@@ -22,7 +22,11 @@ from app.db.crud.wireguard import (
     reconcile_wireguard_subnets,
     wg_core_subnets,
 )
-from app.fork.operation.core_extras import apply_l2tp_core_config, guard_singbox_user_accounting
+from app.fork.operation.core_extras import (
+    apply_l2tp_core_config,
+    cores_in_use_message,
+    guard_singbox_user_accounting,
+)
 from app.fork.operation.entitled_secrets import grant_entitled_secrets_for_core
 from app.models.admin import AdminDetails
 from app.models.core import (
@@ -179,6 +183,10 @@ class CoreOperation(BaseOperation):
         db_core = await self.get_validated_core_config(db, core_id)
         was_wg = db_core.type == CoreType.wg
 
+        in_use = await cores_in_use_message(db, [db_core])
+        if in_use:
+            await self.raise_error(message=in_use, code=409, db=db)
+
         affected_node_ids = await get_node_ids_by_core(db, core_id)
 
         await remove_core_config(db, db_core)
@@ -209,6 +217,10 @@ class CoreOperation(BaseOperation):
         for db_core in db_cores_list:
             if db_core.id == 1:
                 await self.raise_error(message="Cannot delete default core config", code=403)
+
+        in_use = await cores_in_use_message(db, db_cores_list)
+        if in_use:
+            await self.raise_error(message=in_use, code=409, db=db)
 
         core_ids = [c.id for c in db_cores_list]
         core_names = [c.name for c in db_cores_list]

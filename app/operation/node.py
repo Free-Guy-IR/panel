@@ -31,6 +31,7 @@ from app.db.crud.node import (
 from app.db.crud.user import get_user_by_id, get_user_count_metric_stats
 from app.db.models import Node, NodeStatus
 from app.fork.cores.singbox_guard import singbox_index_keyed_inbounds, unsafe_singbox_node_message
+from app.fork.crud.node import CoreConfigMissing
 from app.fork.operation.node_extras import (
     _BACKEND_TYPE_BY_CORE,  # noqa: F401
     _CONNECT_LOCKS,  # noqa: F401
@@ -737,8 +738,10 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         await self._validate_additional_cores(db, new_node.additional_core_config_ids, new_node.core_config_id)
         try:
             db_node = await create_node(db, new_node)
-        except IntegrityError:
-            await self.raise_error(message=f'Node "{new_node.name}" already exists', code=409, db=db)
+        except (IntegrityError, CoreConfigMissing):
+            await self._refuse_node_write(
+                db, new_node.name, [new_node.core_config_id, *(new_node.additional_core_config_ids or [])]
+            )
 
         try:
             await self._update_node_impl(db_node)
@@ -769,10 +772,13 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 modified_node.core_config_id if modified_node.core_config_id is not None else db_node.core_config_id,
             )
 
+        node_name = modified_node.name or db_node.name
         try:
             db_node = await modify_node(db, db_node, modified_node)
-        except IntegrityError:
-            await self.raise_error(message=f'Node "{db_node.name}" already exists', code=409, db=db)
+        except (IntegrityError, CoreConfigMissing):
+            await self._refuse_node_write(
+                db, node_name, [modified_node.core_config_id, *(modified_node.additional_core_config_ids or [])]
+            )
 
         if db_node.status in (NodeStatus.disabled, NodeStatus.limited):
             await self.disconnect_single_node(db_node.id)

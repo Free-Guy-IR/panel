@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.db import AsyncSession
 from app.db.crud.node import get_inbounds_usage as fetch_inbounds_usage, get_nodes
-from app.db.models import Node, NodeStatus, User
+from app.db.models import CoreConfig, Node, NodeStatus, User
 from app.fork.cores.singbox_guard import singbox_index_keyed_inbounds, unsafe_singbox_node_message
 from app.fork.crud.group_scope import user_in_allowed_groups
 from app.fork.operation.node_snapshots import check_fence, full_sync_fence, node_users_loader, resolve_users
@@ -99,6 +99,15 @@ _BACKEND_TYPE_BY_CORE = {CoreType.xray: service.BackendType.XRAY, **_MULTI_INSTA
 
 
 class NodeExtraCoresMixin:
+    async def _refuse_node_write(self, db: AsyncSession, name: str, core_ids: list[int | None]) -> None:
+        await db.rollback()
+        wanted = {core_id for core_id in core_ids if core_id is not None}
+        if wanted:
+            found = set((await db.execute(select(CoreConfig.id).where(CoreConfig.id.in_(wanted)))).scalars().all())
+            if wanted - found:
+                await self.raise_error(message="Core config not found", code=404, db=db)
+        await self.raise_error(message=f'Node "{name}" already exists', code=409, db=db)
+
     @staticmethod
     def _node_core_ids(db_node: Node) -> list[int]:
         core_ids = [getattr(db_node, "core_config_id", None) or 1]

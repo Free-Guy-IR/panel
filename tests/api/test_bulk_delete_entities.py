@@ -492,10 +492,11 @@ def test_bulk_delete_client_templates_rejects_system_template(access_token):
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
-def test_delete_core_restarts_only_affected_nodes_with_default_core(access_token, monkeypatch):
+def test_delete_core_refuses_a_core_a_node_uses_and_restarts_nothing(access_token, monkeypatch):
     target_core = create_core(access_token, name=unique_name("single_core"))
     other_core = create_core(access_token, name=unique_name("other_core"))
-    target_node_id = create_db_node(core_config_id=target_core["id"])
+    target_node_name = unique_name("single_core_node")
+    target_node_id = create_db_node(core_config_id=target_core["id"], name=target_node_name)
     other_node_id = create_db_node(core_config_id=other_core["id"])
     default_node_id = create_db_node(core_config_id=1)
     restart_nodes = AsyncMock()
@@ -507,15 +508,23 @@ def test_delete_core_restarts_only_affected_nodes_with_default_core(access_token
             params={"restart_nodes": True},
         )
 
-        assert response.status_code == status.HTTP_204_NO_CONTENT
-        assert get_node_core_config_id(target_node_id) is None
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert target_node_name in response.json()["detail"]
+        assert get_node_core_config_id(target_node_id) == target_core["id"]
         assert get_node_core_config_id(other_node_id) == other_core["id"]
         assert get_node_core_config_id(default_node_id) == 1
-        restart_nodes.assert_awaited_once()
-        db_nodes = restart_nodes.await_args.args[1]
-        assert [node.id for node in db_nodes] == [target_node_id]
-        assert db_nodes[0].core_config_id is None
-        assert restart_nodes.await_args.kwargs == {"force_start": True}
+        restart_nodes.assert_not_awaited()
+
+        delete_db_node(target_node_id)
+        response = client.delete(
+            f"/api/core/{target_core['id']}",
+            headers=auth_headers(access_token),
+            params={"restart_nodes": True},
+        )
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        assert get_node_core_config_id(other_node_id) == other_core["id"]
+        restart_nodes.assert_not_awaited()
     finally:
         delete_db_node(target_node_id)
         delete_db_node(other_node_id)
@@ -524,7 +533,7 @@ def test_delete_core_restarts_only_affected_nodes_with_default_core(access_token
         delete_core_if_present(access_token, other_core["id"])
 
 
-def test_delete_core_without_restart_clears_node_core_reference(access_token, monkeypatch):
+def test_delete_core_without_restart_refuses_a_core_a_node_uses(access_token, monkeypatch):
     target_core = create_core(access_token, name=unique_name("single_core_no_restart"))
     node_id = create_db_node(core_config_id=target_core["id"])
     restart_nodes = AsyncMock()
@@ -532,15 +541,15 @@ def test_delete_core_without_restart_clears_node_core_reference(access_token, mo
     try:
         response = client.delete(f"/api/core/{target_core['id']}", headers=auth_headers(access_token))
 
-        assert response.status_code == status.HTTP_204_NO_CONTENT
-        assert get_node_core_config_id(node_id) is None
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert get_node_core_config_id(node_id) == target_core["id"]
         restart_nodes.assert_not_awaited()
     finally:
         delete_db_node(node_id)
         delete_core_if_present(access_token, target_core["id"])
 
 
-def test_bulk_delete_cores_clears_node_core_references(access_token, monkeypatch):
+def test_bulk_delete_cores_refuses_cores_nodes_still_use(access_token, monkeypatch):
     seed_core = create_core(access_token, name=unique_name("bulk_core_seed"))
     target_cores = [create_core(access_token, name=unique_name("bulk_core")) for _ in range(2)]
     node_ids = [create_db_node(core_config_id=core["id"]) for core in target_cores]
@@ -554,15 +563,23 @@ def test_bulk_delete_cores_clears_node_core_references(access_token, monkeypatch
             json={"ids": [core["id"] for core in target_cores]},
         )
 
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert [get_node_core_config_id(node_id) for node_id in node_ids] == [core["id"] for core in target_cores]
+        assert get_node_core_config_id(seed_node_id) == seed_core["id"]
+        restart_nodes.assert_not_awaited()
+
+        for node_id in node_ids:
+            delete_db_node(node_id)
+        response = client.post(
+            "/api/cores/bulk/delete",
+            headers=auth_headers(access_token),
+            json={"ids": [core["id"] for core in target_cores]},
+        )
+
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["count"] == 2
-        assert all(get_node_core_config_id(node_id) is None for node_id in node_ids)
         assert get_node_core_config_id(seed_node_id) == seed_core["id"]
-        restart_nodes.assert_awaited_once()
-        db_nodes = restart_nodes.await_args.args[1]
-        assert {node.id for node in db_nodes} == set(node_ids)
-        assert all(node.core_config_id is None for node in db_nodes)
-        assert restart_nodes.await_args.kwargs == {"force_start": True}
+        restart_nodes.assert_not_awaited()
     finally:
         for node_id in node_ids:
             delete_db_node(node_id)

@@ -13,13 +13,20 @@ from app.fork.operation.usage_guard import execute_with_statement_timeout
 from app.models.stats import InboundUsageStat, InboundUsageStatsList, Period
 
 
+class CoreConfigMissing(LookupError):
+    pass
+
+
 async def resolve_additional_cores(db: AsyncSession, core_ids: list[int] | None) -> list[CoreConfig]:
     if not core_ids:
         return []
     ordered = list(dict.fromkeys(core_ids))
     result = await db.execute(select(CoreConfig).where(CoreConfig.id.in_(ordered)))
     by_id = {core.id: core for core in result.scalars().all()}
-    return [by_id[core_id] for core_id in ordered if core_id in by_id]
+    missing = [core_id for core_id in ordered if core_id not in by_id]
+    if missing:
+        raise CoreConfigMissing(missing)
+    return [by_id[core_id] for core_id in ordered]
 
 
 async def get_inbounds_usage(

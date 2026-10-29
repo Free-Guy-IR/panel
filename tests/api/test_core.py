@@ -182,15 +182,14 @@ def test_core_delete_2(access_token):
     assert response.status_code == status.HTTP_204_NO_CONTENT
 
 
-def test_core_delete_restarts_nodes_that_used_the_core(access_token, monkeypatch):
-    """Deleting a core with restart_nodes=true must restart the nodes that used it."""
-
+def test_core_delete_with_restart_nodes_refuses_a_core_a_node_uses(access_token, monkeypatch):
     core = create_core(access_token, name=unique_name("core_delete_restart"))
+    node_name = unique_name("node_core_delete")
 
     async def _make_node() -> int:
         async with TestSession() as session:
             node = Node(
-                name=unique_name("node_core_delete"),
+                name=node_name,
                 address="127.0.0.1",
                 port=8081,
                 api_port=62051,
@@ -204,12 +203,24 @@ def test_core_delete_restarts_nodes_that_used_the_core(access_token, monkeypatch
 
     node_id = asyncio.run(_make_node())
 
-    restarted: list[tuple[int, bool]] = []
+    restarted: list[int] = []
 
-    async def _fake_connect_nodes_bulk(db, nodes, *, force_start=False):
-        restarted.extend((n.id, force_start) for n in nodes)
+    async def _fake_connect_nodes_bulk(db, nodes, **kwargs):
+        restarted.extend(n.id for n in nodes)
 
     monkeypatch.setattr("app.routers.core.node_operator.connect_nodes_bulk", _fake_connect_nodes_bulk)
+
+    async def _node_core() -> int | None:
+        async with TestSession() as session:
+            node = await session.get(Node, node_id)
+            return None if node is None else node.core_config_id
+
+    async def _cleanup_node():
+        async with TestSession() as session:
+            node = await session.get(Node, node_id)
+            if node is not None:
+                await session.delete(node)
+                await session.commit()
 
     try:
         response = client.delete(
@@ -217,17 +228,24 @@ def test_core_delete_restarts_nodes_that_used_the_core(access_token, monkeypatch
             headers=auth_headers(access_token),
             params={"restart_nodes": True},
         )
-        assert response.status_code == status.HTTP_204_NO_CONTENT
-        assert (node_id, True) in restarted
+        assert response.status_code == status.HTTP_409_CONFLICT, response.text
+        detail = response.json()["detail"]
+        assert isinstance(detail, str)
+        assert node_name in detail and str(node_id) in detail, detail
+        assert restarted == []
+        assert client.get(f"/api/core/{core['id']}", headers=auth_headers(access_token)).status_code == (
+            status.HTTP_200_OK
+        )
+        assert asyncio.run(_node_core()) == core["id"]
     finally:
-        async def _cleanup_node():
-            async with TestSession() as session:
-                node = await session.get(Node, node_id)
-                if node is not None:
-                    await session.delete(node)
-                    await session.commit()
-
         asyncio.run(_cleanup_node())
+        response = client.delete(
+            url=f"/api/core/{core['id']}",
+            headers=auth_headers(access_token),
+            params={"restart_nodes": True},
+        )
+        assert response.status_code == status.HTTP_204_NO_CONTENT, response.text
+        assert restarted == []
 
 
 def test_inbounds_get(access_token):
