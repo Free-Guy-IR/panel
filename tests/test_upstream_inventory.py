@@ -2849,6 +2849,37 @@ def test_a_fork_commit_cited_with_its_files_is_checked_in_those_files(tmp_path, 
         )
 
 
+@pytest.mark.parametrize(
+    ("files", "code"), [({"notify.yml": "escaped\n"}, 0), ({"notify.yml": "escaped\n", "app.py": "b\n"}, 1)]
+)
+def test_a_decision_scoped_to_files_stops_covering_a_commit_that_touches_another_file(tmp_path, files, code):
+    repo_path = tmp_path / f"scoped-{len(files)}"
+    repo_path.mkdir()
+    git(repo_path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(repo_path, "config", key, value)
+    commit(repo_path, "upstream base", {"notify.yml": "raw\n", "app.py": "a\n"})
+    git(repo_path, "tag", "v1.0")
+    notifier = commit(repo_path, "ci(notifications): escape commit messages", files)
+    git(repo_path, "update-ref", "refs/remotes/upstream/dev", notifier)
+    git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
+    git(repo_path, "rm", "-q", "notify.yml")
+    git(repo_path, "commit", "-q", "-m", "fork: drop the notifier")
+    text = (
+        f"## Waived\n\n- `{notifier}` the fork deleted notify.yml security: yes owner-decision: 2026-10-28-hint-waivers\n"
+        "\n## Owner decisions\n\n"
+        f"- `2026-10-28-hint-waivers` the fork deleted the notifier, covers `{notifier}` touching only `notify.yml` "
+        "until: 2026-11-27\n"
+    )
+    result = standalone_gate(repo_path, text, "--grandfathered-base", "v1.0", "--today", "2026-10-29")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert (
+            f"`{notifier}` is not covered by owner decision 2026-10-28-hint-waivers: it touches app.py, outside the "
+            "files the record names"
+        ) in result.stdout
+
+
 def test_a_waiver_of_a_security_looking_commit_must_be_security_yes(tmp_path):
     repo_path, _, fix = hunk_repo(tmp_path, "waived-hint", "router.py", ROUTER, ROUTER_FIXED)
     git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
