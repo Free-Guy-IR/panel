@@ -2892,6 +2892,47 @@ def test_a_waiver_of_a_security_looking_commit_must_be_security_yes(tmp_path):
     assert "a waiver of a security-looking commit needs security: yes and an owner decision" in result.stdout
 
 
+@pytest.mark.parametrize(
+    ("message", "word"),
+    [
+        (
+            (
+                "fix(hosts): reject host fields the subscription cannot format\n\n"
+                "Host path, SNI and address go through str.format_map with the subscription variables."
+            ),
+            "format_map",
+        ),
+        (
+            (
+                "fix(subscription): keep the server-only finalmask filter out of client configs\n\n"
+                "The admin's source IP lists reached users."
+            ),
+            "server-only",
+        ),
+        ("fix(api): stop the stats route from leaking other admins' totals", "leaking"),
+        ("fix(nodes): no longer exposes the node address in the public info", "exposes"),
+    ],
+)
+def test_the_security_hint_knows_format_strings_and_exposure(tmp_path, message, word):
+    repo_path = tmp_path / "hint-words"
+    repo_path.mkdir()
+    git(repo_path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(repo_path, "config", key, value)
+    commit(repo_path, "upstream base", {"hosts.py": "a\n"})
+    git(repo_path, "tag", "v1.0")
+    fix = commit(repo_path, message, {"hosts.py": "b\n"})
+    git(repo_path, "update-ref", "refs/remotes/upstream/dev", fix)
+    git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
+    commit(repo_path, "fork feature", {"fork.py": "fork\n"})
+    queue = f"## Port queue\n\n- `{fix}` port it security: no, a host rebuild change until: 2026-11-20\n"
+    result = standalone_gate(repo_path, queue, "--grandfathered-base", "v1.0", "--today", "2026-10-28")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"`{fix[:12]}` is classified security: no but it names '{word}'; re-review the classification" in (
+        result.stdout
+    )
+
+
 def test_the_security_hint_reads_the_commit_body(tmp_path):
     repo_path = tmp_path / "body-hint"
     repo_path.mkdir()
