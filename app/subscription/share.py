@@ -9,6 +9,7 @@ from jdatetime import date as jd
 from app.core.hosts import host_manager
 from app.db.crud.wireguard import pick_peer_ip_for_inbound
 from app.db.models import UserStatus
+from app.fork.format_template import format_bounded
 from app.fork.registry import get_subscription_format
 from app.models.status_emojis import STATUS_EMOJIS
 from app.models.subscription import SubscriptionInboundData
@@ -204,7 +205,7 @@ def _format_dynamic_value(value, format_variables: dict):
             # Formatting would build the padded result first; a value saved before the size check stays raw text
             return value
         try:
-            return value.format_map(format_variables)
+            return format_bounded(value, format_variables)
         except ValueError, KeyError, AttributeError, IndexError, TypeError:
             # A value the variables cannot fill (stray brace, {0}, {X.y}) is kept as it is
             return value
