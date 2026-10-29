@@ -4,7 +4,6 @@ from fastapi import status
 
 from app.core.xray import XRayConfig
 from app.db.models import Node
-from app.operation.node import NodeOperation
 from app.utils.crypto import generate_wireguard_keypair
 from tests.api import TestSession, client
 from tests.api.helpers import (
@@ -205,12 +204,12 @@ def test_core_delete_restarts_nodes_that_used_the_core(access_token, monkeypatch
 
     node_id = asyncio.run(_make_node())
 
-    restarted: list[int] = []
+    restarted: list[tuple[int, bool]] = []
 
-    async def _fake_connect_nodes_bulk(self, db, nodes):
-        restarted.extend(n.id for n in nodes)
+    async def _fake_connect_nodes_bulk(db, nodes, *, force_start=False):
+        restarted.extend((n.id, force_start) for n in nodes)
 
-    monkeypatch.setattr(NodeOperation, "connect_nodes_bulk", _fake_connect_nodes_bulk)
+    monkeypatch.setattr("app.routers.core.node_operator.connect_nodes_bulk", _fake_connect_nodes_bulk)
 
     try:
         response = client.delete(
@@ -219,7 +218,7 @@ def test_core_delete_restarts_nodes_that_used_the_core(access_token, monkeypatch
             params={"restart_nodes": True},
         )
         assert response.status_code == status.HTTP_204_NO_CONTENT
-        assert node_id in restarted
+        assert (node_id, True) in restarted
     finally:
         async def _cleanup_node():
             async with TestSession() as session:
