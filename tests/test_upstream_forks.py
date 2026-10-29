@@ -318,7 +318,6 @@ def test_release_refs_belong_only_to_a_ledger_repo(world):
     assert "repo node sets release_refs, which only a ledger repo uses" in result.stdout
 
 
-
 def test_a_refs_snapshot_line_is_never_passed_to_git_as_an_option(world, tmp_path):
     shas = world["shas"]
     ledger = "## Waived\n\n" + "".join(f"- `{shas[k]}` reason security: no\n" for k in ("bumped", "feature"))

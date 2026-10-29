@@ -997,7 +997,9 @@ def ineffective_picks(head, candidates, upstream, tips_for):
         fork_commits = picks.get(sha, [])
         live = [commit for commit in fork_commits if commit not in reverted]
         if not live:
-            findings[sha] = f"every fork commit carrying its trailer is reverted ({', '.join(c[:12] for c in fork_commits)})"
+            findings[sha] = (
+                f"every fork commit carrying its trailer is reverted ({', '.join(c[:12] for c in fork_commits)})"
+            )
             continue
         expected, missing = missing_pick_lines(sha, pick_reference(sha, upstream, tips_for(sha)), head)
         if missing:
@@ -1094,7 +1096,10 @@ def owner_decision_record(item_text, today, where):
         return f"{where}: `{ident}` has no reason", None
     dates = UNTIL_RE.findall(reason)
     if len(dates) != 1 or len(LOOSE_UNTIL_RE.findall(reason)) != 1:
-        return f"{where}: `{ident}` needs exactly one until: YYYY-MM-DD (found {len(LOOSE_UNTIL_RE.findall(reason))})", None
+        return (
+            f"{where}: `{ident}` needs exactly one until: YYYY-MM-DD (found {len(LOOSE_UNTIL_RE.findall(reason))})",
+            None,
+        )
     try:
         until = date.fromisoformat(dates[0])
     except ValueError:
@@ -1124,7 +1129,9 @@ def decision_problem(label, ident, records, today, until, verb, item):
             f"{record['until'].isoformat()}"
         )
     if until is not None and (until - record["date"]).days > DECISION_MAX_DAYS:
-        return f"{label} {verb} until {until.isoformat()}, more than {DECISION_MAX_DAYS} days after owner decision {ident}"
+        return (
+            f"{label} {verb} until {until.isoformat()}, more than {DECISION_MAX_DAYS} days after owner decision {ident}"
+        )
     if item is not None and item not in record["covers"]:
         return f"{label} is not covered by owner decision {ident}"
     return None
@@ -1278,7 +1285,9 @@ def parse_sync_ledger(path, today=None):
             if problem:
                 errors.append(problem)
             elif record["id"] in records:
-                errors.append(f"{where}: `{record['id']}` is recorded more than once (first at {records[record['id']]['where']})")
+                errors.append(
+                    f"{where}: `{record['id']}` is recorded more than once (first at {records[record['id']]['where']})"
+                )
             else:
                 records[record["id"]] = record
             continue
@@ -1354,9 +1363,7 @@ def parse_sync_ledger(path, today=None):
             security = flags[0].lower() == "yes" if flags else None
         if section == HELD:
             if deadline is not None:
-                errors.append(
-                    f"{where}: `{token}` is held for an upstream release, which has no until date; remove it"
-                )
+                errors.append(f"{where}: `{token}` is held for an upstream release, which has no until date; remove it")
                 continue
             flags = SECURITY_FLAG_RE.findall(reason)
             if len(flags) != 1:
@@ -1381,8 +1388,12 @@ def parse_sync_ledger(path, today=None):
             if security and len(named) > 1:
                 errors.append(f"{where}: `{token}` names {len(named)} owner decisions; keep exactly one")
                 continue
-            problem = security and named and owner_decision_problem(
-                named[0], today, f"`{token}`: a delegated security port", LEDGER_DECISION_SYNTAX
+            problem = (
+                security
+                and named
+                and owner_decision_problem(
+                    named[0], today, f"`{token}`: a delegated security port", LEDGER_DECISION_SYNTAX
+                )
             )
             if problem:
                 errors.append(f"{where}: {problem}")
@@ -1457,7 +1468,9 @@ def resolve_sync_entries(entries, in_range):
             elif earlier["kind"] != entry["kind"] or any(
                 earlier[key] != entry[key] for key in ("conditional", "security", "deadline")
             ):
-                errors.append(f"{entry['where']}: {sha[:12]} is also decided differently at {earlier['where']}; keep one")
+                errors.append(
+                    f"{entry['where']}: {sha[:12]} is also decided differently at {earlier['where']}; keep one"
+                )
             else:
                 duplicates.append(f"{entry['where']}: {sha[:12]} is already listed at {earlier['where']}")
             continue
@@ -1772,7 +1785,9 @@ def parity_gate(
         for label in snapshot_kept:
             print(f"    {label}")
     print()
-    print(f"Upstream commits past base: {len(in_range)}, of them merge commits with their own changes: {len(content_merges)}")
+    print(
+        f"Upstream commits past base: {len(in_range)}, of them merge commits with their own changes: {len(content_merges)}"
+    )
     for kind, label in COVERAGE_LABELS.items():
         print(f"  {label:<42} {counts[kind]}")
     print(f"  {'unported':<42} {len(uncovered)}")
@@ -1814,7 +1829,9 @@ def parity_gate(
         print()
         print(f"Cherry-picked upstream commits whose change is not all in {head} ({len(ineffective)}):")
         for sha, why in ineffective.items():
-            state = "needs a Ported by design or Waived entry" if sha in unlisted_picks else "covered by its ledger entry"
+            state = (
+                "needs a Ported by design or Waived entry" if sha in unlisted_picks else "covered by its ledger entry"
+            )
             print(f"  {sha[:12]}: {why}; {state}")
 
     if ledger_errors:

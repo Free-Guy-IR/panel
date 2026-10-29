@@ -278,7 +278,9 @@ def check_image(entry, workdir, tags_file):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Prove that every forked repository has a mechanical upstream tracker.")
+    parser = argparse.ArgumentParser(
+        description="Prove that every forked repository has a mechanical upstream tracker."
+    )
     parser.add_argument("--config", default="upstream-forks/forks.toml", help="fork map (TOML)")
     parser.add_argument("--workdir", help="directory for the git mirrors (default: a temporary directory)")
     parser.add_argument("--only", action="append", default=[], help="check only these repo names (repeatable)")
