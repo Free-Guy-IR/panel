@@ -77,3 +77,19 @@ and are counted as ported.
 ## Port queue
 
 No released upstream node commit is owed.
+
+## Fork overrides of upstream changes in the grandfathered base (not read by the gate)
+
+Upstream changes inside the grandfathered base e9a9ba286413c404854b80c847b588b620426660 (v0.5.4) that fork main
+deliberately undoes. The gate trusts the base and does not check them; each line records the override so that a later
+sync keeps it.
+
+- `628b431398d9771c5b6f71abe6f49e8b4fce3a64` upstream (2026-08-05) removed the validateCurrentClient middleware from
+  REST and RPC, and `1de5f94bbdb21e0c937f89424febfd38719492f5` (2026-08-16) dropped the client IP from Connect and from
+  the rest and rpc base handlers. Both are in v0.5.4 and reach fork main as ancestors through the merge 9267b04, but
+  fork commit de3493fb (2026-09-23) keeps client-IP isolation: on fork main ed7d5c1c, Controller.IsCurrentClient
+  (controller/controller.go:147-150) admits only the panel that started the node, the REST private group uses
+  validateCurrentClient (controller/rest/service.go:38, controller/rest/middleware.go:48-55), and gRPC gates backend
+  management with validateCurrentClientMiddleware (controller/rpc/middleware.go:92-110, controller/rpc/base.go:22).
+  A later upstream sync keeps these checks: without them any API-key holder, not only the connected panel, could
+  manage the node's backends and user sync. Recorded 2026-10-29 for B7-ADV2 B2-11.
