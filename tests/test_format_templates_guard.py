@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from app.models.settings import Application, CustomVariable, Subscription as SubSettings
+from app.models.settings import Application, CustomVariable, CustomVariableInput, Subscription as SubSettings
 from app.operation.subscription import SubscriptionOperation
 from app.subscription.share import apply_custom_format_variables
 
@@ -52,7 +52,7 @@ def test_a_template_the_variables_cannot_fill_is_served_raw(template):
 @pytest.mark.parametrize("value", ["{USERNAME:>300}", "{USERNAME:>300}{", "{USERNAME.missing}", "{USERNAME[0]}"])
 def test_a_custom_variable_that_would_pad_hugely_or_read_attributes_is_refused_on_save(value):
     with pytest.raises(ValidationError):
-        CustomVariable(key="CUSTOM", value=value)
+        CustomVariableInput(key="CUSTOM", value=value)
 
 
 def test_ordinary_templates_still_render():
@@ -61,4 +61,5 @@ def test_ordinary_templates_still_render():
     settings = SubSettings.model_construct(announce="hi {USERNAME:>5} {{x}}")
 
     assert SubscriptionOperation._format_announce(settings, variables) == "hi x {x}"
-    assert CustomVariable(key="CUSTOM", value="{USERNAME:>256}").value == "{USERNAME:>256}"
+    assert CustomVariableInput(key="CUSTOM", value="{USERNAME:>256}").value == "{USERNAME:>256}"
+    assert CustomVariable(key="CUSTOM", value="{USERNAME:>300}").value == "{USERNAME:>300}"

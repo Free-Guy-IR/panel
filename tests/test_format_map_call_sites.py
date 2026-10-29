@@ -3,8 +3,8 @@ from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent / "app"
 GUARDED = {
+    ("fork/format_template.py", "check_template_value"),
     ("models/host.py", "validate_format_variables"),
-    ("models/settings.py", "validate_value_format"),
     ("subscription/share.py", "_format_dynamic_value"),
 }
 

@@ -13,8 +13,8 @@ from pydantic import (
     model_validator,
 )
 
+from app.fork.format_template import check_template_value
 from app.models.proxy import ShadowsocksMethods
-from app.utils.helpers import has_oversized_format_spec
 from app.utils.logger import get_logger
 
 from .notification_enable import NotificationEnable
@@ -356,19 +356,6 @@ class CustomVariable(BaseModel):
             raise ValueError("Variable key must use uppercase letters, numbers, and underscores")
         return value
 
-    @field_validator("value")
-    @classmethod
-    def validate_value_format(cls, value: str) -> str:
-        if has_oversized_format_spec(value):
-            raise ValueError("Invalid formatting variables")
-        try:
-            value.format_map({key: "" for key in BUILTIN_FORMAT_VARIABLES})
-        except ValueError, AttributeError, IndexError, TypeError:
-            raise ValueError("Invalid formatting variables")
-        except KeyError:
-            pass
-        return value
-
 
 def validate_custom_variables(value: list[CustomVariable]) -> list[CustomVariable]:
     seen: set[str] = set()
@@ -591,9 +578,22 @@ class SettingsSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CustomVariableInput(CustomVariable):
+    @field_validator("value")
+    @classmethod
+    def value_formats_as_written(cls, value: str) -> str:
+        return check_template_value(value)
+
+
 class SubscriptionInput(Subscription):
     applications: list[ApplicationInput] = Field(default_factory=list)
+    custom_variables: list[CustomVariableInput] = Field(default_factory=list)
+
+
+class GeneralInput(General):
+    custom_variables: list[CustomVariableInput] | None = Field(default=None)
 
 
 class SettingsSchemaInput(SettingsSchema):
     subscription: SubscriptionInput | None = Field(default=None)
+    general: GeneralInput | None = Field(default=None)
