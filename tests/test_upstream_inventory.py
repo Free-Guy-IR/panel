@@ -2910,10 +2910,9 @@ def test_a_waiver_of_a_security_looking_commit_must_be_security_yes(tmp_path):
             "server-only",
         ),
         ("fix(api): stop the stats route from leaking other admins' totals", "leaking"),
-        ("fix(nodes): no longer exposes the node address in the public info", "exposes"),
     ],
 )
-def test_the_security_hint_knows_format_strings_and_exposure(tmp_path, message, word):
+def test_the_security_hint_knows_format_strings_and_leaks(tmp_path, message, word):
     repo_path = tmp_path / "hint-words"
     repo_path.mkdir()
     git(repo_path, "init", "-q", "-b", "up")

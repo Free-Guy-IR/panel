@@ -132,7 +132,8 @@ SECURITY_SUBJECT_RE = re.compile(
     r"\b(?:security|cve-\d{4}-\d+|ghsa(?:-[0-9a-z]{4}){3}|vulnerab\w*|exploit\w*|disclosur\w*"
     r"|auth(?:n|z|entication|enticate|orization|orize|orized)?|permissions?|privileges?|api[ _-]?keys?"
     r"|jwt|tokens?|sessions?|passkeys?|webauthn|credentials?|passwords?"
-    r"|inject\w*|xss|csrf|ssrf|escap\w*|sanitiz\w*|traversal|bypass\w*|spoof\w*|hijack\w*|forger\w*|rce)\b",
+    r"|inject\w*|xss|csrf|ssrf|escap\w*|sanitiz\w*|traversal|bypass\w*|spoof\w*|hijack\w*|forger\w*|rce"
+    r"|format_map|server[ -]only|leak\w*)\b",
     re.IGNORECASE,
 )
 UPSTREAM_NAMESPACES = ("refs/remotes/upstream/", "refs/upstream-tags/")
