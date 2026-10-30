@@ -44,3 +44,56 @@ def test_a_stored_list_longer_than_the_limit_still_loads():
         len(AdminContactInfo.model_validate({"username": "a", "custom_variables": _variables(150)}).custom_variables)
         == 150
     )
+
+
+def test_only_the_first_hundred_stored_custom_variables_of_each_list_are_applied():
+    from types import SimpleNamespace
+
+    from app.models.settings import CustomVariable
+    from app.subscription.share import get_effective_custom_variables
+
+    stored_settings = [CustomVariable(key=f"S{index}", value="{USERNAME}") for index in range(5000)]
+    stored_admin = [CustomVariable(key=f"A{index}", value="{USERNAME}") for index in range(5000)]
+    user = SimpleNamespace(admin=SimpleNamespace(custom_variables=stored_admin))
+
+    applied = get_effective_custom_variables(user, stored_settings)
+
+    assert [variable.key for variable in applied] == [f"S{index}" for index in range(LIMIT)] + [
+        f"A{index}" for index in range(LIMIT)
+    ]
+
+
+def test_a_legacy_admin_with_thousands_of_custom_variables_formats_at_most_the_limit(monkeypatch):
+    from types import SimpleNamespace
+
+    from app.models.settings import CustomVariable
+    from app.models.user import UserStatus
+    from app.operation.subscription import SubscriptionOperation
+    from app.subscription import share
+
+    formatted = []
+    bounded = share.format_bounded
+
+    def counting(template, variables):
+        formatted.append(template)
+        return bounded(template, variables)
+
+    monkeypatch.setattr(share, "format_bounded", counting)
+    variables = [CustomVariable(key=f"V{index}", value="{USERNAME:256}" * 16) for index in range(5000)]
+    admin = SimpleNamespace(username="reseller", profile_title="{V0}", custom_variables=variables, support_url=None)
+    user = SimpleNamespace(
+        username="alice",
+        status=UserStatus.active,
+        expire=None,
+        on_hold_expire_duration=None,
+        admin=admin,
+        data_limit=None,
+        used_traffic=0,
+    )
+    settings = SimpleNamespace(
+        custom_variables=[], profile_title="", announce="", announce_url="", support_url="", update_interval=12
+    )
+
+    SubscriptionOperation.create_response_headers(user, "https://sub.example.com/sub/x", settings)
+
+    assert len(formatted) <= 3 * LIMIT

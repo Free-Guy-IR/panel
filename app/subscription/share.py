@@ -9,7 +9,7 @@ from jdatetime import date as jd
 from app.core.hosts import host_manager
 from app.db.crud.wireguard import pick_peer_ip_for_inbound
 from app.db.models import UserStatus
-from app.fork.format_template import format_bounded
+from app.fork.format_template import MAX_CUSTOM_VARIABLES, format_bounded
 from app.fork.registry import get_subscription_format
 from app.models.status_emojis import STATUS_EMOJIS
 from app.models.subscription import SubscriptionInboundData
@@ -174,9 +174,9 @@ def _custom_variable_parts(custom_variable) -> tuple[str | None, str]:
 def get_effective_custom_variables(
     user: UsersResponseWithInbounds, custom_variables: list | tuple | None = None
 ) -> list:
-    variables = list(custom_variables or [])
+    variables = list(custom_variables or [])[:MAX_CUSTOM_VARIABLES]
     admin_variables = getattr(getattr(user, "admin", None), "custom_variables", None) or []
-    variables.extend(admin_variables)
+    variables.extend(admin_variables[:MAX_CUSTOM_VARIABLES])
     return variables
 
 
