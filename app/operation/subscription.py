@@ -21,7 +21,7 @@ from app.models.settings import (
     SubRule,
     Subscription as SubSettings,
 )
-from app.models.stats import UserUsageStatsList
+from app.models.stats import USAGE_RECORD_GRANULARITY, UserUsageStatsList
 from app.models.subscription import SubscriptionUsageQuery
 from app.models.user import SubscriptionUserResponse, UsersResponseWithInbounds
 from app.settings import hwid_settings, subscription_settings
@@ -988,7 +988,9 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         ip: str | None = None,
     ) -> UserUsageStatsList:
         """Fetches the usage statistics for the user within a specified date range."""
-        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
+        start, end = await self.validate_dates(
+            query.start, query.end, True, period=query.period, granularity=USAGE_RECORD_GRANULARITY
+        )
 
         db_user = await self.get_validated_sub(
             db,
