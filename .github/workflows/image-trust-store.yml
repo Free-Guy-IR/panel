@@ -1,0 +1,68 @@
+name: Image Trust Store
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: pg-trust-store-check:ci
+
+jobs:
+  trust-store:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.14"
+
+      - name: The Dockerfile deselects with the expression the mechanism check tests
+        run: |
+          python3 - <<'EOF'
+          import ast
+          import sys
+          from pathlib import Path
+
+          tree = ast.parse(Path("scripts/image_distrust_runtime_check.py").read_text(encoding="utf-8"))
+          expressions = [
+              node.value.value
+              for node in tree.body
+              if isinstance(node, ast.Assign)
+              and any(getattr(target, "id", None) == "DOCKERFILE_DESELECT_EXPRESSION" for target in node.targets)
+          ]
+          if len(expressions) != 1:
+              sys.exit("DOCKERFILE_DESELECT_EXPRESSION is not defined exactly once")
+          line = f"sed -i -E '{expressions[0]}' /etc/ca-certificates.conf"
+          if line not in Path("Dockerfile").read_text(encoding="utf-8"):
+              sys.exit(f"the Dockerfile no longer runs: {line}")
+          print(f"the Dockerfile runs: {line}")
+          EOF
+
+      - name: Build the panel image (the build itself runs the store check and fails on any emSign root)
+        run: docker build --pull --tag "$IMAGE" .
+
+      - name: "Regression guard: no emSign or eMudhra root in any trust store of the built image"
+        run: |
+          docker run --rm --network none \
+            -v "$GITHUB_WORKSPACE/scripts:/checks:ro" \
+            --entrypoint python "$IMAGE" -B /checks/image_trust_store_check.py
+
+      - name: "Mechanism check: a root deselected the Dockerfile's way loses trust, and no store holds an emSign issuer (fails on a stock image)"
+        run: |
+          docker run --rm --network none \
+            -e PG_THROWAWAY_CONTAINER=1 \
+            -v "$GITHUB_WORKSPACE/scripts:/checks:ro" \
+            --entrypoint python "$IMAGE" -B /checks/image_distrust_runtime_check.py

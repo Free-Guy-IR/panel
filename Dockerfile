@@ -43,6 +43,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && update-ca-certificates --fresh \
     && rm -rf /var/lib/apt/lists/*
 
+RUN base_python="$(python -c 'import sys; print(sys.base_prefix)')/bin/python3" \
+    && ensurepip_dir="$("$base_python" -c 'import ensurepip, pathlib; print(pathlib.Path(ensurepip.__file__).parent)')" \
+    && test -d "$ensurepip_dir" \
+    && rm -f "$ensurepip_dir"/_bundled/pip-*.whl \
+    && PG_IMAGE_BUILD=1 python -B /code/scripts/distrust_certifi_roots.py --image
+
+RUN python -B /code/scripts/image_trust_store_check.py
+
 COPY cli_wrapper.sh /usr/bin/pasarguard-cli
 RUN chmod +x /usr/bin/pasarguard-cli
 

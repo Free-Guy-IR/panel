@@ -54,3 +54,6 @@ graphify-out
 dashboard/*
 !dashboard/__init__.py
 !dashboard/build
+!scripts/distrust_certifi_roots.py
+!scripts/emsign_roots.py
+!scripts/image_trust_store_check.py
