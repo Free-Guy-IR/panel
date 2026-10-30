@@ -4,14 +4,31 @@ from copy import deepcopy
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from sqlalchemy import Row, and_, bindparam, case, delete, desc, func, insert, literal, not_, or_, select, update
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    Row,
+    and_,
+    bindparam,
+    case,
+    cast,
+    delete,
+    desc,
+    func,
+    insert,
+    literal,
+    not_,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, load_only, selectinload, with_expression
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.functions import coalesce
 
-from app.db.compiles_types import DateDiff
+from app.db.compiles_types import DateDiff, ElapsedSeconds
 from app.db.models import (
     Admin,
     AdminStatus,
@@ -39,7 +56,6 @@ from app.fork.crud.owner_traffic import lock_destination_admin, lock_owner_rows,
 from app.fork.crud.user_locks import (
     MODIFY_STATUS_KEYS,
     NextPlanUnavailable,
-    auto_delete_due,
     refresh_next_plan_for_update,
     refresh_user_state_for_update,
 )
@@ -72,7 +88,6 @@ from app.models.user import (
 from app.models.validators import MAX_ON_HOLD_EXPIRE_DURATION_SECONDS
 from app.subscription.sub_update_buffer import flush_before_read, queue_user_sub_update
 from app.utils.jwt import next_revocation_instant
-from config import user_cleanup_settings
 
 from .general import (
     _build_trunc_expression,
@@ -83,6 +98,7 @@ from .general import (
 from .group import get_groups_by_ids
 from .wireguard import (
     lock_for_allocation_release,
+    lock_users_subnets,
     release_locked_allocations,
     release_users_allocations,
     sync_user_allocations,
@@ -1873,10 +1889,22 @@ async def get_users_subscription_agent_stats(
     return rows
 
 
+AUTODELETE_BATCH_SIZE = 100
+AUTODELETE_MAX_USERS_PER_RUN = 1000
+AUTODELETE_MAX_RETRIES = 3
+
+
+def _wireguard_settings(proxy_settings: dict | None):
+    return (proxy_settings or {}).get("wireguard")
+
+
 async def autodelete_expired_users(
     db: AsyncSession,
     include_limited_users: bool = False,
+    default_autodelete_days: int | None = None,
     *,
+    batch_size: int = AUTODELETE_BATCH_SIZE,
+    max_users: int = AUTODELETE_MAX_USERS_PER_RUN,
     on_chunk_deleted: UsersDeletedCallback | None = None,
 ) -> list[UserNotificationResponse]:
     """
@@ -1886,54 +1914,82 @@ async def autodelete_expired_users(
         db (AsyncSession): Database session
         include_limited_users (bool, optional): Whether to delete limited users as well.
             Defaults to False.
+        default_autodelete_days (int | None): Fallback retention for users without
+            an individual policy. ``None`` or a negative value keeps them.
+        batch_size (int): Maximum users deleted in each transaction.
+        max_users (int): Maximum users deleted during this invocation.
 
     Returns:
         list[UserNotificationResponse]: List of deleted users.
     """
     target_status = [UserStatus.expired] if not include_limited_users else [UserStatus.expired, UserStatus.limited]
 
-    auto_delete = func.coalesce(User.auto_delete_in_days, literal(user_cleanup_settings.autodelete_days)).label(
-        "auto_delete"
+    fallback_days = -1 if default_autodelete_days is None else default_autodelete_days
+    if batch_size <= 0 or max_users <= 0:
+        raise ValueError("batch_size and max_users must be positive")
+    auto_delete = func.coalesce(User.auto_delete_in_days, literal(fallback_days))
+
+    eligibility_conditions = (
+        auto_delete >= 0,  # Negative values prevent auto-deletion
+        User.status.in_(target_status),
+        User.last_status_change.isnot(None),
+        # Compare with the app's UTC time: NOW() on MySQL is the session time zone. The bind is time zone aware
+        # so PostgreSQL does not read it in the session time zone either.
+        ElapsedSeconds(literal(datetime.now(UTC), DateTime(timezone=True)), User.last_status_change)
+        # 36,500 days in seconds does not fit a 32-bit integer
+        >= cast(auto_delete, BigInteger) * 86_400,
     )
-    predicates = (auto_delete >= 0, User.status.in_(target_status))
-
-    def is_due(row: Row) -> bool:
-        return auto_delete_due(row.last_status_change, row.auto_delete, datetime.now(UTC))
-
-    candidates = (
-        await db.execute(select(User.id, User.last_status_change, auto_delete).where(*predicates).order_by(User.id))
-    ).all()
-    due_ids = [row.id for row in candidates if is_due(row)]
+    candidate_query = select(User.id, User.proxy_settings).where(*eligibility_conditions).order_by(User.id)
 
     result: list[UserNotificationResponse] = []
-    for start in range(0, len(due_ids), DELETE_CHUNK_SIZE):
-        chunk = due_ids[start : start + DELETE_CHUNK_SIZE]
-        users = (
-            (await db.execute(select(User).options(joinedload(User.admin)).where(User.id.in_(chunk)).order_by(User.id)))
-            .unique()
-            .scalars()
-            .all()
+    retries = 0
+    while len(result) < max_users:
+        current_batch_size = min(batch_size, max_users - len(result))
+        candidates = (await db.execute(candidate_query.limit(current_batch_size))).all()
+        if not candidates:
+            break
+        candidate_ids = [candidate.id for candidate in candidates]
+        prelocked = {candidate.id: _wireguard_settings(candidate.proxy_settings) for candidate in candidates}
+        # remove_users releases WireGuard peer IPs, which locks subnet rows: take them before the user rows
+        await lock_users_subnets(db, [candidate.proxy_settings for candidate in candidates])
+
+        # Revalidate after candidate selection, then hold row locks until remove_users commits.
+        # This prevents a concurrent status or retention-policy update from racing the delete.
+        locked_query = (
+            select(User)
+            .where(User.id.in_(candidate_ids), *eligibility_conditions)
+            .options(joinedload(User.admin))
+            .order_by(User.id)
+            .with_for_update(of=User, skip_locked=True)
         )
+        expired_users = (await db.scalars(locked_query)).unique().all()
+        if not expired_users:
+            break
+        if any(_wireguard_settings(user.proxy_settings) != prelocked[user.id] for user in expired_users):
+            # A peer IP moved after the candidates were read, so its subnet row is not locked yet: start the batch over
+            await db.rollback()
+            retries += 1
+            if retries > AUTODELETE_MAX_RETRIES:
+                break
+            continue
+
         responses: dict[int, UserNotificationResponse] = {}
-        for user in users:
+        for user in expired_users:
             await load_user_attrs(user)
             responses[user.id] = UserNotificationResponse.model_validate(user)
 
         try:
-            removed = await _delete_locked_users(
-                db,
-                chunk,
-                *predicates,
-                extra_columns=(User.last_status_change, auto_delete),
-                keep=is_due,
-            )
+            removed = await _delete_locked_users(db, list(responses), *eligibility_conditions)
             await db.commit()
         except Exception:
             await db.rollback()
             raise
         if removed and on_chunk_deleted is not None:
             await on_chunk_deleted(removed)
-        result.extend(responses[row.id] for row in removed if row.id in responses)
+        result.extend(responses[row.id] for row in removed)
+
+        if len(candidate_ids) < current_batch_size:
+            break
 
     return result
 
