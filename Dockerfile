@@ -39,7 +39,8 @@ ENV PATH="/code/.venv/bin:$PATH"
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
-    && update-ca-certificates \
+    && sed -i -E 's@^(mozilla/(emSign|eMudhra)[^/]*\.crt)$@!\1@' /etc/ca-certificates.conf \
+    && update-ca-certificates --fresh \
     && rm -rf /var/lib/apt/lists/*
 
 COPY cli_wrapper.sh /usr/bin/pasarguard-cli
