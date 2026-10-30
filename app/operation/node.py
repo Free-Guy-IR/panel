@@ -92,6 +92,7 @@ from app.models.node import (
     UserIPListAll,
 )
 from app.models.stats import (
+    USAGE_RECORD_GRANULARITY,
     NodeOutboundsLatencyResponse,
     NodeOutboundUsageStatsList,
     NodeRealtimeStats,
@@ -1072,7 +1073,9 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         query: NodeUsageQuery,
         admin: AdminDetails | None = None,
     ) -> NodeUsageStatsList:
-        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
+        start, end = await self.validate_dates(
+            query.start, query.end, True, period=query.period, granularity=USAGE_RECORD_GRANULARITY
+        )
         async with usage_aggregation_guard(("nodes_usage", admin.id if admin else None)):
             return await get_nodes_usage(
                 db,
@@ -1089,7 +1092,9 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         query: NodeOutboundUsageQuery,
         admin: AdminDetails | None = None,
     ) -> NodeOutboundUsageStatsList:
-        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
+        start, end = await self.validate_dates(
+            query.start, query.end, True, period=query.period, granularity=USAGE_RECORD_GRANULARITY
+        )
         async with usage_aggregation_guard(("nodes_outbound_usage", admin.id if admin else None)):
             return await get_nodes_outbound_usage(db, start, end, period=query.period, node_id=query.node_id)
 
@@ -1100,7 +1105,9 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         query: NodeUsageQuery,
         admin: AdminDetails | None = None,
     ) -> UserCountMetricStatsList:
-        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
+        start, end = await self.validate_dates(
+            query.start, query.end, True, period=query.period, granularity=USAGE_RECORD_GRANULARITY
+        )
         try:
             validate_user_count_metric_scope(metric, node_id=query.node_id, group_by_node=query.group_by_node)
         except ValueError as exc:

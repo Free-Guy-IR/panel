@@ -26,6 +26,7 @@ import {
 } from '@/utils/chart-period-utils'
 import { getChartRenderFlags } from '@/utils/chart-performance'
 import useDirDetection from '@/hooks/use-dir-detection'
+import { useChartPeriodLimit } from '@/hooks/use-chart-period-limit'
 
 import PeriodSelector from './period-selector'
 import { capUsagePeriod } from '@/fork/charts/usage-bucket-cap'
@@ -91,7 +92,8 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats, realtime
 
   const PERIOD_OPTIONS = useMemo(() => buildPeriodOptions(t), [t])
   const [periodOption, setPeriodOption] = useState<PeriodOption>(() => getDefaultPeriodOption(PERIOD_OPTIONS))
-  const [periodOverride, setPeriodOverride] = useState<ChartPeriodOverride>(CHART_PERIOD_OVERRIDE_AUTO)
+  const [selectedPeriodOverride, setPeriodOverride] = useState<ChartPeriodOverride>(CHART_PERIOD_OVERRIDE_AUTO)
+  const { allowedPeriods, periodOverride } = useChartPeriodLimit({ shortcut: periodOption.value }, selectedPeriodOverride, setPeriodOverride)
 
   useEffect(() => {
     setPeriodOption(previous => {
@@ -364,7 +366,7 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats, realtime
                   ))}
                 </SelectContent>
               </Select>
-              <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} cappedFrom={cappedPeriod.cappedFrom} />
+              <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} allowedPeriods={allowedPeriods} cappedFrom={cappedPeriod.cappedFrom} />
             </div>
           </div>
         </div>

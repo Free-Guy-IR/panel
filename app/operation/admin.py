@@ -51,7 +51,7 @@ from app.models.admin import (
     hash_password,
 )
 from app.models.admin_role import RoleLimits
-from app.models.stats import Period, UserUsageStatsList
+from app.models.stats import USAGE_RECORD_GRANULARITY, Period, UserUsageStatsList
 from app.node.sync import remove_users as sync_remove_users, sync_users
 from app.operation import BaseOperation
 from app.operation.admin_sync import admin_users_sync_blocked, sync_admin_users_for_block_transition
@@ -471,7 +471,7 @@ class AdminOperation(BaseOperation):
         group_by_node: bool = False,
     ) -> UserUsageStatsList:
         """Get aggregated usage for an admin's users."""
-        start, end = await self.validate_dates(start, end, True, period=period)
+        start, end = await self.validate_dates(start, end, True, period=period, granularity=USAGE_RECORD_GRANULARITY)
 
         is_self = db_admin.username == admin.username
         if not is_self:

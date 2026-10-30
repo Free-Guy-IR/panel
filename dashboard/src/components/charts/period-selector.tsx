@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useUsagePeriodCapNotice } from '@/fork/charts/use-usage-period-cap-notice'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
@@ -16,12 +17,15 @@ type PeriodSelectorProps = {
   value: ChartPeriodOverride
   onValueChange: (value: ChartPeriodOverride) => void
   className?: string
+  /** Periods that can be picked for the current range. Others are shown disabled. All are allowed when omitted. */
+  allowedPeriods?: readonly ChartPeriodOverride[]
   cappedFrom?: Period
 }
 
-export default function PeriodSelector({ value, onValueChange, className, cappedFrom }: PeriodSelectorProps) {
+export default function PeriodSelector({ value, onValueChange, className, allowedPeriods, cappedFrom }: PeriodSelectorProps) {
   const { t } = useTranslation()
   const dir = useDirDetection()
+  const disabledHint = t('statistics.periodTooFineForRange', { defaultValue: 'Too many points for this range. Pick a shorter range.' })
   const capNotice = useUsagePeriodCapNotice(cappedFrom)
 
   return (
@@ -36,11 +40,29 @@ export default function PeriodSelector({ value, onValueChange, className, capped
       </SelectTrigger>
       <SelectContent dir={dir}>
         <SelectItem value={CHART_PERIOD_OVERRIDE_AUTO}>{getChartPeriodLabel(CHART_PERIOD_OVERRIDE_AUTO, t)}</SelectItem>
-        {CHART_PERIOD_VALUES.map(period => (
-          <SelectItem key={period} value={period}>
-            {getChartPeriodLabel(period, t)}
-          </SelectItem>
-        ))}
+        <TooltipProvider delayDuration={150}>
+          {CHART_PERIOD_VALUES.map(period => {
+            const disabled = allowedPeriods ? !allowedPeriods.includes(period) : false
+            const item = (
+              <SelectItem key={period} value={period} disabled={disabled}>
+                {getChartPeriodLabel(period, t)}
+              </SelectItem>
+            )
+            if (!disabled) return item
+
+            // A disabled item gets no pointer events, so the wrapper carries the tooltip
+            return (
+              <Tooltip key={period}>
+                <TooltipTrigger asChild>
+                  <div>{item}</div>
+                </TooltipTrigger>
+                <TooltipContent side="left" dir={dir}>
+                  {disabledHint}
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
+        </TooltipProvider>
       </SelectContent>
     </Select>
   )

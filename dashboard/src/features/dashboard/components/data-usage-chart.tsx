@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { useChartViewType } from '@/hooks/use-chart-view-type'
 import useDirDetection from '@/hooks/use-dir-detection'
+import { useChartPeriodLimit } from '@/hooks/use-chart-period-limit'
 import { Period, useGetUsersUsage, UserUsageStat } from '@/service/api'
 import {
   CHART_PERIOD_OVERRIDE_AUTO,
@@ -15,6 +16,7 @@ import {
   getChartQueryRangeFromShortcut,
   getChartXAxisInterval,
   resolvePeriodOverride,
+  USAGE_RECORD_BUCKET_MINUTES,
 } from '@/utils/chart-period-utils'
 import { getChartRenderFlags } from '@/utils/chart-performance'
 import { formatBytes } from '@/utils/formatByte'
@@ -139,7 +141,8 @@ const DataUsageChart = ({ adminUsername }: { adminUsername?: string }) => {
     [t],
   )
   const [periodOption, setPeriodOption] = useState<PeriodOption>(() => PERIOD_OPTIONS.find(opt => opt.value === '7d') ?? PERIOD_OPTIONS[0])
-  const [periodOverride, setPeriodOverride] = useState<ChartPeriodOverride>(CHART_PERIOD_OVERRIDE_AUTO)
+  const [selectedPeriodOverride, setPeriodOverride] = useState<ChartPeriodOverride>(CHART_PERIOD_OVERRIDE_AUTO)
+  const { allowedPeriods, periodOverride } = useChartPeriodLimit({ shortcut: periodOption.value }, selectedPeriodOverride, setPeriodOverride, { recordBucketMinutes: USAGE_RECORD_BUCKET_MINUTES })
 
   // Update periodOption when PERIOD_OPTIONS changes (e.g., language change)
   useEffect(() => {
@@ -255,7 +258,7 @@ const DataUsageChart = ({ adminUsername }: { adminUsername?: string }) => {
               ))}
             </SelectContent>
           </Select>
-          <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} cappedFrom={queryRange.cappedFrom} />
+          <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} allowedPeriods={allowedPeriods} cappedFrom={queryRange.cappedFrom} />
         </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col justify-center overflow-hidden p-2 sm:p-6">

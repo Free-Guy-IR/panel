@@ -101,6 +101,7 @@ from app.models.admin import AdminDetails
 from app.models.proxy import ProxyTable
 from app.models.settings import HWIDSettings
 from app.models.stats import (
+    USAGE_RECORD_GRANULARITY,
     Period,
     UserCountMetric,
     UserCountMetricStatsList,
@@ -1553,7 +1554,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         node_id: int | None = None,
         group_by_node: bool = False,
     ) -> UserUsageStatsList:
-        start, end = await self.validate_dates(start, end, True, period=period)
+        start, end = await self.validate_dates(start, end, True, period=period, granularity=USAGE_RECORD_GRANULARITY)
 
         if not _has_permission(admin, "nodes", "stats"):
             node_id = None
@@ -1717,7 +1718,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         query: UsersUsageBreakdownQuery,
     ) -> UserUsageStatsList:
         """Get all users usage"""
-        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
+        start, end = await self.validate_dates(
+            query.start, query.end, True, period=query.period, granularity=USAGE_RECORD_GRANULARITY
+        )
         node_id = query.node_id
         core_id = query.core_id
         group_by_node = query.group_by_node
@@ -1755,7 +1758,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         query: UsersUsageQuery,
     ) -> UserCountMetricStatsList:
         """Get one users activity/status count metric from usage rows."""
-        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
+        start, end = await self.validate_dates(
+            query.start, query.end, True, period=query.period, granularity=USAGE_RECORD_GRANULARITY
+        )
         node_id = query.node_id
         group_by_node = query.group_by_node
 
