@@ -12,7 +12,18 @@ def is_plain_field(field: str, conversion: str | None) -> bool:
     return bool(field) and not field.isdigit() and "." not in field and "[" not in field and conversion in _CONVERT
 
 
+def is_unparseable(value: str) -> bool:
+    try:
+        for _ in Formatter().parse(value):
+            pass
+    except ValueError:
+        return True
+    return False
+
+
 def check_template_value(value: str) -> str:
+    if is_unparseable(value):
+        raise ValueError('Invalid formatting variables: every "{" and "}" needs a partner; write {{ or }} for a brace')
     if has_oversized_format_spec(value):
         raise ValueError(
             f"Invalid formatting variables: width and precision must be numbers up to {MAX_FORMAT_SPEC_NUMBER}"
