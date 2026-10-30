@@ -17,6 +17,7 @@ from app.db.models import Admin, AdminRole, Node, NodeUserUsage, User
 from app.fork.jobs import usage_limits
 from app.jobs import record_usages
 from app.models.proxy import ProxyTable
+from app.models.settings import General
 from app.operation import admin_sync
 from config import database_settings
 
@@ -128,10 +129,15 @@ async def recorder_db_fixture(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(record_usages, "_usage_job_runs", set(), raising=False)
     monkeypatch.setattr(record_usages, "_user_usage_running", False)
     monkeypatch.setattr(record_usages, "_node_usage_running", False)
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
     monkeypatch.setattr(record_usages, "_pending_user_usage_history", defaultdict(int))
     monkeypatch.setattr(record_usages, "_user_usage_history_last_flush", None)
     monkeypatch.setattr(record_usages.usage_settings, "user_usage_history_flush_interval", 0)
+    default_general = General()
+
+    async def serve_default_general():
+        return default_general
+
+    monkeypatch.setattr(record_usages, "general_settings", serve_default_general)
     record_usages._usage_coefficient_cache.clear()
 
     yield session_factory

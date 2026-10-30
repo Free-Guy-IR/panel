@@ -19,8 +19,9 @@ from app.node import node_manager
 from app.node.nats_memory import ensure_bridge_memory, get_bridge_memory, shutdown_bridge_memory
 from app.operation import OperatorType
 from app.operation.node import NodeOperation
+from app.settings import general_settings
 from app.utils.logger import get_logger
-from config import feature_settings, job_settings, runtime_settings, server_settings
+from config import job_settings, runtime_settings, server_settings
 
 node_operator = NodeOperation(operator_type=OperatorType.SYSTEM)
 logger = get_logger("node-checker")
@@ -431,7 +432,7 @@ async def initialize_nodes():
     )
 
     # Multi-uvicorn workers must not Stop remote cores / clear shared sync queues on exit.
-    if feature_settings.stop_nodes_on_shutdown and server_settings.workers <= 1:
+    if server_settings.workers <= 1:
         on_shutdown(shutdown_nodes)
 
     on_shutdown(_stop_node_loops)
@@ -453,6 +454,15 @@ async def shutdown_nodes():
         return
     if is_multi_worker() and server_settings.workers > 1:
         logger.info("Skipping remote node stop on multi-worker shutdown")
+        return
+
+    try:
+        stop_nodes = (await general_settings()).stop_nodes_on_shutdown
+    except Exception as exc:
+        logger.warning("Failed to load the stop nodes on shutdown setting, leaving nodes running: %s", exc)
+        return
+    if not stop_nodes:
+        logger.info("Leaving nodes' cores running on shutdown")
         return
 
     logger.info("Stopping nodes' cores...")

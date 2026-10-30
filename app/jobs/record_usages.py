@@ -42,6 +42,7 @@ from app.fork.jobs.usage_limits import enforce_user_limits_now
 from app.fork.node_health import record_usage_failure, record_usage_success
 from app.node import node_manager
 from app.operation.admin_sync import enforce_admin_limits_now
+from app.settings import general_settings
 from app.utils.logger import get_logger
 from config import job_settings, runtime_settings, usage_settings
 
@@ -159,6 +160,7 @@ def _merge_usage_dicts(dicts: list[dict]) -> dict:
         for uid, value in d.items():
             merged[uid] += value
     return dict(merged)
+
 
 # Prevent overlapping usage jobs from stacking writes (and deadlocks) when
 # node stats calls take longer than the scheduler interval.
@@ -717,6 +719,8 @@ async def _write_node_user_usage_params(dialect: str, upsert_params: list[dict])
     user_ids = sorted({int(row["uid"]) for row in upsert_params})
     batch_size = USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT.get(sql_family(dialect)) or len(user_ids)
 
+    drop_stale_epochs = (await general_settings()).usage.reset_usage_clean_chart_data
+
     async def _write(conn) -> None:
         committed_epochs: dict[int, int] = {}
         for id_batch in _chunked(user_ids, batch_size):
@@ -725,7 +729,6 @@ async def _write_node_user_usage_params(dialect: str, upsert_params: list[dict])
             )
             for user_id, usage_epoch in locked.fetchall():
                 committed_epochs[int(user_id)] = int(usage_epoch or 0)
-        drop_stale_epochs = usage_settings.reset_user_usage_clean_chart_data
         rows = [
             {key: row[key] for key in ("uid", "value", "node_id", "created_at")}
             for row in upsert_params
@@ -913,7 +916,7 @@ def _process_users_stats_response(stats_response):
     for uid, value in params.items():
         try:
             validated_params.append({"uid": int(uid), "value": value})
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             invalid_uids.append(uid)
 
     return validated_params, invalid_uids
@@ -1033,7 +1036,7 @@ async def _node_usage_coefficient(node: PasarGuardNode, node_id: int) -> float:
 
     try:
         coeff = float(raw_coeff)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         last_known = _usage_coefficient_cache.get(node_id)
         if last_known is not None:
             logger.error(
@@ -1511,7 +1514,7 @@ async def _persist_collected_usage_once(
     valid_users_usage = [usage for usage in users_usage if int(usage["uid"]) in valid_user_ids and usage["value"] > 0]
 
     filtered_node_params = {}
-    if not usage_settings.disable_recording_node_usage:
+    if (await general_settings()).usage.record_node_usage:
         for node_id, params in api_params.items():
             filtered_params = [param for param in params if int(param["uid"]) in valid_user_ids]
             if filtered_params:
@@ -1874,7 +1877,10 @@ def _node_usage_bytes(totals: dict[int, tuple[int, int]]) -> int:
 
 
 async def write_node_usage(
-    node_totals: dict[int, tuple[int, int]], created_at: dt, stat_batches: dict[int, StatBatch] | None = None
+    node_totals: dict[int, tuple[int, int]],
+    created_at: dt,
+    stat_batches: dict[int, StatBatch] | None = None,
+    record_node_usage: bool = True,
 ) -> None:
     ordered = [(node_id, up, down) for node_id, (up, down) in sorted(node_totals.items()) if up or down]
     if not ordered and not held(stat_batches):
@@ -1899,7 +1905,7 @@ async def write_node_usage(
             node_update_stmt, [{"node_id": node_id, "up": up, "down": down} for node_id, up, down in ordered]
         )
         await conn.execute(system_update_stmt)
-        if usage_settings.disable_recording_node_usage:
+        if not record_node_usage:
             return
         existing = set(
             (await conn.execute(select(Node.id).where(Node.id.in_([node_id for node_id, _, _ in ordered])))).scalars()
@@ -1964,6 +1970,8 @@ async def _record_node_usages_impl():
         logger.debug("No healthy nodes found, skipping node usage recording")
         return
 
+    record_node_usage = (await general_settings()).usage.record_node_usage
+
     logger.debug(f"Starting node usage recording for {len(nodes)} nodes")
 
     try:
@@ -2006,7 +2014,7 @@ async def _record_node_usages_impl():
                 logger.debug("No node usage to record")
                 return
             try:
-                await write_node_usage(node_totals, created_at, stat_batches)
+                await write_node_usage(node_totals, created_at, stat_batches, record_node_usage)
                 break
             except StaleStatBatches as stale:
                 logger.warning(
@@ -2025,7 +2033,7 @@ async def _record_node_usages_impl():
         if not node_totals:
             return
 
-        if usage_settings.disable_recording_node_usage:
+        if not record_node_usage:
             return
 
         await after_record_node_usages(nodes, created_at)

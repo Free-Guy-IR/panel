@@ -15,7 +15,7 @@ from app.fork.db_rollback import rollback
 from app.jobs import record_usages
 from app.models.proxy import ProxyTable
 from tests.api.helpers import unique_name
-from tests.test_record_usages import DummyNode, session_factory  # noqa: F401
+from tests.test_record_usages import DummyNode, _patch_record_node_usage, session_factory  # noqa: F401
 
 BEFORE_AUTOINCREMENT = "009f2a24cc7b"
 
@@ -99,7 +99,7 @@ async def test_usage_a_node_still_counts_for_a_deleted_user_is_never_billed_to_a
         return [{"uid": str(old_id), "value": 5_000_000}]
 
     monkeypatch.setattr(record_usages, "get_users_stats", the_node_still_counts_the_deleted_users_traffic)
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
     await record_usages.record_user_usages()
 
     async with session_factory() as session:

@@ -31,6 +31,7 @@ export default function SubscriptionSettings() {
     defaultValues: {
       url_prefix: '',
       update_interval: 24,
+      clients_limit: 10,
       support_url: '',
       profile_title: '',
       announce: '',
@@ -115,6 +116,7 @@ export default function SubscriptionSettings() {
       form.reset({
         url_prefix: subscriptionData.url_prefix || '',
         update_interval: subscriptionData.update_interval || 24,
+        clients_limit: subscriptionData.clients_limit ?? 10,
         support_url: subscriptionData.support_url || '',
         profile_title: subscriptionData.profile_title || '',
         announce: subscriptionData.announce || '',
@@ -274,6 +276,7 @@ export default function SubscriptionSettings() {
       form.reset({
         url_prefix: subscriptionData.url_prefix || '',
         update_interval: subscriptionData.update_interval || 24,
+        clients_limit: subscriptionData.clients_limit ?? 10,
         support_url: subscriptionData.support_url || '',
         profile_title: subscriptionData.profile_title || '',
         announce: subscriptionData.announce || '',

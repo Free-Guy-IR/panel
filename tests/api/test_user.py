@@ -17,15 +17,15 @@ from sqlalchemy import delete, event, func, select, update
 from app.db.crud.hwid import register_user_hwid
 from app.db.crud.user import get_user as get_db_user, get_users as get_db_users, update_users_status
 from app.db.models import NodeUserUsage, User, UserStatus, UserUsageResetLogs
-from app.models.settings import ConfigFormat, SubRule, Subscription
+from app.models.settings import ConfigFormat, General, SubRule, Subscription, UsageSettings
 from app.models.stats import Period, UserCountMetric, UserCountMetricStat, UserCountMetricStatsList
 from app.models.user import UserListQuery
 from app.models.validators import MAX_ON_HOLD_EXPIRE_DURATION_SECONDS
+from app.operation import user as user_operation_module
 from app.operation.subscription import SubscriptionOperation
 from app.utils import jwt as jwt_utils
 from app.utils.crypto import generate_wireguard_keypair, get_wireguard_public_key
 from app.utils.jwt import create_admin_token, create_subscription_token, get_secret_key, get_subscription_payload
-from config import usage_settings
 from tests.api import TestSession, client, engine
 from tests.api.helpers import (
     auth_headers,
@@ -1975,8 +1975,8 @@ def test_reset_on_hold_user_usage_preserves_hold_state(access_token):
         cleanup_groups(access_token, core, groups)
 
 
-def test_reset_user_usage_only_cleans_chart_data_when_enabled(access_token):
-    """Test that user reset preserves chart data unless env cleanup is enabled."""
+def test_reset_user_usage_only_cleans_chart_data_when_enabled(access_token, monkeypatch):
+    """Test that user reset preserves chart data unless the chart cleanup setting is on."""
     core, groups = setup_groups(access_token, 1)
     user = create_user(
         access_token,
@@ -1996,9 +1996,17 @@ def test_reset_user_usage_only_cleans_chart_data_when_enabled(access_token):
             )
             await session.commit()
 
-    previous_clean_chart_data = usage_settings.reset_user_usage_clean_chart_data
+    # API tests serve the cached settings getters from a fixed row, so the setting is served from memory here
+    def set_clean_chart_data(value: bool) -> None:
+        general = General(usage=UsageSettings(reset_usage_clean_chart_data=value))
+
+        async def get_general_settings():
+            return general
+
+        monkeypatch.setattr(user_operation_module, "general_settings", get_general_settings)
+
     try:
-        usage_settings.reset_user_usage_clean_chart_data = False
+        set_clean_chart_data(False)
         asyncio.run(_add_chart_row())
         assert count_user_chart_rows(user["id"]) == 1
 
@@ -2009,7 +2017,7 @@ def test_reset_user_usage_only_cleans_chart_data_when_enabled(access_token):
         assert response.status_code == status.HTTP_200_OK
         assert count_user_chart_rows(user["id"]) == 1
 
-        usage_settings.reset_user_usage_clean_chart_data = True
+        set_clean_chart_data(True)
         response = client.post(
             f"/api/user/by-id/{user['id']}/reset",
             headers={"Authorization": f"Bearer {access_token}"},
@@ -2017,7 +2025,6 @@ def test_reset_user_usage_only_cleans_chart_data_when_enabled(access_token):
         assert response.status_code == status.HTTP_200_OK
         assert count_user_chart_rows(user["id"]) == 0
     finally:
-        usage_settings.reset_user_usage_clean_chart_data = previous_clean_chart_data
         delete_user(access_token, user["username"])
         cleanup_groups(access_token, core, groups)
 

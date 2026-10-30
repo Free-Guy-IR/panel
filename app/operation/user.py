@@ -153,7 +153,7 @@ from app.operation.permissions import (
     get_scope_admin_id,
     is_scope_all,
 )
-from app.settings import hwid_settings, subscription_settings
+from app.settings import general_settings, hwid_settings, subscription_settings
 from app.utils.connection_enforcement import close_active_restriction, close_active_restrictions
 from app.utils.helpers import fix_datetime_timezone
 from app.utils.hwid import resolve_effective_hwid_settings
@@ -164,7 +164,7 @@ from app.utils.mtproto import prepare_mtproto_secret  # noqa: F401
 from app.utils.openvpn import prepare_openvpn_password  # noqa: F401
 from app.utils.system import readable_duration, readable_size
 from app.utils.wireguard import ensure_unique_wireguard_public_key, prepare_wireguard_keys
-from config import subscription_env_settings, usage_settings
+from config import subscription_env_settings
 
 
 def _has_permission(admin: AdminDetails, resource: str, action: str) -> bool:
@@ -1198,7 +1198,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         old_status = db_user.status
 
         if clean_chart_data is None:
-            clean_chart_data = usage_settings.reset_user_usage_clean_chart_data
+            clean_chart_data = (await general_settings()).usage.reset_usage_clean_chart_data
 
         db_user = await reset_user_data_usage(db=db, db_user=db_user, clean_chart_data=clean_chart_data)
         user = await self.update_user(db_user)
@@ -1238,7 +1238,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         db_users = await bulk_reset_user_data_usage(
             db,
             db_users,
-            clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+            clean_chart_data=(await general_settings()).usage.reset_usage_clean_chart_data,
         )
         await sync_users(db_users)
 
@@ -1431,13 +1431,14 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         await reset_all_users_data_usage(
             db=db,
             admin=None,  # None = all admins, not filtered by owner
-            clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+            clean_chart_data=(await general_settings()).usage.reset_usage_clean_chart_data,
             allowed_group_ids=get_allowed_group_ids(admin),
         )
 
     async def _active_next_plan(self, db: AsyncSession, db_user: User, admin: AdminDetails) -> UserResponse:
         if db_user is None or db_user.next_plan is None:
             await self.raise_error(message="User doesn't have next plan", code=404)
+        clean_chart_data = (await general_settings()).usage.reset_usage_clean_chart_data
         try:
             await acquire_proxy_secrets_lock(db)
             await refresh_user_state_for_update(db, db_user)
@@ -1449,7 +1450,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 db_user = await reset_user_by_next(
                     db=db,
                     db_user=db_user,
-                    clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+                    clean_chart_data=clean_chart_data,
                 )
             except NextPlanUnavailable:
                 await self.raise_error(message="User doesn't have next plan", code=404, db=db)
@@ -2098,13 +2099,16 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             prepared_updates.append((db_user, modify_user, validated_groups, original_status, emit_reset_status_change))
 
         modified_user_ids: list[int] = []
+        clean_chart_data = (
+            (await general_settings()).usage.reset_usage_clean_chart_data if user_template.reset_usages else False
+        )
         try:
             for db_user, modified_user_model, validated_groups, _, _ in prepared_updates:
                 if user_template.reset_usages:
                     await reset_user_data_usage(
                         db,
                         db_user,
-                        clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+                        clean_chart_data=clean_chart_data,
                         commit=False,
                     )
 

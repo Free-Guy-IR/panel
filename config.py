@@ -134,7 +134,6 @@ class CorsSettings(EnvSettings):
 class SubscriptionEnvSettings(EnvSettings):
     xray_path: str = Field(default="", validation_alias="XRAY_SUBSCRIPTION_PATH")
     fallback_path: str = Field(default="sub", validation_alias="SUBSCRIPTION_PATH")
-    clients_limit: int = Field(default=10, validation_alias="USER_SUBSCRIPTION_CLIENTS_LIMIT")
     access_limit: int = Field(default=10, validation_alias="USER_SUBSCRIPTION_ACCESS_LIMIT")
     access_dedupe_seconds: int = Field(default=300, validation_alias="USER_SUBSCRIPTION_ACCESS_DEDUPE_SECONDS")
     external_config: str = Field(default="", validation_alias="EXTERNAL_CONFIG")
@@ -197,16 +196,10 @@ class AuthSettings(EnvSettings):
 
 
 class UsageSettings(EnvSettings):
-    disable_recording_node_usage: bool = Field(default=False, validation_alias="DISABLE_RECORDING_NODE_USAGE")
-    enable_recording_nodes_stats: bool = Field(default=False, validation_alias="ENABLE_RECORDING_NODES_STATS")
     user_usage_history_flush_interval: int = Field(
         default=60,
         ge=1,
         validation_alias="USER_USAGE_HISTORY_FLUSH_INTERVAL",
-    )
-    reset_user_usage_clean_chart_data: bool = Field(
-        default=False,
-        validation_alias="RESET_USER_USAGE_CLEAN_CHART_DATA",
     )
 
 
@@ -246,10 +239,6 @@ class JobSettings(EnvSettings):
     content_filter_reconcile_timeout: int = Field(
         default=180, ge=5, validation_alias="JOB_CONTENT_FILTER_RECONCILE_TIMEOUT"
     )
-
-
-class FeatureSettings(EnvSettings):
-    stop_nodes_on_shutdown: bool = Field(default=True, validation_alias="STOP_NODES_ON_SHUTDOWN")
 
 
 class SubmittedSecretCollision(StrEnum):
@@ -298,12 +287,8 @@ logging_settings = LoggingSettings()
 auth_settings = AuthSettings()
 usage_settings = UsageSettings()
 job_settings = JobSettings()
-feature_settings = FeatureSettings()
 security_settings = SecuritySettings()
 proxy_secret_settings = ProxySecretSettings()
-
-if database_settings.is_sqlite:
-    usage_settings.enable_recording_nodes_stats = False
 
 if runtime_settings.debug and dashboard_settings.vite_base_api == "/":
     scheme = "https" if server_settings.has_ssl else "http"

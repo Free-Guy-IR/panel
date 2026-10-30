@@ -33,7 +33,7 @@ from app.operation import OperatorType
 from app.operation.user import UserOperation
 from app.settings import general_settings, webhook_settings
 from app.utils.logger import get_logger
-from config import job_settings, runtime_settings, usage_settings
+from config import job_settings, runtime_settings
 
 logger = get_logger("review-users")
 user_operator = UserOperation(operator_type=OperatorType.SYSTEM)
@@ -64,6 +64,8 @@ async def apply_status_changes(db: AsyncSession, users: list[User], status: User
         else:
             plain_users.append(user)
 
+    clean_chart_data = (await general_settings()).usage.reset_usage_clean_chart_data if next_plan_users else False
+
     if plain_users:
         if status in (UserStatus.expired, UserStatus.limited):
             await update_users_status(db, plain_users, status)
@@ -81,7 +83,7 @@ async def apply_status_changes(db: AsyncSession, users: list[User], status: User
                 await reset_user_by_next(
                     db,
                     db_user,
-                    clean_chart_data=usage_settings.reset_user_usage_clean_chart_data,
+                    clean_chart_data=clean_chart_data,
                 )
             )
         except NextPlanUnavailable:

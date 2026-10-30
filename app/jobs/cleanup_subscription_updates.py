@@ -4,15 +4,21 @@ from app import scheduler
 from app.db import GetDB
 from app.db.dialect import sql_family
 from app.db.models import UserSubscriptionUpdate
+from app.settings import subscription_settings
 from app.subscription.sub_update_buffer import flush_user_sub_updates
 from app.utils.logger import get_logger
-from config import job_settings, runtime_settings, subscription_env_settings
+from config import job_settings, runtime_settings
 
 logger = get_logger("jobs")
 
 
 async def cleanup_user_subscription_updates():
     """Clean up excess user subscription updates."""
+
+    clients_limit = (await subscription_settings()).clients_limit
+    # 0 or less keeps every update
+    if clients_limit <= 0:
+        return
 
     await flush_user_sub_updates()
 
@@ -21,7 +27,7 @@ async def cleanup_user_subscription_updates():
         users_with_excess = await db.execute(
             select(UserSubscriptionUpdate.user_id)
             .group_by(UserSubscriptionUpdate.user_id)
-            .having(func.count(UserSubscriptionUpdate.id) > subscription_env_settings.clients_limit)
+            .having(func.count(UserSubscriptionUpdate.id) > clients_limit)
         )
         user_ids = [row.user_id for row in users_with_excess]
 
@@ -41,7 +47,7 @@ async def cleanup_user_subscription_updates():
                     select(UserSubscriptionUpdate.id)
                     .where(UserSubscriptionUpdate.user_id == user_id)
                     .order_by(UserSubscriptionUpdate.created_at.desc())
-                    .limit(subscription_env_settings.clients_limit)
+                    .limit(clients_limit)
                 )
                 keep_ids = [row.id for row in keep_ids_result]
 
@@ -63,7 +69,7 @@ async def cleanup_user_subscription_updates():
                 select(sub.c.id)
                 .where(sub.c.user_id == UserSubscriptionUpdate.user_id)
                 .order_by(sub.c.created_at.desc())
-                .limit(subscription_env_settings.clients_limit)
+                .limit(clients_limit)
             )
 
             result = await db.execute(
@@ -76,11 +82,7 @@ async def cleanup_user_subscription_updates():
         await db.commit()
 
 
-if (
-    subscription_env_settings.clients_limit
-    and subscription_env_settings.clients_limit >= 0
-    and runtime_settings.role.runs_scheduler
-):
+if runtime_settings.role.runs_scheduler:
     # Schedule the cleanup job to run every few minutes
     scheduler.add_job(
         cleanup_user_subscription_updates,

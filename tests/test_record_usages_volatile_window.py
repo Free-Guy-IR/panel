@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy.exc import OperationalError
 
 from app.jobs import record_usages
+from tests.test_record_usages import _patch_record_node_usage
 
 
 class _ConnectionGone(Exception):
@@ -96,7 +97,7 @@ async def test_fast_node_usage_is_persisted_before_the_slow_node_returns(monkeyp
         "apply_fenced_user_usage",
         AsyncMock(return_value=record_usages.FencedUsageOutcome(0, 0, [], 0)),
     )
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
     monkeypatch.setattr(record_usages, "USAGE_PERSIST_MAX_VOLATILE_S", 0.05)
 
     await record_usages._record_user_usages_impl()
@@ -239,7 +240,7 @@ async def test_orphan_uid_traffic_is_reported_by_the_usage_job(monkeypatch: pyte
         "apply_fenced_user_usage",
         AsyncMock(return_value=record_usages.FencedUsageOutcome(1, 0, [], 0)),
     )
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
 
     caplog.set_level(logging.WARNING, logger="record-usages")
     await record_usages._record_user_usages_impl()
@@ -310,7 +311,7 @@ async def test_a_failed_cohort_does_not_discard_the_other_cohorts(monkeypatch: p
         "apply_fenced_user_usage",
         AsyncMock(return_value=record_usages.FencedUsageOutcome(0, 0, [], 0)),
     )
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
     monkeypatch.setattr(record_usages, "USAGE_PERSIST_MAX_VOLATILE_S", 0.05)
 
     with pytest.raises(OperationalError):
@@ -404,7 +405,7 @@ async def test_systemic_persistence_failure_stops_polling_the_remaining_nodes(mo
         "apply_fenced_user_usage",
         AsyncMock(return_value=record_usages.FencedUsageOutcome(0, 0, [], 0)),
     )
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
     monkeypatch.setattr(record_usages, "USAGE_PERSIST_MAX_VOLATILE_S", 0.05)
 
     with pytest.raises(OperationalError):
@@ -460,7 +461,7 @@ async def test_lock_contention_does_not_stop_polling_the_remaining_nodes(monkeyp
         "apply_fenced_user_usage",
         AsyncMock(return_value=record_usages.FencedUsageOutcome(0, 0, [], 0)),
     )
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
     monkeypatch.setattr(record_usages, "USAGE_PERSIST_MAX_VOLATILE_S", 0.05)
 
     with pytest.raises(OperationalError):
@@ -491,7 +492,7 @@ async def test_job_duration_is_visible_at_info_level(monkeypatch: pytest.MonkeyP
         "apply_fenced_user_usage",
         AsyncMock(return_value=record_usages.FencedUsageOutcome(1, 0, [], 0)),
     )
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
 
     caplog.set_level(logging.INFO, logger="record-usages")
     await record_usages._record_user_usages_impl()
@@ -545,7 +546,7 @@ async def test_a_lock_contention_storm_stops_polling_after_the_failure_cap(monke
         "apply_fenced_user_usage",
         AsyncMock(return_value=record_usages.FencedUsageOutcome(0, 0, [], 0)),
     )
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
     monkeypatch.setattr(record_usages, "USAGE_PERSIST_MAX_VOLATILE_S", 0.05)
 
     with pytest.raises(OperationalError):
@@ -596,7 +597,7 @@ async def test_a_successful_cohort_resets_the_consecutive_failure_counter(monkey
         "apply_fenced_user_usage",
         AsyncMock(return_value=record_usages.FencedUsageOutcome(0, 0, [], 0)),
     )
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
     monkeypatch.setattr(record_usages, "USAGE_PERSIST_MAX_VOLATILE_S", 0.05)
 
     with pytest.raises(OperationalError):

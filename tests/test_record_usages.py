@@ -34,11 +34,24 @@ from app.db.models import (
 from app.fork.jobs import usage_limits
 from app.jobs import record_usages
 from app.models.proxy import ProxyTable
-from app.models.settings import ConnectionLimit
+from app.models.settings import ConnectionLimit, General, UsageSettings
 from app.operation import admin_sync
 from app.utils import connection_limiter
 from config import database_settings, runtime_settings
 from tests.test_recorder_harness import restore_seeded_rows, snapshot_seeded_rows
+
+
+def _patch_record_node_usage(
+    monkeypatch: pytest.MonkeyPatch, enabled: bool, reset_usage_clean_chart_data: bool = False
+) -> None:
+    general = General.model_construct(
+        usage=UsageSettings(record_node_usage=enabled, reset_usage_clean_chart_data=reset_usage_clean_chart_data)
+    )
+
+    async def get_general_settings():
+        return general
+
+    monkeypatch.setattr(record_usages, "general_settings", get_general_settings)
 
 
 class DummyNode:
@@ -355,6 +368,7 @@ async def session_factory(monkeypatch: pytest.MonkeyPatch, tmp_path):
     monkeypatch.setattr(admin_sync, "GetDB", TestGetDB)
     monkeypatch.setattr(usage_limits, "GetDB", TestGetDB)
     monkeypatch.setattr(record_usages, "_retained_cohorts", [])
+    _patch_record_node_usage(monkeypatch, True)
 
     yield session_factory
 
@@ -498,7 +512,7 @@ async def test_record_user_usages_updates_users_and_admins(monkeypatch: pytest.M
         return stats_map[node.node_id]
 
     monkeypatch.setattr(record_usages, "get_users_stats", fake_get_users_stats)
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
 
     await record_usages.record_user_usages()
 
@@ -572,7 +586,7 @@ async def test_record_user_usages_limits_overused_admin(monkeypatch: pytest.Monk
 
     remove_users = AsyncMock()
     monkeypatch.setattr(record_usages, "get_users_stats", fake_get_users_stats)
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", True)
+    _patch_record_node_usage(monkeypatch, False)
     monkeypatch.setattr("app.operation.admin_sync.sync_remove_users", remove_users)
 
     await record_usages.record_user_usages()
@@ -726,7 +740,7 @@ async def test_record_user_usages_returns_when_no_usage(monkeypatch: pytest.Monk
         return []
 
     monkeypatch.setattr(record_usages, "get_users_stats", fake_get_users_stats)
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
 
     await record_usages.record_user_usages()
 
@@ -780,7 +794,7 @@ async def test_record_node_usages_updates_totals(monkeypatch: pytest.MonkeyPatch
         return stats_map[node.node_id]
 
     monkeypatch.setattr(record_usages, "get_outbounds_stats", fake_get_outbounds_stats)
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
 
     await record_usages.record_node_usages()
 
@@ -1072,7 +1086,7 @@ def _install_nodes(monkeypatch: pytest.MonkeyPatch, node_ids, coefficients, stat
         return stats_map[node.node_id]
 
     monkeypatch.setattr(record_usages, "get_users_stats", fake_get_users_stats)
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
     return nodes
 
 
@@ -1311,7 +1325,7 @@ async def test_reset_during_collection_is_not_billed(monkeypatch: pytest.MonkeyP
 
     nodes = [(node_ids[0], DummyNode(node_ids[0]))]
     monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
 
     async def racing_get_users_stats(node: DummyNode, node_id: int | None = None):
         await _reset_user(session_factory, reset_user_id)
@@ -1340,7 +1354,7 @@ async def test_bulk_reset_during_collection_is_not_billed(monkeypatch: pytest.Mo
 
     nodes = [(node_ids[0], DummyNode(node_ids[0]))]
     monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
 
     async def racing_get_users_stats(node: DummyNode, node_id: int | None = None):
         async with session_factory() as session:
@@ -1371,7 +1385,7 @@ async def test_reset_all_during_collection_is_not_billed(monkeypatch: pytest.Mon
 
     nodes = [(node_ids[0], DummyNode(node_ids[0]))]
     monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
 
     async def racing_get_users_stats(node: DummyNode, node_id: int | None = None):
         async with session_factory() as session:
@@ -1401,7 +1415,7 @@ async def test_rolled_back_reset_during_collection_still_bills(monkeypatch: pyte
 
     nodes = [(node_ids[0], DummyNode(node_ids[0]))]
     monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
 
     async def racing_get_users_stats(node: DummyNode, node_id: int | None = None):
         await _rolled_back_reset(session_factory, user_id)
@@ -1432,7 +1446,7 @@ async def test_straddling_delta_is_counted_exactly_once(monkeypatch: pytest.Monk
 
     nodes = [(node_ids[0], DummyNode(node_ids[0]))]
     monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
 
     async def racing_get_users_stats(node: DummyNode, node_id: int | None = None):
         await _reset_user(session_factory, user_id)
@@ -1720,7 +1734,7 @@ async def test_usage_recording_survives_a_concurrent_node_delete(
     monkeypatch: pytest.MonkeyPatch, session_factory, ordering
 ):
     admin_id, (user_one, user_two), (kept_node, deleted_node) = await _seed_node_delete_race(session_factory)
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True)
 
     stats_map = {
         kept_node: [{"uid": str(user_one), "value": 100}, {"uid": str(user_two), "value": 50}],
@@ -1981,11 +1995,13 @@ def _history_by_user(history) -> dict[int, int]:
     return dict(totals)
 
 
-def _force_coalesced_history(monkeypatch: pytest.MonkeyPatch, clock: list[float]) -> None:
+def _force_coalesced_history(
+    monkeypatch: pytest.MonkeyPatch, clock: list[float], reset_usage_clean_chart_data: bool = False
+) -> None:
     monkeypatch.setattr(record_usages, "_history_is_coalesced", lambda dialect: True)
     monkeypatch.setattr(record_usages, "_monotonic_now", lambda: clock[0])
     monkeypatch.setattr(record_usages.usage_settings, "user_usage_history_flush_interval", 60)
-    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    _patch_record_node_usage(monkeypatch, True, reset_usage_clean_chart_data)
 
 
 @pytest.mark.asyncio
@@ -1995,8 +2011,7 @@ async def test_coalesced_history_survives_a_reset_and_a_node_delete(
 ):
     admin_id, (user_one, user_two), (kept_node, deleted_node) = await _seed_node_delete_race(session_factory)
     clock = [100.0]
-    _force_coalesced_history(monkeypatch, clock)
-    monkeypatch.setattr(record_usages.usage_settings, "reset_user_usage_clean_chart_data", True)
+    _force_coalesced_history(monkeypatch, clock, reset_usage_clean_chart_data=True)
 
     await _coalesced_cycle(
         monkeypatch,
@@ -2078,8 +2093,7 @@ async def test_coalesced_history_keeps_pre_reset_rows_without_chart_cleanup(
 ):
     admin_id, (user_one, user_two), (kept_node, _) = await _seed_node_delete_race(session_factory)
     clock = [100.0]
-    _force_coalesced_history(monkeypatch, clock)
-    monkeypatch.setattr(record_usages.usage_settings, "reset_user_usage_clean_chart_data", False)
+    _force_coalesced_history(monkeypatch, clock, reset_usage_clean_chart_data=False)
 
     await _coalesced_cycle(monkeypatch, {kept_node: [{"uid": str(user_one), "value": 100}]})
     clock[0] = 110.0
