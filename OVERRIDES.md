@@ -58,8 +58,10 @@ is tracked through upstream-forks/forks.toml.
 
 ## Python `except (A, B)` syntax fixes (upstream PR candidates)
 
-Upstream uses the Python-2-style `except A, B:` which is a SyntaxError on Python 3;
-the fork parenthesizes every occurrence. Each file below is that fix unless noted.
+Upstream writes `except A, B:` without parentheses, which Python accepts only from 3.14 (PEP 758)
+and rejects before it; the fork parenthesized the occurrences in the files below. Ports made
+upstream-identical since then keep upstream's unparenthesized form, which ruff 0.16.4 format prefers,
+so not every occurrence in the fork is parenthesized. Each file below is that fix unless noted.
 
 - `main.py` — except-fix, plus `timeout_graceful_shutdown=HTTP_DRAIN_TIMEOUT_S` (1.5 s) on the uvicorn run call. Without it, uvicorn waits for every in-flight request before lifespan shutdown starts, so one slow request could use up Docker's 10 s stop window and the usage drain would never run (v5.34.26, P12)
 - `app/core/manager.py`
