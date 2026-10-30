@@ -8,6 +8,7 @@ import bcrypt
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field, field_validator
 
 from app.db.models import AdminStatus
+from app.fork.format_template import MAX_CUSTOM_VARIABLES
 from app.models.admin_role import RoleAccess, RoleFeatures, RoleHWIDSettings, RoleLimits, RolePermissions
 from app.models.settings import CustomVariable, CustomVariableInput, validate_custom_variables
 from app.models.stats import Period
@@ -177,7 +178,7 @@ class AdminModify(BaseModel):
     sub_domain: str | None = None
     profile_title: str | None = None
     support_url: str | None = None
-    custom_variables: list[CustomVariableInput] | None = None
+    custom_variables: list[CustomVariableInput] | None = Field(default=None, max_length=MAX_CUSTOM_VARIABLES)
     note: str | None = None
     notification_enable: UserNotificationEnable | None = None
     role_id: int | None = None

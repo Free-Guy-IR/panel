@@ -3,6 +3,7 @@ from string import Formatter
 
 from app.utils.helpers import MAX_FORMAT_SPEC_NUMBER, has_oversized_format_spec
 
+MAX_CUSTOM_VARIABLES = 100
 MAX_FORMAT_GROWTH = 4096
 _CONVERT = {None: lambda value: value, "s": str, "r": repr, "a": ascii}
 

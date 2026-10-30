@@ -13,7 +13,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.fork.format_template import check_template_value
+from app.fork.format_template import MAX_CUSTOM_VARIABLES, check_template_value
 from app.models.proxy import ShadowsocksMethods
 from app.utils.logger import get_logger
 
@@ -587,11 +587,11 @@ class CustomVariableInput(CustomVariable):
 
 class SubscriptionInput(Subscription):
     applications: list[ApplicationInput] = Field(default_factory=list)
-    custom_variables: list[CustomVariableInput] = Field(default_factory=list)
+    custom_variables: list[CustomVariableInput] = Field(default_factory=list, max_length=MAX_CUSTOM_VARIABLES)
 
 
 class GeneralInput(General):
-    custom_variables: list[CustomVariableInput] | None = Field(default=None)
+    custom_variables: list[CustomVariableInput] | None = Field(default=None, max_length=MAX_CUSTOM_VARIABLES)
 
 
 class SettingsSchemaInput(SettingsSchema):
