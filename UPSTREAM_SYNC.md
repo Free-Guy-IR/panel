@@ -566,6 +566,15 @@ repository under `upstream-forks/`.
   commit has its decision in `upstream-forks/subscription-template.md`. If the fork ever builds the
   page from subscription-template again, it must be rebased onto upstream first.
 
+- Known red, recorded 2026-10-30: the Upstream Inventory step "Fork tracker coverage" fails on fork main
+  1c20204b6 (run 40615339461) and keeps failing with this ledger until the side ledgers land. At this ledger's head
+  on 2026-10-30 it reports node 33 unported, 16 ledger and 7 refs snapshot errors (owner PG-NODE), scripts 7
+  unported (owner SCRIPTS), node_bridge_py 20 unported (owner PUSH-GATE), core-kit 3 unported (owner PUSH-GATE),
+  subscription-template 30 unported (owner PG-MERGE, its 36 drafted lines are due 2026-11-10) and mtg 1 unported
+  (owner PG-NODE); wireguard-config-kit is OK. The decisions for most of them sit on the side-ledger branch
+  b7/side-ledgers-20261027 (head 1262f9adddf6), which lands as the next increment after this one. Every other step
+  of the job must stay green.
+
 ## Upstream PR candidates (not read by the parity gate)
 
 Upstream bugs the fork fixes in its own code. Main submits them upstream after full verification.
