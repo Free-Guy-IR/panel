@@ -24,6 +24,7 @@ from app.db.models import (
     ProxyInbound,
     ReminderType,
     User,
+    UserHWID,
     UserStatus,
     UserStatusCreate,
     UserSubscriptionUpdate,
@@ -1108,6 +1109,16 @@ async def create_users_bulk(
     return db_users
 
 
+_USER_DEPENDENT_MODELS = (
+    NodeUserUsage,
+    UserUsageResetLogs,
+    UserSubscriptionUpdate,
+    UserHWID,
+    NextPlan,
+    NotificationReminder,
+)
+
+
 async def _delete_user_dependencies(db: AsyncSession, user_ids: list[int]):
     """Remove all rows that reference the given user IDs."""
     if not user_ids:
@@ -1115,6 +1126,10 @@ async def _delete_user_dependencies(db: AsyncSession, user_ids: list[int]):
 
     await db.execute(users_groups_association.delete().where(users_groups_association.c.user_id.in_(user_ids)))
     await node_removals.mark_node_removals(db, user_ids)
+
+    if db.bind.dialect.name == "sqlite":
+        for model in _USER_DEPENDENT_MODELS:
+            await db.execute(delete(model).where(model.user_id.in_(user_ids)))
 
 
 async def _delete_locked_users(
