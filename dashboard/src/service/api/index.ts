@@ -233,6 +233,8 @@ export interface APIKeyCreate {
   permissions?: RolePermissions;
   inherit_permissions?: boolean;
   expire_date?: string | null;
+  max_requests?: number | null;
+  delete_on_limit?: boolean;
   admin_id?: number | null;
 }
 
@@ -254,6 +256,8 @@ export interface APIKeyCreateResponse {
   permissions?: RolePermissions;
   inherit_permissions?: boolean;
   expire_date?: string | null;
+  max_requests?: number | null;
+  delete_on_limit?: boolean;
   id: number;
   admin_id: number;
   created_at: string;
@@ -261,6 +265,7 @@ export interface APIKeyCreateResponse {
   revoked_at?: string | null;
   status?: APIKeyStatus;
   is_expired?: boolean;
+  request_count?: number;
   api_key: string;
 }
 
@@ -274,6 +279,8 @@ export interface APIKeyResponse {
   permissions?: RolePermissions;
   inherit_permissions?: boolean;
   expire_date?: string | null;
+  max_requests?: number | null;
+  delete_on_limit?: boolean;
   id: number;
   admin_id: number;
   created_at: string;
@@ -281,6 +288,7 @@ export interface APIKeyResponse {
   revoked_at?: string | null;
   status?: APIKeyStatus;
   is_expired?: boolean;
+  request_count?: number;
 }
 
 export interface APIKeyUpdate {
@@ -294,6 +302,8 @@ export interface APIKeyUpdate {
   permissions?: RolePermissions | null;
   inherit_permissions?: boolean;
   expire_date?: string | null;
+  max_requests?: number | null;
+  delete_on_limit?: boolean;
   status?: APIKeyStatus;
 }
 

@@ -1114,14 +1114,23 @@ class APIKey(Base, CreatedAtUTCMixin):
     def is_expired(cls):
         return and_(cls.expire_date.isnot(None), cls.expire_date <= func.current_timestamp())
 
+    @hybrid_property
+    def is_limited(self) -> bool:
+        """True when max_requests is set and request_count has reached or passed it."""
+        return self.max_requests is not None and self.max_requests > 0 and self.request_count >= self.max_requests
+
+    @is_limited.expression
+    def is_limited(cls):
+        return and_(cls.max_requests.isnot(None), cls.max_requests > 0, cls.request_count >= cls.max_requests)
+
     @property
     def is_usable(self) -> bool:
-        """False if the key is disabled, its admin is missing/disabled, or it has expired."""
+        """False if the key is disabled, its admin is missing/disabled, has expired, or hit its request limit."""
         if self.status == APIKeyStatus.disabled:
             return False
         if self.admin is None or self.admin.status == AdminStatus.disabled:
             return False
-        return not self.is_expired
+        return not (self.is_expired or self.is_limited)
 
 
 class TempKey(Base):
