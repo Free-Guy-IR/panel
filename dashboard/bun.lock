@@ -17,7 +17,6 @@
         "@pasarguard/openvpn-config-kit": "file:../../openvpn-config-kit",
         "@pasarguard/singbox-config-kit": "file:../../singbox-config-kit",
         "@pasarguard/wireguard-config-kit": "file:../../wireguard-config-kit",
-        "@pasarguard/xray-config-kit": "^0.3.8",
         "@radix-ui/react-accordion": "^1.2.20",
         "@radix-ui/react-alert-dialog": "^1.1.23",
         "@radix-ui/react-avatar": "^1.2.6",
@@ -478,7 +477,7 @@
 
     "@oxc-project/types": ["@oxc-project/types@0.147.0", "", {}, "sha512-IJ3s6ltHLp45S0bh7phkX+gJO7A1Wuz2EaqpAhb8WjqDwbzMiWKHhyyT42tskaWjEYXtHtVCPpnBJVT9+dcRLg=="],
 
-    "@pasarguard/core-kit": ["@pasarguard/core-kit@file:../../core-kit", { "dependencies": { "@pasarguard/mtproto-config-kit": "file:../mtproto-config-kit", "@pasarguard/openvpn-config-kit": "file:../openvpn-config-kit", "@pasarguard/singbox-config-kit": "file:../singbox-config-kit", "@pasarguard/wireguard-config-kit": "file:../wireguard-config-kit", "@pasarguard/xray-config-kit": "0.3.7" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
+    "@pasarguard/core-kit": ["@pasarguard/core-kit@file:../../core-kit", { "dependencies": { "@pasarguard/l2tp-config-kit": "file:../l2tp-config-kit", "@pasarguard/mtproto-config-kit": "file:../mtproto-config-kit", "@pasarguard/openvpn-config-kit": "file:../openvpn-config-kit", "@pasarguard/singbox-config-kit": "file:../singbox-config-kit", "@pasarguard/wireguard-config-kit": "file:../wireguard-config-kit", "@pasarguard/xray-config-kit": "0.4.2" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
 
     "@pasarguard/l2tp-config-kit": ["@pasarguard/l2tp-config-kit@file:../../l2tp-config-kit", { "dependencies": { "zod": "^3.25.76" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
 
@@ -490,7 +489,7 @@
 
     "@pasarguard/wireguard-config-kit": ["@pasarguard/wireguard-config-kit@file:../../wireguard-config-kit", { "dependencies": { "@stablelib/x25519": "^2.0.1", "zod": "^3.25.76" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
 
-    "@pasarguard/xray-config-kit": ["@pasarguard/xray-config-kit@0.3.8", "", { "dependencies": { "@noble/post-quantum": "^0.5.4", "@stablelib/x25519": "^2.0.1", "mlkem": "^2.7.0", "zod": "^3.23.8", "zod-to-json-schema": "^3.25.2" } }, "sha512-zHRk3poELWPu9R5Ux8CcWpoCWEgcPXfI3Gm3rZVqjGBYzTUFlEspDB/uGugLNWPH/fNgZIaxCCz+6TxJlIDHIA=="],
+    "@pasarguard/xray-config-kit": ["@pasarguard/xray-config-kit@0.4.2", "", { "dependencies": { "@noble/post-quantum": "^0.5.4", "@stablelib/x25519": "^2.0.1", "mlkem": "^2.7.0", "zod": "^3.23.8", "zod-to-json-schema": "^3.25.2" } }, "sha512-v0XkCLQWx4eZV7jkUXSUiQleDvwkQ7c7urmmvtQVFbm4stWirnGxYh0mznl0xKgETYkDKRG7uG/1AnLBD3wMFw=="],
 
     "@radix-ui/number": ["@radix-ui/number@1.1.3", "", {}, "sha512-Road2bidD0uu/1BGDOWNdPI06g0lIRy6IF9GZcIrDK2KGItfor8IQwQa+yM2ERgHM1MmHxaxpTzk0/Jp42lNfA=="],
 
@@ -1856,15 +1855,15 @@
 
     "@orval/zod/jsesc": ["jsesc@3.1.0", "", { "bin": { "jsesc": "bin/jsesc" } }, "sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA=="],
 
-    "@pasarguard/core-kit/@pasarguard/mtproto-config-kit": ["@pasarguard/mtproto-config-kit@file:../../mtproto-config-kit", { "dependencies": { "zod": "^3.25.76" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
+    "@pasarguard/core-kit/@pasarguard/l2tp-config-kit": ["@pasarguard/l2tp-config-kit@file:../../l2tp-config-kit", {}],
 
-    "@pasarguard/core-kit/@pasarguard/openvpn-config-kit": ["@pasarguard/openvpn-config-kit@file:../../openvpn-config-kit", { "dependencies": { "zod": "^3.25.76" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
+    "@pasarguard/core-kit/@pasarguard/mtproto-config-kit": ["@pasarguard/mtproto-config-kit@file:../../mtproto-config-kit", {}],
 
-    "@pasarguard/core-kit/@pasarguard/singbox-config-kit": ["@pasarguard/singbox-config-kit@file:../../singbox-config-kit", { "dependencies": { "zod": "^3.25.76" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
+    "@pasarguard/core-kit/@pasarguard/openvpn-config-kit": ["@pasarguard/openvpn-config-kit@file:../../openvpn-config-kit", {}],
 
-    "@pasarguard/core-kit/@pasarguard/wireguard-config-kit": ["@pasarguard/wireguard-config-kit@file:../../wireguard-config-kit", { "dependencies": { "@stablelib/x25519": "^2.0.1", "zod": "^3.25.76" }, "devDependencies": { "@types/bun": "^1.3.9", "typescript": "^5.5.4" } }],
+    "@pasarguard/core-kit/@pasarguard/singbox-config-kit": ["@pasarguard/singbox-config-kit@file:../../singbox-config-kit", {}],
 
-    "@pasarguard/core-kit/@pasarguard/xray-config-kit": ["@pasarguard/xray-config-kit@0.3.7", "", { "dependencies": { "@noble/post-quantum": "^0.5.4", "@stablelib/x25519": "^2.0.1", "mlkem": "^2.7.0", "zod": "^3.23.8", "zod-to-json-schema": "^3.25.2" } }, "sha512-KxlrXE7ys/ZHRpn4tnCV3jaokoROV2MOTBof2/3HT/KhsHritEKGsd4SmAlDvTpVjIhiQdBBeYNLjcd7zAN+CQ=="],
+    "@pasarguard/core-kit/@pasarguard/wireguard-config-kit": ["@pasarguard/wireguard-config-kit@file:../../wireguard-config-kit", {}],
 
     "@scalar/json-magic/pathe": ["pathe@2.0.3", "", {}, "sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w=="],
 
