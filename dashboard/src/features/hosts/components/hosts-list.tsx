@@ -268,6 +268,11 @@ export default function HostsList({
                   xmux: mapMasqueXmuxForForm(host.transport_settings.masque_settings.xmux),
                 }
               : undefined,
+            xdrive_settings: host.transport_settings.xdrive_settings
+              ? {
+                  xmux: mapMasqueXmuxForForm(host.transport_settings.xdrive_settings.xmux),
+                }
+              : undefined,
             xhttp_settings: host.transport_settings.xhttp_settings
               ? {
                   mode: host.transport_settings.xhttp_settings.mode ?? undefined,
@@ -648,6 +653,11 @@ export default function HostsList({
                 ? {
                     remote_dns: host.transport_settings.masque_settings.remote_dns ?? [],
                     xmux: host.transport_settings.masque_settings.xmux ?? undefined,
+                  }
+                : undefined,
+              xdrive_settings: host.transport_settings.xdrive_settings
+                ? {
+                    xmux: host.transport_settings.xdrive_settings.xmux ?? undefined,
                   }
                 : undefined,
               xhttp_settings: host.transport_settings.xhttp_settings
