@@ -153,7 +153,8 @@ async def test_an_admin_wide_change_locks_and_updates_its_users_by_primary_key_o
     writes = [columns for kind, columns in user_targets if kind == "write"]
     assert locks and writes, user_targets
     assert all(columns == {"id"} for columns in locks), user_targets
-    assert all("id" in columns and "admin_id" not in columns for columns in writes), user_targets
+    owner_checked = _database_url().startswith("sqlite")
+    assert all("id" in columns and ("admin_id" in columns) == owner_checked for columns in writes), user_targets
     after = UserStatus.active if action == "activate_all" else UserStatus.disabled
     assert await _final(recorder_db, user_ids) == [(after, 0)] * USERS
 

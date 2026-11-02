@@ -15,7 +15,7 @@ from app.db.models import (
     UserUsageResetLogs,
     users_groups_association,
 )
-from app.fork.crud.admin_scope import locked_targets
+from app.fork.crud.admin_scope import holds_row_locks, locked_targets
 from app.fork.crud.group_scope import user_in_allowed_groups
 from app.models.group import BulkGroup
 from app.models.user import BulkUser, BulkUserFilter, BulkUsersProxy
@@ -102,7 +102,7 @@ async def disable_all_active_users(
         admin (Optional[Admin]): Admin to filter users by, if any.
     """
     query = update(User).where(User.status.in_((UserStatus.active, UserStatus.on_hold)))
-    if admin and user_ids is None:
+    if admin and (user_ids is None or not holds_row_locks(db)):
         query = query.filter(User.admin_id == admin.id)
     if allowed_group_ids is not None:
         query = query.filter(user_in_allowed_groups(User.id, allowed_group_ids))
@@ -133,7 +133,7 @@ async def activate_all_disabled_users(
         admin (Optional[Admin]): Admin to filter users by, if any.
     """
     filters = [User.status == UserStatus.disabled]
-    if admin and user_ids is None:
+    if admin and (user_ids is None or not holds_row_locks(db)):
         filters.append(User.admin_id == admin.id)
     if allowed_group_ids is not None:
         filters.append(user_in_allowed_groups(User.id, allowed_group_ids))
