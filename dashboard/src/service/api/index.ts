@@ -282,12 +282,16 @@ export interface APIKeyResponse {
 
 export interface APIKeyUpdate {
   admin_id?: number | null;
-  name?: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  name?: string;
   note?: string | null;
   permissions?: RolePermissions | null;
-  inherit_permissions?: boolean | null;
+  inherit_permissions?: boolean;
   expire_date?: string | null;
-  status?: APIKeyStatus | null;
+  status?: APIKeyStatus;
 }
 
 export interface APIKeysResponse {
@@ -343,6 +347,13 @@ export const AdminCreateStatus = {
   disabled: 'disabled',
 } as const;
 
+export interface CustomVariableInput {
+  /** @maxLength 64 */
+  key: string;
+  /** @maxLength 512 */
+  value?: string;
+}
+
 export interface RoleLimits {
   max_users?: number | null;
   data_limit_min?: number | null;
@@ -368,7 +379,7 @@ export interface AdminCreate {
   sub_domain?: string | null;
   profile_title?: string | null;
   support_url?: string | null;
-  custom_variables?: CustomVariable[] | null;
+  custom_variables?: CustomVariableInput[] | null;
   note?: string | null;
   notification_enable?: UserNotificationEnable | null;
   role_id: number;
@@ -476,7 +487,7 @@ export interface AdminModify {
   sub_domain?: string | null;
   profile_title?: string | null;
   support_url?: string | null;
-  custom_variables?: CustomVariable[] | null;
+  custom_variables?: CustomVariableInput[] | null;
   note?: string | null;
   notification_enable?: UserNotificationEnable | null;
   role_id?: number | null;
@@ -619,6 +630,20 @@ export interface DownloadLink {
 }
 
 export interface Application {
+  /** @maxLength 32 */
+  name: string;
+  /** @maxLength 512 */
+  icon_url?: string;
+  /** @maxLength 256 */
+  import_url?: string;
+  description?: Partial<Record<Language, string>>;
+  recommended?: boolean;
+  show_when_hwid_enabled?: boolean;
+  platform: Platform;
+  download_links: DownloadLink[];
+}
+
+export interface ApplicationInput {
   /** @maxLength 32 */
   name: string;
   /** @maxLength 512 */
@@ -1296,7 +1321,7 @@ export interface BulkGroupsActionResponse {
  * Model for bulk host selection by IDs
  */
 export interface BulkHostSelection {
-  ids?: number[];
+  ids: number[];
 }
 
 /**
@@ -1320,6 +1345,32 @@ export interface BulkNodeSelection {
 export interface BulkNodesActionResponse {
   nodes: string[];
   count: number;
+}
+
+export type ProxySecretField = typeof ProxySecretField[keyof typeof ProxySecretField];
+
+
+export const ProxySecretField = {
+  hysteriaauth: 'hysteria.auth',
+  hysteria2password: 'hysteria2.password',
+  tuicpassword: 'tuic.password',
+  tuicuuid: 'tuic.uuid',
+  trojanpassword: 'trojan.password',
+  shadowsockspassword: 'shadowsocks.password',
+  vlessid: 'vless.id',
+  vmessid: 'vmess.id',
+} as const;
+
+export interface BulkRepairProxySecrets {
+  dry_run?: boolean;
+  group_ids?: number[];
+  admins?: number[];
+  users?: number[];
+  status?: UserStatus[];
+  expire_after?: string | null;
+  expire_before?: string | null;
+  /** @minItems 1 */
+  secret_fields: ProxySecretField[];
 }
 
 export interface BulkUser {
@@ -1839,6 +1890,15 @@ export interface General {
   stop_nodes_on_shutdown?: boolean;
 }
 
+export interface GeneralInput {
+  default_method?: ShadowsocksMethods;
+  on_hold_timeout_action?: OnHoldTimeoutAction;
+  custom_variables?: CustomVariableInput[] | null;
+  usage?: UsageSettings;
+  node_health?: NodeHealthSettings;
+  stop_nodes_on_shutdown?: boolean;
+}
+
 export type GeoFilseRegion = typeof GeoFilseRegion[keyof typeof GeoFilseRegion];
 
 
@@ -1979,6 +2039,11 @@ export interface InboundUsageStatsList {
 
 export interface L2TPSettings {
   password?: string | null;
+}
+
+export interface MasqueSettings {
+  /** @minLength 1 */
+  password?: string;
 }
 
 export interface ModifyUserByTemplate {
@@ -2264,6 +2329,19 @@ export interface NotificationSettings {
   max_retries: number;
 }
 
+export interface NotificationSettingsInput {
+  notify_telegram?: boolean;
+  notify_discord?: boolean;
+  telegram_api_token?: string | null;
+  telegram_chat_id?: number | null;
+  telegram_topic_id?: number | null;
+  discord_webhook_url?: string | null;
+  channels?: NotificationChannels;
+  proxy_url?: string | null;
+  /** @exclusiveMinimum 1 */
+  max_retries: number;
+}
+
 /**
  * A freshly generated OpenVPN PKI bundle (CA + server cert/key + tls-crypt static key).
  *
@@ -2343,11 +2421,6 @@ export interface WireGuardSettings {
   peer_ips?: string[];
 }
 
-export interface MasqueSettings {
-  /** @minLength 1 */
-  password?: string;
-}
-
 export interface TuicSettings {
   uuid?: string;
   password?: string;
@@ -2367,21 +2440,30 @@ export interface ProxyTable {
   l2tp?: L2TPSettings;
 }
 
+export interface StrictVlessSettings {
+  id?: string;
+  flow?: string | null;
+}
+
+export interface StrictOpenVPNSettings {
+  password?: string | null;
+}
+
 export interface StrictL2TPSettings {
   password?: string | null;
 }
 
 export interface ProxyTableInput {
   vmess?: VMessSettings;
-  vless?: VlessSettings;
+  vless?: StrictVlessSettings;
   trojan?: TrojanSettings;
   shadowsocks?: ShadowsocksSettings;
   wireguard?: WireGuardSettings;
   hysteria?: HysteriaSettings;
-  hysteria2?: Hysteria2Settings;
-  openvpn?: OpenVPNSettings;
-  tuic?: TuicSettings;
   masque?: MasqueSettings;
+  hysteria2?: Hysteria2Settings;
+  openvpn?: StrictOpenVPNSettings;
+  tuic?: TuicSettings;
   l2tp?: StrictL2TPSettings;
 }
 
@@ -2600,8 +2682,64 @@ export interface SettingsSchema {
   connection_limit?: ConnectionLimit | null;
 }
 
+export interface TelegramInput {
+  enable?: boolean;
+  token?: string | null;
+  webhook_url?: string | null;
+  webhook_secret?: string | null;
+  proxy_url?: string | null;
+  method?: RunMethod;
+  mini_app_login?: boolean;
+  mini_app_web_url?: string | null;
+  for_admins_only?: boolean;
+}
+
+export interface WebhookInput {
+  enable?: boolean;
+  webhooks?: WebhookInfo[];
+  days_left?: number[];
+  usage_percent?: number[];
+  /** @exclusiveMinimum 0 */
+  timeout: number;
+  /** @exclusiveMinimum 0 */
+  recurrent: number;
+  proxy_url?: string | null;
+}
+
+export type SubscriptionInputResponseHeaders = { [key: string]: unknown };
+
+export interface SubscriptionInput {
+  url_prefix?: string;
+  update_interval?: number;
+  support_url?: string;
+  profile_title?: string;
+  /** @maxLength 128 */
+  announce?: string;
+  announce_url?: string;
+  response_headers?: SubscriptionInputResponseHeaders;
+  rules: SubRule[];
+  manual_sub_request?: SubFormatEnable;
+  applications?: ApplicationInput[];
+  allow_browser_config?: boolean;
+  disable_sub_template?: boolean;
+  randomize_order?: boolean;
+  /** @maxItems 100 */
+  custom_variables?: CustomVariableInput[];
+  clients_limit?: number;
+}
+
+export interface SettingsSchemaInput {
+  telegram?: TelegramInput | null;
+  webhook?: WebhookInput | null;
+  notification_settings?: NotificationSettingsInput | null;
+  notification_enable?: NotificationEnable | null;
+  subscription?: SubscriptionInput | null;
+  hwid?: HWIDSettings | null;
+  general?: GeneralInput | null;
+  connection_limit?: ConnectionLimit | null;
+}
+
 export interface SubscriptionUserResponse {
-  proxy_settings?: ProxyTable;
   expire?: string | number | null;
   /** data_limit can be 0 or greater */
   data_limit?: number | null;
@@ -2783,6 +2921,33 @@ export type UserIPListAllNodes = {[key: string]: UserIPList | null};
  */
 export interface UserIPListAll {
   nodes: UserIPListAllNodes;
+}
+
+export interface UserListItem {
+  proxy_settings?: ProxyTable;
+  expire?: string | number | null;
+  /** data_limit can be 0 or greater */
+  data_limit?: number | null;
+  data_limit_reset_strategy?: DataLimitResetStrategy | null;
+  note?: string | null;
+  /** on_hold_expire_duration can be 0 or greater in seconds */
+  on_hold_expire_duration?: number | null;
+  on_hold_timeout?: string | number | null;
+  group_ids?: number[] | null;
+  auto_delete_in_days?: number | null;
+  hwid_limit?: number | null;
+  next_plan?: NextPlanModel | null;
+  id: number;
+  username: string;
+  status: UserStatus;
+  used_traffic: number;
+  lifetime_used_traffic?: number;
+  created_at: string;
+  edit_at?: string | null;
+  online_at?: string | null;
+  subscription_url?: string;
+  admin?: AdminBase | null;
+  hwid_count?: number | null;
 }
 
 export interface UserModify {
@@ -2967,7 +3132,7 @@ export interface UserUsageStatsList {
 }
 
 export interface UsersResponse {
-  users: UserResponse[];
+  users: UserListItem[];
   total: number;
 }
 
@@ -4974,6 +5139,231 @@ export const useBulkActivateL2tpPasswords = <TError = ErrorType<Unauthorized | H
         TContext
       > => {
       return useMutation(getBulkActivateL2tpPasswordsMutationOptions(options), queryClient);
+    }
+
+export type bulkRepairDuplicateProxySecretsResponse200 = {
+  data: unknown
+  status: 200
+}
+
+export type bulkRepairDuplicateProxySecretsResponse401 = {
+  data: Unauthorized
+  status: 401
+}
+
+export type bulkRepairDuplicateProxySecretsResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type bulkRepairDuplicateProxySecretsResponseSuccess = (bulkRepairDuplicateProxySecretsResponse200) & {
+  headers: Headers;
+};
+export type bulkRepairDuplicateProxySecretsResponseError = (bulkRepairDuplicateProxySecretsResponse401 | bulkRepairDuplicateProxySecretsResponse422) & {
+  headers: Headers;
+};
+
+export type bulkRepairDuplicateProxySecretsResponse = (bulkRepairDuplicateProxySecretsResponseSuccess | bulkRepairDuplicateProxySecretsResponseError)
+
+export const getBulkRepairDuplicateProxySecretsUrl = () => {
+
+
+
+
+  return `/api/users/bulk/repair_duplicate_secrets`
+}
+
+/**
+ * Give every user who shares a proxy secret with another user a fresh,
+ * unique one. A secret supplied by an API client (a sales bot, a script) can
+ * be handed to many users; for password-authenticated protocols such as
+ * Hysteria2 that lets every member of the group authenticate as every other
+ * member, and the node attributes all of their traffic to whichever single
+ * user it matched.
+ *
+ * - **secret_fields**: Required, at least one of `hysteria.auth`,
+ *   `hysteria2.password`, `tuic.password`, `tuic.uuid`, `trojan.password`,
+ *   `shadowsocks.password`, `vless.id`, `vmess.id`. There is deliberately no
+ *   "repair everything" default: each protocol invalidates a different set of
+ *   client configurations and is its own decision.
+ * - **user_ids**, **admins**, **group_ids**, **status**: Optional filters, the
+ *   same ones the other bulk operations take. Duplicates are always detected
+ *   across every user; the filter only limits who gets rewritten.
+ * - **dry_run**: Report how many users would be rewritten and change nothing.
+ *
+ * Every member of a duplicate group that matches the filter is rewritten -
+ * nobody keeps a value that was handed to somebody else. Users whose secret is
+ * already unique are never touched.
+ * @summary Reissue proxy secrets that more than one user shares
+ */
+export const bulkRepairDuplicateProxySecrets = async (bulkRepairProxySecrets: BulkRepairProxySecrets, options?: RequestInit): Promise<bulkRepairDuplicateProxySecretsResponse> => {
+
+  return orvalFetcher<bulkRepairDuplicateProxySecretsResponse>(getBulkRepairDuplicateProxySecretsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bulkRepairProxySecrets)
+  }
+);}
+
+
+
+
+
+export const getBulkRepairDuplicateProxySecretsMutationOptions = <TError = ErrorType<Unauthorized | HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkRepairDuplicateProxySecrets>>, TError,{data: BodyType<BulkRepairProxySecrets>}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkRepairDuplicateProxySecrets>>, TError,{data: BodyType<BulkRepairProxySecrets>}, TContext> => {
+
+const mutationKey = ['bulkRepairDuplicateProxySecrets'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkRepairDuplicateProxySecrets>>, {data: BodyType<BulkRepairProxySecrets>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkRepairDuplicateProxySecrets(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkRepairDuplicateProxySecretsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkRepairDuplicateProxySecrets>>>
+    export type BulkRepairDuplicateProxySecretsMutationBody = BodyType<BulkRepairProxySecrets>
+    export type BulkRepairDuplicateProxySecretsMutationError = ErrorType<Unauthorized | HTTPValidationError>
+
+    /**
+ * @summary Reissue proxy secrets that more than one user shares
+ */
+export const useBulkRepairDuplicateProxySecrets = <TError = ErrorType<Unauthorized | HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkRepairDuplicateProxySecrets>>, TError,{data: BodyType<BulkRepairProxySecrets>}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof bulkRepairDuplicateProxySecrets>>,
+        TError,
+        {data: BodyType<BulkRepairProxySecrets>},
+        TContext
+      > => {
+      return useMutation(getBulkRepairDuplicateProxySecretsMutationOptions(options), queryClient);
+    }
+
+export type bulkActivateOpenvpnPasswordsResponse200 = {
+  data: unknown
+  status: 200
+}
+
+export type bulkActivateOpenvpnPasswordsResponse401 = {
+  data: Unauthorized
+  status: 401
+}
+
+export type bulkActivateOpenvpnPasswordsResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type bulkActivateOpenvpnPasswordsResponseSuccess = (bulkActivateOpenvpnPasswordsResponse200) & {
+  headers: Headers;
+};
+export type bulkActivateOpenvpnPasswordsResponseError = (bulkActivateOpenvpnPasswordsResponse401 | bulkActivateOpenvpnPasswordsResponse422) & {
+  headers: Headers;
+};
+
+export type bulkActivateOpenvpnPasswordsResponse = (bulkActivateOpenvpnPasswordsResponseSuccess | bulkActivateOpenvpnPasswordsResponseError)
+
+export const getBulkActivateOpenvpnPasswordsUrl = () => {
+
+
+
+
+  return `/api/users/bulk/openvpn_activate`
+}
+
+/**
+ * Issue an OpenVPN password to existing users who are entitled to OpenVPN
+ * through their current groups (an enabled group gives them an inbound served
+ * by an OpenVPN core) but have none yet - e.g. users who reached OpenVPN
+ * through a group or core change made after they were created.
+ *
+ * - **users**: Optional list of user IDs to consider
+ * - **admins**: Optional list of admin IDs — their users will be considered
+ * - **group_ids**: Optional list of group IDs to filter users by their group membership
+ * - **status**: Optional status to filter users (e.g., "expired", "active"), empty means no filtering
+ * - **dry_run**: Report how many users would receive a password and change nothing.
+ * - Sending no filters at all considers every user.
+ *
+ * Users who are not entitled to OpenVPN are never given a password, whatever
+ * the filter says. Users who already have one are never touched - this only
+ * fills in a *missing* password, never regenerates an existing one.
+ * @summary Retroactively issue OpenVPN passwords to entitled users
+ */
+export const bulkActivateOpenvpnPasswords = async (bulkUserFilter: BulkUserFilter, options?: RequestInit): Promise<bulkActivateOpenvpnPasswordsResponse> => {
+
+  return orvalFetcher<bulkActivateOpenvpnPasswordsResponse>(getBulkActivateOpenvpnPasswordsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bulkUserFilter)
+  }
+);}
+
+
+
+
+
+export const getBulkActivateOpenvpnPasswordsMutationOptions = <TError = ErrorType<Unauthorized | HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkActivateOpenvpnPasswords>>, TError,{data: BodyType<BulkUserFilter>}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkActivateOpenvpnPasswords>>, TError,{data: BodyType<BulkUserFilter>}, TContext> => {
+
+const mutationKey = ['bulkActivateOpenvpnPasswords'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkActivateOpenvpnPasswords>>, {data: BodyType<BulkUserFilter>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkActivateOpenvpnPasswords(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkActivateOpenvpnPasswordsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkActivateOpenvpnPasswords>>>
+    export type BulkActivateOpenvpnPasswordsMutationBody = BodyType<BulkUserFilter>
+    export type BulkActivateOpenvpnPasswordsMutationError = ErrorType<Unauthorized | HTTPValidationError>
+
+    /**
+ * @summary Retroactively issue OpenVPN passwords to entitled users
+ */
+export const useBulkActivateOpenvpnPasswords = <TError = ErrorType<Unauthorized | HTTPValidationError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkActivateOpenvpnPasswords>>, TError,{data: BodyType<BulkUserFilter>}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof bulkActivateOpenvpnPasswords>>,
+        TError,
+        {data: BodyType<BulkUserFilter>},
+        TContext
+      > => {
+      return useMutation(getBulkActivateOpenvpnPasswordsMutationOptions(options), queryClient);
     }
 
 export type baseResponse200 = {
@@ -12083,14 +12473,14 @@ export const getModifySettingsUrl = () => {
 /**
  * @summary Modify Settings
  */
-export const modifySettings = async (settingsSchema: SettingsSchema, options?: RequestInit): Promise<modifySettingsResponse> => {
+export const modifySettings = async (settingsSchemaInput: SettingsSchemaInput, options?: RequestInit): Promise<modifySettingsResponse> => {
 
   return orvalFetcher<modifySettingsResponse>(getModifySettingsUrl(),
   {
     ...options,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(settingsSchema)
+    body: JSON.stringify(settingsSchemaInput)
   }
 );}
 
@@ -12099,8 +12489,8 @@ export const modifySettings = async (settingsSchema: SettingsSchema, options?: R
 
 
 export const getModifySettingsMutationOptions = <TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof modifySettings>>, TError,{data: BodyType<SettingsSchema>}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
-): UseMutationOptions<Awaited<ReturnType<typeof modifySettings>>, TError,{data: BodyType<SettingsSchema>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof modifySettings>>, TError,{data: BodyType<SettingsSchemaInput>}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+): UseMutationOptions<Awaited<ReturnType<typeof modifySettings>>, TError,{data: BodyType<SettingsSchemaInput>}, TContext> => {
 
 const mutationKey = ['modifySettings'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -12112,7 +12502,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof modifySettings>>, {data: BodyType<SettingsSchema>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof modifySettings>>, {data: BodyType<SettingsSchemaInput>}> = (props) => {
           const {data} = props ?? {};
 
           return  modifySettings(data,requestOptions)
@@ -12126,18 +12516,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type ModifySettingsMutationResult = NonNullable<Awaited<ReturnType<typeof modifySettings>>>
-    export type ModifySettingsMutationBody = BodyType<SettingsSchema>
+    export type ModifySettingsMutationBody = BodyType<SettingsSchemaInput>
     export type ModifySettingsMutationError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
 
     /**
  * @summary Modify Settings
  */
 export const useModifySettings = <TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof modifySettings>>, TError,{data: BodyType<SettingsSchema>}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof modifySettings>>, TError,{data: BodyType<SettingsSchemaInput>}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof modifySettings>>,
         TError,
-        {data: BodyType<SettingsSchema>},
+        {data: BodyType<SettingsSchemaInput>},
         TContext
       > => {
       return useMutation(getModifySettingsMutationOptions(options), queryClient);
@@ -16846,34 +17236,34 @@ export function useGetUsage<TData = Awaited<ReturnType<typeof getUsage>>, TError
 
 
 
-export type getUserCountMetricResponse200 = {
-  data: UserCountMetricStatsList
+export type getOutboundUsageResponse200 = {
+  data: NodeOutboundUsageStatsList
   status: 200
 }
 
-export type getUserCountMetricResponse401 = {
+export type getOutboundUsageResponse401 = {
   data: Unauthorized
   status: 401
 }
 
-export type getUserCountMetricResponse403 = {
+export type getOutboundUsageResponse403 = {
   data: Forbidden
   status: 403
 }
 
-export type getUserCountMetricResponse422 = {
+export type getOutboundUsageResponse422 = {
   data: HTTPValidationError
   status: 422
 }
 
-export type getUserCountMetricResponseSuccess = (getUserCountMetricResponse200) & {
+export type getOutboundUsageResponseSuccess = (getOutboundUsageResponse200) & {
   headers: Headers;
 };
-export type getUserCountMetricResponseError = (getUserCountMetricResponse401 | getUserCountMetricResponse403 | getUserCountMetricResponse422) & {
+export type getOutboundUsageResponseError = (getOutboundUsageResponse401 | getOutboundUsageResponse403 | getOutboundUsageResponse422) & {
   headers: Headers;
 };
 
-export type getUserCountMetricResponse = (getUserCountMetricResponseSuccess | getUserCountMetricResponseError)
+export type getOutboundUsageResponse = (getOutboundUsageResponseSuccess | getOutboundUsageResponseError)
 
 export const getGetOutboundUsageUrl = (params?: GetOutboundUsageParams,) => {
   const normalizedParams = new URLSearchParams();
@@ -16894,9 +17284,9 @@ export const getGetOutboundUsageUrl = (params?: GetOutboundUsageParams,) => {
  * Retrieve usage per outbound tag, over all nodes or one, within a date range.
  * @summary Get Outbound Usage
  */
-export const getOutboundUsage = async (params?: GetOutboundUsageParams, options?: RequestInit): Promise<NodeOutboundUsageStatsList> => {
+export const getOutboundUsage = async (params?: GetOutboundUsageParams, options?: RequestInit): Promise<getOutboundUsageResponse> => {
 
-  return orvalFetcher<NodeOutboundUsageStatsList>(getGetOutboundUsageUrl(params),
+  return orvalFetcher<getOutboundUsageResponse>(getGetOutboundUsageUrl(params),
   {
     ...options,
     method: 'GET'
@@ -16983,6 +17373,35 @@ export function useGetOutboundUsage<TData = Awaited<ReturnType<typeof getOutboun
 
 
 
+
+export type getUserCountMetricResponse200 = {
+  data: UserCountMetricStatsList
+  status: 200
+}
+
+export type getUserCountMetricResponse401 = {
+  data: Unauthorized
+  status: 401
+}
+
+export type getUserCountMetricResponse403 = {
+  data: Forbidden
+  status: 403
+}
+
+export type getUserCountMetricResponse422 = {
+  data: HTTPValidationError
+  status: 422
+}
+
+export type getUserCountMetricResponseSuccess = (getUserCountMetricResponse200) & {
+  headers: Headers;
+};
+export type getUserCountMetricResponseError = (getUserCountMetricResponse401 | getUserCountMetricResponse403 | getUserCountMetricResponse422) & {
+  headers: Headers;
+};
+
+export type getUserCountMetricResponse = (getUserCountMetricResponseSuccess | getUserCountMetricResponseError)
 
 export const getGetUserCountMetricUrl = (metric: UserCountMetric,
     params?: GetUserCountMetricParams,) => {
