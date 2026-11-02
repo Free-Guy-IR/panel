@@ -150,6 +150,10 @@ def side_engine(engine: Engine) -> AsyncEngine:
     return side
 
 
+def holds_row_locks(db: AsyncSession) -> bool:
+    return db.get_bind().dialect.name != "sqlite"
+
+
 async def read_committed_rows(db: AsyncSession, statement) -> list:
     bind = db.get_bind()
     if bind.dialect.name not in MYSQL_FAMILY:

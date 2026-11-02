@@ -19,10 +19,6 @@ def id_batches(user_ids: list[int]) -> list[list[int]]:
     return [ordered[start : start + USER_LOCK_BATCH_SIZE] for start in range(0, len(ordered), USER_LOCK_BATCH_SIZE)]
 
 
-def holds_row_locks(db: AsyncSession) -> bool:
-    return db.get_bind().dialect.name != "sqlite"
-
-
 def locked_targets(statement, user_ids: list[int] | None) -> list:
     if user_ids is None:
         return [statement]

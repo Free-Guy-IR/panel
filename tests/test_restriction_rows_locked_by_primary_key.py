@@ -104,9 +104,10 @@ async def test_closing_restrictions_targets_their_rows_by_primary_key_only(recor
 
     assert closed == 3
     assert restriction_targets, "closing took no lock and wrote nothing"
-    assert all("user_id" not in columns and "id" in columns for _kind, columns in restriction_targets), (
-        restriction_targets
-    )
+    one_write = _database_url().startswith("sqlite")
+    assert all(
+        ("user_id" in columns) == one_write and ("id" in columns) != one_write for _kind, columns in restriction_targets
+    ), restriction_targets
     assert await _active_restrictions(recorder_db, user_ids) == dict.fromkeys(user_ids, 0)
 
 

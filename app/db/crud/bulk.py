@@ -15,8 +15,9 @@ from app.db.models import (
     UserUsageResetLogs,
     users_groups_association,
 )
-from app.fork.crud.admin_scope import holds_row_locks, locked_targets
+from app.fork.crud.admin_scope import locked_targets
 from app.fork.crud.group_scope import user_in_allowed_groups
+from app.fork.proxy_secrets.locks import holds_row_locks
 from app.models.group import BulkGroup
 from app.models.user import BulkUser, BulkUserFilter, BulkUsersProxy
 

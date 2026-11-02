@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.db.models import ConnectionRestriction, User, UserStatus
-from app.fork.proxy_secrets.locks import read_committed_rows
+from app.fork.proxy_secrets.locks import holds_row_locks, read_committed_rows
 from app.models.settings import ConnectionLimit
 from app.utils.logger import get_logger
 
@@ -219,16 +219,19 @@ async def close_active_restrictions(db: AsyncSession, user_ids: Iterable[int], r
     ids = sorted({int(user_id) for user_id in user_ids if user_id is not None})
     closed = 0
     for start in range(0, len(ids), RELEASE_LOCK_BATCH_SIZE):
-        restriction_ids = await _restriction_ids(
-            db, ids[start : start + RELEASE_LOCK_BATCH_SIZE], ConnectionRestriction.active.is_(True)
-        )
-        for first in range(0, len(restriction_ids), RELEASE_LOCK_BATCH_SIZE):
+        chunk = ids[start : start + RELEASE_LOCK_BATCH_SIZE]
+        if holds_row_locks(db):
+            restriction_ids = await _restriction_ids(db, chunk, ConnectionRestriction.active.is_(True))
+            targets = [
+                ConnectionRestriction.id.in_(restriction_ids[first : first + RELEASE_LOCK_BATCH_SIZE])
+                for first in range(0, len(restriction_ids), RELEASE_LOCK_BATCH_SIZE)
+            ]
+        else:
+            targets = [ConnectionRestriction.user_id.in_(chunk)]
+        for target in targets:
             result = await db.execute(
                 update(ConnectionRestriction)
-                .where(
-                    ConnectionRestriction.id.in_(restriction_ids[first : first + RELEASE_LOCK_BATCH_SIZE]),
-                    ConnectionRestriction.active.is_(True),
-                )
+                .where(target, ConnectionRestriction.active.is_(True))
                 .values(active=False, restored_at=datetime.now(UTC))
                 .execution_options(synchronize_session=False)
             )
