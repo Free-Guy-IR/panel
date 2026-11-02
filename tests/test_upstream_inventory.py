@@ -2803,7 +2803,9 @@ def design_repo(tmp_path, name, undo=False):
     repo_path, _, fix = hunk_repo(tmp_path, name, "router.py", ROUTER, ROUTER_FIXED)
     git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
     commit(repo_path, "fork guard", {"guard.py": GUARD})
-    fork_fix = commit(repo_path, "fork: delete needs update in the guard", {"guard.py": GUARD_FIXED})
+    fork_fix = commit(
+        repo_path, f"fork: delete needs update in the guard\n\nUpstream: {fix}\n", {"guard.py": GUARD_FIXED}
+    )
     if undo:
         commit(repo_path, "fork: drop the guard rule", {"guard.py": GUARD})
     return repo_path, fix, fork_fix
@@ -2837,7 +2839,7 @@ def test_a_fork_commit_cited_with_its_files_is_checked_in_those_files(tmp_path, 
     commit(repo_path, "fork guard", {"guard.py": GUARD, "NOTES.md": "guard notes\n\nthe guard checks update\n"})
     fork_fix = commit(
         repo_path,
-        "fork: delete needs update in the guard",
+        f"fork: delete needs update in the guard\n\nUpstream: {fix}\n",
         {"guard.py": GUARD_FIXED, "NOTES.md": "guard notes\n\nthe guard checks update and delete\n"},
     )
     commit(repo_path, "fork: rewrite the notes", {"NOTES.md": "guard notes\n\nsee guard.py\n"})
@@ -2850,6 +2852,138 @@ def test_a_fork_commit_cited_with_its_files_is_checked_in_those_files(tmp_path, 
         assert f"`{fix[:12]}` is ported by design as a security fix, but its reason names no fork commit on main" in (
             result.stdout
         )
+
+
+ROUTER_GUARDED = ROUTER.replace(
+    "    return await crud.remove(db, name)", "    guard_delete(current_admin)\n    return await crud.remove(db, name)"
+)
+ROUTER_PADDED = ROUTER.replace(
+    '"read")),\n):\n    return await crud.remove',
+    '"read")),\n    audit=Depends(audit_log),\n    trace=Depends(trace_request),\n    limit=Depends(rate_limit),\n):\n'
+    "    return await crud.remove",
+)
+REMOVE_HEAD = '    name: str,\n    db=Depends(get_db),\n    current_admin: AdminDetails = Depends(require_permission("admins", "read")),\n'
+ROUTER_PADDED_BOTH = ROUTER.replace(
+    REMOVE_HEAD,
+    "    name: str,\n    db=Depends(get_db),\n    audit=Depends(audit_log),\n    trace=Depends(trace_request),\n"
+    '    limit=Depends(rate_limit),\n    current_admin: AdminDetails = Depends(require_permission("admins", "read")),\n'
+    "    tenant=Depends(tenant_scope),\n    locale=Depends(locale_of),\n    clock=Depends(clock_of),\n",
+)
+ROUTER_NEIGHBOURS = ROUTER.replace(
+    REMOVE_HEAD,
+    '    name: str,\n    db=Depends(get_session),\n    current_admin: AdminDetails = Depends(require_permission("admins", "read")),\n',
+).replace("return await crud.remove(db, name)", "return await crud.remove(db, name, actor=current_admin)")
+DESIGN_RELATIONS = {
+    "unrelated": ("fork: delete needs update in the guard", {"guard.py": GUARD_FIXED}, "", None, 1),
+    "unrelated-named": ("fork: delete needs update in the guard", {"guard.py": GUARD_FIXED}, " in guard.py:2", None, 1),
+    "same-file-other-line": (
+        "fork: guard delete in the router",
+        {"router.py": ROUTER_GUARDED, "guard.py": GUARD_FIXED},
+        "",
+        None,
+        1,
+    ),
+    "names-the-fix-in-text": (
+        "fork: delete needs update in the guard\n\nThe fork's design for {fix}.\n",
+        {"guard.py": GUARD_FIXED},
+        "",
+        None,
+        1,
+    ),
+    "padded-on-both-sides": ("fork: audit admin removal", {"router.py": ROUTER_PADDED_BOTH}, "", None, 1),
+    "both-neighbours-edited": ("fork: audit admin removal", {"router.py": ROUTER_NEIGHBOURS}, "", None, 1),
+    "padded-around-the-line": ("fork: audit admin removal", {"router.py": ROUTER_PADDED}, "", None, 1),
+    "upstream-trailer": (
+        "fork: delete needs update in the guard\n\nUpstream: {fix}\n",
+        {"guard.py": GUARD_FIXED},
+        "",
+        None,
+        0,
+    ),
+    "carries-the-change": (
+        "fork: delete needs update",
+        {"router.py": ROUTER_FIXED, "guard.py": GUARD_FIXED},
+        "",
+        None,
+        0,
+    ),
+    "carries-the-change-undone": (
+        "fork: delete needs update",
+        {"router.py": ROUTER_FIXED, "guard.py": GUARD_FIXED},
+        "",
+        {"router.py": ROUTER},
+        1,
+    ),
+    "carries-the-change-named-file-undone": (
+        "fork: delete needs update",
+        {"router.py": ROUTER_FIXED, "guard.py": GUARD_FIXED},
+        " in guard.py:2",
+        {"guard.py": GUARD},
+        1,
+    ),
+}
+
+
+@pytest.mark.parametrize("relation", sorted(DESIGN_RELATIONS))
+def test_a_security_design_port_cites_a_fork_commit_that_carries_the_upstream_change(tmp_path, relation):
+    message, files, named, undo, code = DESIGN_RELATIONS[relation]
+    repo_path, _, fix = hunk_repo(tmp_path, f"design-relation-{relation}", "router.py", ROUTER, ROUTER_FIXED)
+    git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
+    commit(repo_path, "fork guard", {"guard.py": GUARD})
+    cited = commit(repo_path, message.format(fix=fix), files)
+    if undo:
+        commit(repo_path, "fork: undo part of it", undo)
+    commit(repo_path, "fork: unrelated tidy", {"other.py": "tidy\n"})
+    text = f"## Ported by design\n\n- `{fix}` the fork guards delete itself, fork commit {cited}{named} security: yes\n"
+    result = standalone_gate(repo_path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but its reason names no fork commit on main" in (
+            result.stdout
+        )
+
+
+TWO_CHECKS = 'def remove(admin, name):\n    check(admin, "read")\n    log(name)\n    audit(admin, "read")\n    return crud.remove(name)\n'
+TWO_CHECKS_FIXED = TWO_CHECKS.replace('"read"', '"update"')
+TWO_CHECKS_MIDDLE = TWO_CHECKS.replace("    log(name)\n", "    log(name, admin)\n")
+LATE_CHECK = "def remove(admin, name):\n    crud.remove(name)\n    notify(name)\n    check(admin)\n    return None\n"
+EARLY_CHECK = "def remove(admin, name):\n    check(admin)\n    crud.remove(name)\n    notify(name)\n    return None\n"
+
+
+@pytest.mark.parametrize(
+    ("name", "before", "after", "fork_text", "code"),
+    [
+        ("middle-line-only", TWO_CHECKS, TWO_CHECKS_FIXED, TWO_CHECKS_MIDDLE, 1),
+        ("both-lines", TWO_CHECKS, TWO_CHECKS_FIXED, TWO_CHECKS_FIXED, 0),
+        ("moved-check", LATE_CHECK, EARLY_CHECK, EARLY_CHECK, 0),
+    ],
+)
+def test_a_security_design_port_is_judged_by_the_lines_upstream_changed(tmp_path, name, before, after, fork_text, code):
+    repo_path, _, fix = hunk_repo(tmp_path, f"design-lines-{name}", "perm.py", before, after)
+    git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
+    commit(repo_path, "fork guard", {"guard.py": GUARD})
+    cited = commit(repo_path, "fork: tighten remove", {"perm.py": fork_text, "guard.py": GUARD_FIXED})
+    text = f"## Ported by design\n\n- `{fix}` the fork guards remove itself, fork commit {cited} security: yes\n"
+    result = standalone_gate(repo_path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+
+
+PURGE = "def remove(admin, name):\n    return crud.remove(name)\n\n\ndef purge(admin, name):\n    return crud.remove(name)\n"
+PURGE_FIXED = PURGE.replace(
+    "def purge(admin, name):\n    return crud.remove(name)",
+    "def purge(admin, name):\n    guard(admin)\n    return crud.remove(name)",
+)
+WIPE = "\n\ndef wipe(admin, name):\n    guard(admin)\n    return crud.remove(name)\n"
+
+
+def test_a_security_design_port_of_a_line_the_fork_already_has_elsewhere_counts(tmp_path):
+    repo_path, _, fix = hunk_repo(tmp_path, "design-added-elsewhere", "purge.py", PURGE, PURGE_FIXED)
+    git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
+    commit(repo_path, "fork wipe", {"purge.py": PURGE + WIPE})
+    cited = commit(repo_path, "fork: guard purge", {"purge.py": PURGE_FIXED + WIPE})
+    text = f"## Ported by design\n\n- `{fix}` the fork guards purge itself, fork commit {cited} security: yes\n"
+    result = standalone_gate(repo_path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize(

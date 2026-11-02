@@ -852,6 +852,7 @@ def reverted_commits(head):
     return set(REVERT_RE.findall(git("log", "--format=%B", head)))
 
 
+HUNK_RANGE_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 HUNK_HEADER_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@")
 HUNK_CONTEXT = 3
 CONTEXT_SLACK = 2
@@ -1054,7 +1055,85 @@ def commit_paths(sha):
     ]
 
 
-def design_fork_commit(reason, head, in_range):
+def picks_upstream(fork_sha, upstream_sha):
+    body = git("log", "-1", "--format=%B", fork_sha)
+    return upstream_sha in set(CHERRY_PICK_RE.findall(body)) | set(UPSTREAM_TRAILER_RE.findall(body))
+
+
+def changed_offsets(path, side):
+    marked = [changed for text, changed in side if normalise_line(path, text)]
+    changed_at = [i for i, changed in enumerate(marked) if changed]
+    return tuple(i - changed_at[0] for i in changed_at)
+
+
+def block_positions(lines, side):
+    if lines is None:
+        return []
+    before, core, after = side
+    size = len(core)
+    return [
+        i
+        for i in range(len(lines) - size + 1)
+        if lines[i : i + size] == core
+        and context_follows(lines, i - 1, -1, tuple(reversed(before)))
+        and context_follows(lines, i + size, 1, after)
+    ]
+
+
+def normalised_positions(ref, path, numbers):
+    content = head_blob(ref, path)
+    if content is None or not numbers:
+        return frozenset()
+    kept = [number for number, line in enumerate(content.splitlines(), 1) if normalise_line(path, line)]
+    return frozenset(index for index, number in enumerate(kept) if number in numbers)
+
+
+@functools.lru_cache(maxsize=1024)
+def fork_line_changes(fork_sha, path):
+    parent = f"{fork_sha}^"
+    if not commit_exists(parent):
+        return frozenset(), frozenset(range(len(normalised_file(fork_sha, path) or ())))
+    removed, added = set(), set()
+    old = new = 0
+    in_hunk = False
+    for line in git("diff", "-U0", "--no-color", "--no-ext-diff", parent, fork_sha, "--", path).splitlines():
+        match = HUNK_RANGE_RE.match(line)
+        if match:
+            old, new, in_hunk = int(match.group(1)), int(match.group(2)), True
+        elif in_hunk and line.startswith("-"):
+            removed.add(old)
+            old += 1
+        elif in_hunk and line.startswith("+"):
+            added.add(new)
+            new += 1
+    return normalised_positions(parent, path, removed), normalised_positions(fork_sha, path, added)
+
+
+def paths_bringing_upstream_change(upstream_sha, fork_sha, paths):
+    brought = set()
+    for hunk in commit_hunks(upstream_sha):
+        path = hunk["new"] or hunk["old"]
+        if path not in paths or path in brought:
+            continue
+        removed, added = fork_line_changes(fork_sha, path)
+        post = hunk_side(path, hunk["post"])
+        pre = hunk_side(path, hunk["pre"])
+        if hunk["new"] is not None and post is not None:
+            offsets = changed_offsets(path, hunk["post"])
+            positions = block_positions(normalised_file(fork_sha, path), post)
+            if any(i + offset in added for i in positions for offset in offsets):
+                brought.add(path)
+                continue
+        if pre is not None and pre != post and not block_in_place(normalised_file(fork_sha, path), pre):
+            offsets = changed_offsets(path, hunk["pre"])
+            positions = block_positions(normalised_file(f"{fork_sha}^", path), pre)
+            if any(i + offset in removed for i in positions for offset in offsets):
+                brought.add(path)
+    return brought
+
+
+def design_fork_commit(reason, head, in_range, upstream_sha):
+    upstream_paths = set(commit_paths(upstream_sha))
     for token in FORK_COMMIT_RE.findall(SECURITY_FLAG_RE.sub("", reason)):
         result = subprocess.run(
             ["git", "rev-parse", "--verify", "--quiet", f"{token}^{{commit}}"],
@@ -1065,9 +1144,12 @@ def design_fork_commit(reason, head, in_range):
         fork_sha = result.stdout.strip()
         if result.returncode != 0 or fork_sha in in_range or not is_ancestor(fork_sha, head):
             continue
-        touched = git("show", "--format=", "--name-only", "-M", fork_sha).split("\n")
-        named = {path for path in touched if path and re.search(rf"(?<![\w./-]){re.escape(path)}(?![\w/-])", reason)}
-        expected, missing = missing_pick_lines(fork_sha, fork_sha, head, named)
+        touched = {path for path in git("show", "--format=", "--name-only", "-M", fork_sha).split("\n") if path}
+        brought = paths_bringing_upstream_change(upstream_sha, fork_sha, touched & upstream_paths)
+        if not brought and not picks_upstream(fork_sha, upstream_sha):
+            continue
+        named = {path for path in touched if re.search(rf"(?<![\w./-]){re.escape(path)}(?![\w/-])", reason)}
+        expected, missing = missing_pick_lines(fork_sha, fork_sha, head, named | brought if named else touched)
         if expected and not missing:
             return fork_sha
     return None
@@ -1765,12 +1847,13 @@ def parity_gate(
             )
             continue
         if entry["kind"] == "ported-by-design" and entry["security"]:
-            if not design_fork_commit(entry["reason"], head, in_range):
+            if not design_fork_commit(entry["reason"], head, in_range, sha):
                 del coverage[sha]
                 ledger_errors.append(
                     f"{entry['where']}: `{sha[:12]}` is ported by design as a security fix, but its reason names no "
-                    f"fork commit on {head} whose change is still there; name that fork commit, or record a Waived "
-                    "entry under an owner decision"
+                    f"fork commit on {head} that carries part of the upstream change or names it in a cherry-pick or "
+                    "Upstream: line, with its change still there; name that fork commit, or record a Waived entry "
+                    "under an owner decision"
                 )
             continue
         if entry["kind"] not in ("waived", "ported-by-design") or entry["security"]:
