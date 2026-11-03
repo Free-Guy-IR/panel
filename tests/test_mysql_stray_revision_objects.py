@@ -1,4 +1,7 @@
+import json
 import os
+from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
 from alembic.command import check, upgrade
@@ -16,6 +19,7 @@ from app.fork.migration_guards import (
     SORT_ORDER_REVISION,
     SORT_ORDER_TABLES,
     StrayMigrationObjectError,
+    _restore_applied_objects,
 )
 from tests.test_mysql_interrupted_migrations import _execute, _rollback
 from tests.test_upstream_v551_migration_splice import (
@@ -366,3 +370,39 @@ def test_a_rollback_removes_a_stray_node_stats_index_pair_without_losing_the_for
         _quiet(upgrade, _config(url), "head")
         _assert_clean_head(url)
         assert "fk_node_stats_node_id_nodes" not in _node_stats_indexes(url)
+
+
+def _claim_count(url: str) -> int:
+    engine = create_engine(_sync(url))
+    try:
+        with engine.connect() as connection:
+            return connection.execute(text("SELECT COUNT(*) FROM proxy_secret_claims")).scalar()
+    finally:
+        engine.dispose()
+
+
+def _restore(url: str, removed: set[str]) -> None:
+    script = _script()
+    applied = {revision.revision for revision in script.walk_revisions("base", "heads")}
+    engine = create_engine(_sync(url))
+    try:
+        with engine.begin() as connection:
+            _restore_applied_objects(connection, script, applied, removed)
+    finally:
+        engine.dispose()
+
+
+def test_a_claims_table_recreated_by_an_abandoned_rollback_is_backfilled_by_the_next_upgrade(tmp_path):
+    url = f"sqlite+aiosqlite:///{tmp_path / 'claims.sqlite3'}"
+    _quiet(upgrade, _config(url), "head")
+    settings = {"vless": {"id": str(uuid4())}, "trojan": {"password": "claims-trojan-secret"}}
+    _execute(
+        url,
+        "INSERT INTO users (username, status, used_traffic, data_limit_reset_strategy, created_at, proxy_settings) "
+        f"VALUES ('claims', 'active', 0, 'no_reset', '{datetime.now(UTC):%Y-%m-%d %H:%M:%S}', '{json.dumps(settings)}')",
+        "DROP TABLE proxy_secret_claims",
+    )
+    _restore(url, {"e79833e2a0b2"})
+    assert _claim_count(url) == 0
+    _restore(url, set())
+    assert _claim_count(url) == 2

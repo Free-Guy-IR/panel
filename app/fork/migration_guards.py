@@ -501,6 +501,11 @@ def _remove_unapplied_objects(connection: Connection, applied: set[str]) -> None
         connection.exec_driver_sql(f"DROP TABLE {quote(table)}")
 
 
+def _table_is_empty(connection: Connection, table: str) -> bool:
+    quote = connection.dialect.identifier_preparer.quote
+    return connection.exec_driver_sql(f"SELECT 1 FROM {quote(table)} LIMIT 1").first() is None
+
+
 def _seed_named_locks(connection: Connection, table, module) -> None:
     connection.execute(table.insert(), [{"name": name, "acquired_at": None} for name in module.SEEDED_LOCKS])
 
@@ -550,12 +555,14 @@ def _restore_applied_objects(
         if revision not in applied:
             continue
         for table in tables:
-            if inspector.has_table(table):
-                continue
             model = Base.metadata.tables[table]
-            model.create(connection)
+            created = not inspector.has_table(table)
+            if created:
+                model.create(connection)
             refill = TABLE_REFILLS.get(table)
-            if refill is not None and revision not in removed:
+            if refill is None or revision in removed:
+                continue
+            if created or _table_is_empty(connection, table):
                 refill(connection, model, script.get_revision(revision).module)
     _restore_applied_columns(connection, script, applied)
     inspector = inspect(connection)
