@@ -235,3 +235,53 @@ def test_a_connect_that_read_the_node_after_the_edit_still_pushes_when_an_older_
         delete_db_node(node["id"])
         delete_core_if_present(access_token, old_core["id"])
         delete_core_if_present(access_token, new_core["id"])
+
+
+@pytest.mark.parametrize("stale_force", [True, False], ids=["stale-forced", "stale-health-reconnect"])
+def test_a_connect_whose_node_read_returns_before_an_edit_commits_never_pushes_the_old_core_after_the_edit_restart(
+    access_token, gated_connects, stale_force
+):
+    old_core = create_core(access_token, name=unique_name("stale_read_old"))
+    new_core = create_core(access_token, name=unique_name("stale_read_new"))
+    node = make_node(old_core["id"], node_status=NodeStatus.error)
+    sessions: dict[int, str] = {}
+    read_returned, release_read = asyncio.Event(), asyncio.Event()
+
+    async def read_then_hold_the_stale_caller(db, node_id, **kwargs):
+        db_node = await get_node_by_id(db, node_id, **kwargs)
+        caller = sessions[id(db)]
+        if db_node is not None:
+            gated_connects.current_caller[id(db_node)] = caller
+        if caller == "C1":
+            read_returned.set()
+            await release_read.wait()
+        return db_node
+
+    gated_connects.monkeypatch.setattr("app.operation.node.get_node_by_id", read_then_hold_the_stale_caller)
+
+    async def scenario():
+        operation = NodeOperation(operator_type=OperatorType.API)
+
+        async with TestSession() as db1:
+            sessions[id(db1)] = "C1"
+            stale = asyncio.create_task(operation._connect_single_node_local(db1, node["id"], force_start=stale_force))
+            await read_returned.wait()
+
+            await move_node_to_core(node["id"], new_core["id"])
+            async with TestSession() as db2:
+                sessions[id(db2)] = "C2"
+                await operation._connect_single_node_local(db2, node["id"], force_start=True)
+            await delete_core_row(old_core["id"])
+
+            release_read.set()
+            await stale
+
+    try:
+        asyncio.run(scenario())
+
+        assert [push.caller for push in gated_connects.pushes if push.caller == "C2"] == ["C2"]
+        assert_node_ends_on_current_core(gated_connects.pushes, node["id"], old_core["id"], new_core["id"])
+    finally:
+        delete_db_node(node["id"])
+        delete_core_if_present(access_token, old_core["id"])
+        delete_core_if_present(access_token, new_core["id"])
