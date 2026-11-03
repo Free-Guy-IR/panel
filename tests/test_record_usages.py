@@ -28,12 +28,15 @@ from app.db.models import (
     NodeUserUsage,
     System,
     User,
+    UserStatus,
     UserUsageResetLogs,
 )
 from app.fork.jobs import usage_limits
 from app.jobs import record_usages
 from app.models.proxy import ProxyTable
+from app.models.settings import ConnectionLimit
 from app.operation import admin_sync
+from app.utils import connection_limiter
 from config import database_settings, runtime_settings
 from tests.test_recorder_harness import restore_seeded_rows, snapshot_seeded_rows
 
@@ -1569,3 +1572,174 @@ async def test_usage_recording_survives_a_concurrent_node_delete(
     assert admin_used == 250
     assert all(row.node_id != deleted_node for row in history)
     assert sum(row.used_traffic for row in history if row.node_id == kept_node and row.user_id == user_one) == 130
+
+
+@pytest.mark.asyncio
+async def test_billed_user_drops_out_of_limiter_window(session_factory):
+    _, user_ids, _ = await _seed_billing_fixture(
+        session_factory, node_coefficients=[], user_names=["hostile-limiter-user"], admin_names=["hostile-a"]
+    )
+    uid = user_ids[0]
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == uid)
+            .values(online_at=datetime.now(UTC) - timedelta(seconds=58), status=UserStatus.active)
+        )
+        await session.commit()
+    epochs = await _read_usage_epochs(session_factory, user_ids)
+    ctx = await record_usages.load_user_usage_context(set(user_ids))
+    await record_usages.apply_fenced_user_usage([{"uid": uid, "value": 5}], ctx, epochs)
+    await asyncio.sleep(3)
+    async with session_factory() as session:
+        found = await connection_limiter.candidate_users(
+            session, ConnectionLimit(enabled=True, online_window_seconds=60)
+        )
+    assert uid in [u.id for u in found], "user billed 3s ago is not a limiter candidate"
+
+
+@pytest.mark.asyncio
+async def test_limiter_look_back_ends_one_recorder_throttle_past_the_window(session_factory):
+    _, user_ids, _ = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[],
+        user_names=["limiter-inside-user", "limiter-outside-user"],
+        admin_names=["limiter-bound-admin"],
+    )
+    inside_id, outside_id = user_ids
+    window = 60
+    throttle = connection_limiter.RECORDER_ONLINE_AT_THROTTLE
+    now = datetime.now(UTC)
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == inside_id)
+            .values(online_at=now - timedelta(seconds=window) - throttle + timedelta(seconds=20))
+        )
+        await session.execute(
+            update(User)
+            .where(User.id == outside_id)
+            .values(online_at=now - timedelta(seconds=window) - throttle - timedelta(seconds=20))
+        )
+        await session.commit()
+    async with session_factory() as session:
+        found = await connection_limiter.candidate_users(
+            session, ConnectionLimit(enabled=True, online_window_seconds=window)
+        )
+    found_ids = {u.id for u in found}
+    assert inside_id in found_ids
+    assert outside_id not in found_ids
+
+
+def test_limiter_slack_covers_the_recorder_online_at_throttle():
+    assert connection_limiter.RECORDER_ONLINE_AT_THROTTLE >= record_usages.ONLINE_AT_WRITE_INTERVAL
+
+
+@pytest.mark.asyncio
+async def test_on_hold_user_billed_after_edit_becomes_online(session_factory):
+    _, user_ids, _ = await _seed_billing_fixture(
+        session_factory, node_coefficients=[], user_names=["hostile-onhold-user"], admin_names=["hostile-b"]
+    )
+    uid = user_ids[0]
+    now = datetime.now(UTC)
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == uid)
+            .values(
+                status=UserStatus.on_hold,
+                online_at=now - timedelta(seconds=30),
+                edit_at=now - timedelta(seconds=10),
+                on_hold_expire_duration=86400,
+            )
+        )
+        await session.commit()
+    epochs = await _read_usage_epochs(session_factory, user_ids)
+    ctx = await record_usages.load_user_usage_context(set(user_ids))
+    await record_usages.apply_fenced_user_usage([{"uid": uid, "value": 5}], ctx, epochs)
+    async with session_factory() as session:
+        became = (await session.execute(select(User.id).where(User.id == uid, User.become_online))).scalar_one_or_none()
+    assert became == uid, "on-hold user billed after its edit is not become_online"
+
+
+async def _admin_edit(session_factory, user_id: int) -> None:
+    async with session_factory() as session:
+        await session.execute(update(User).where(User.id == user_id).values(edit_at=datetime.now(UTC)))
+        await session.commit()
+
+
+async def _one_billing_pass(session_factory, user_id: int, value: int) -> None:
+    epochs = await _read_usage_epochs(session_factory, [user_id])
+    ctx = await record_usages.load_user_usage_context({user_id})
+    outcome = await record_usages.apply_fenced_user_usage([{"uid": user_id, "value": value}], ctx, epochs)
+    assert outcome.applied_users == 1
+
+
+async def _online_state(session_factory, user_id: int):
+    async with session_factory() as session:
+        row = (
+            await session.execute(
+                select(User.online_at, User.used_traffic, User.become_online).where(User.id == user_id)
+            )
+        ).one()
+    return row.online_at, row.used_traffic, bool(row.become_online)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ordering", ["edit_first", "pass_first", "edit_inside_pass", "overlapping"])
+async def test_admin_edit_racing_a_billing_pass_is_online_by_the_next_pass(
+    monkeypatch: pytest.MonkeyPatch, session_factory, ordering
+):
+    _, user_ids, _ = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[],
+        user_names=[f"edit-race-{ordering}"],
+        admin_names=[f"edit-race-admin-{ordering}"],
+    )
+    uid = user_ids[0]
+    now = datetime.now(UTC)
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == uid)
+            .values(
+                status=UserStatus.on_hold,
+                created_at=now - timedelta(days=1),
+                online_at=now - timedelta(seconds=30),
+                on_hold_expire_duration=86400,
+            )
+        )
+        await session.commit()
+
+    if ordering == "edit_first":
+        await _admin_edit(session_factory, uid)
+        await _one_billing_pass(session_factory, uid, 5)
+    elif ordering == "pass_first":
+        await _one_billing_pass(session_factory, uid, 5)
+        await _admin_edit(session_factory, uid)
+    elif ordering == "edit_inside_pass":
+        original_settle = record_usages.settle_batches
+
+        async def settle_after_edit(conn, stat_type, stat_batches):
+            await _admin_edit(session_factory, uid)
+            return await original_settle(conn, stat_type, stat_batches)
+
+        monkeypatch.setattr(record_usages, "settle_batches", settle_after_edit)
+        await _one_billing_pass(session_factory, uid, 5)
+        monkeypatch.setattr(record_usages, "settle_batches", original_settle)
+    else:
+        await asyncio.wait_for(
+            asyncio.gather(_admin_edit(session_factory, uid), _one_billing_pass(session_factory, uid, 5)),
+            timeout=30,
+        )
+
+    await _one_billing_pass(session_factory, uid, 7)
+    online_at, used, became = await _online_state(session_factory, uid)
+    assert became, f"{ordering}: user edited around a billing pass is not online after the next pass"
+    assert used == 12
+
+    await _one_billing_pass(session_factory, uid, 11)
+    throttled_online_at, used, became = await _online_state(session_factory, uid)
+    assert became
+    assert used == 23
+    assert _as_utc(throttled_online_at) == _as_utc(online_at)
