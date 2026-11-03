@@ -156,7 +156,8 @@ DIRECTIVE_PREFIXES = (
 )
 CGO_IMPORT_RE = re.compile(r'["`]C["`]')
 FORK_CITE_RE = re.compile(
-    r"\b(?:commits?|ported\s+in|carried\s+by|fixed\s+by):?\s+`?(?:[0-9a-f]{9,40}`?\s*(?:,|and)\s*`?)*$", re.IGNORECASE
+    r"\b(?:commits?|ported[\s-]+in|carried[\s-]+by|fixed[\s-]+by):?\s+[`(]?(?:[0-9a-f]{9,40}[`)]?\s*(?:,|and(?:\s+also)?)\s*[`(]?)*$",
+    re.IGNORECASE,
 )
 GO_MODULE_VERSION_RE = re.compile(r"^go\s+1\.(\d+)\b", re.MULTILINE)
 GO_FILENAME_OSES = frozenset(
@@ -215,6 +216,10 @@ WORKFLOW_DIRECTORY = ".github/workflows"
 WORKFLOW_PLATFORMS_RE = re.compile(r"^\s*-?\s*platforms:\s*(.*)$")
 WORKFLOW_MATRIX_KEYS = ("goos", "goarch")
 WORKFLOW_MATRIX_KEY_RE = re.compile(r"""\bmatrix['"]?\s*:""")
+WORKFLOW_GOARCH_RE = re.compile(r"(?<![\w${.-])goarch(?:(=)|\s*:(?=\s|$))\s*(.*)$", re.IGNORECASE)
+WORKFLOW_SHELL_WORD_RE = re.compile(r"""\$\{\{.*?\}\}|"[^"]*"|'[^']*'|[^\s;&|)]*""")
+WORKFLOW_MATRIX_GOARCH_RE = re.compile(r"\$\{\{\s*matrix\.goarch\s*\}\}")
+WORKFLOW_PLATFORM_FLAG_RE = re.compile(r"--platforms?(?:=|\s+|$)(\S*)")
 GO_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
 GO_LINUX_TRUE_TERMS = frozenset({"linux", "unix"})
 GO_CONSTRAINT_RE = re.compile(r"^\s*//\s*(?:go:build|\+build)\b(.*)$", re.MULTILINE)
@@ -1651,22 +1656,47 @@ def matrix_linux_arches(block):
     return {combo["goarch"] for combo in combos if combo["goos"] == "linux"}
 
 
+def workflow_platform_arches(value, line):
+    value = value.strip().strip("'\"")
+    if not value or "$" in value:
+        raise ShippedArchesUnreadable(f"cannot read the platforms on the line {line!r}")
+    found = set()
+    for platform in value.split(","):
+        parts = platform.strip().split("/")
+        if len(parts) < 2 or not parts[1]:
+            raise ShippedArchesUnreadable(f"cannot read the platform {platform!r}")
+        if parts[0] == "linux":
+            found.add(parts[1])
+    return found
+
+
+def workflow_goarch_arches(line):
+    found = set()
+    for match in WORKFLOW_GOARCH_RE.finditer(line):
+        rest = match.group(2)
+        value = WORKFLOW_SHELL_WORD_RE.match(rest).group(0) if match.group(1) else rest
+        value = value.strip().strip("'\"").strip()
+        if WORKFLOW_MATRIX_GOARCH_RE.fullmatch(value):
+            continue
+        if not re.fullmatch(r"[a-z0-9]+", value):
+            raise ShippedArchesUnreadable(f"cannot read the GOARCH on the line {line!r}")
+        found.add(value)
+    return found
+
+
 def workflow_linux_arches(text):
     lines = workflow_lines(text)
     found = set()
+    in_matrix = set()
     for index, (indent, line) in enumerate(lines):
         platforms = WORKFLOW_PLATFORMS_RE.match(line)
         if platforms:
-            value = platforms.group(1).strip().strip("'\"")
-            if not value or "${{" in value:
-                raise ShippedArchesUnreadable(f"cannot read the platforms line {line!r}")
-            for platform in value.split(","):
-                parts = platform.strip().split("/")
-                if len(parts) < 2 or not parts[1]:
-                    raise ShippedArchesUnreadable(f"cannot read the platform {platform!r}")
-                if parts[0] == "linux":
-                    found.add(parts[1])
+            found |= workflow_platform_arches(platforms.group(1), line)
             continue
+        if index not in in_matrix:
+            found |= workflow_goarch_arches(line)
+            for flag in WORKFLOW_PLATFORM_FLAG_RE.finditer(line):
+                found |= workflow_platform_arches(flag.group(1), line)
         key, colon, value = line.partition(":")
         if key.strip() != "matrix" or not colon:
             if WORKFLOW_MATRIX_KEY_RE.search(line):
@@ -1677,6 +1707,7 @@ def workflow_linux_arches(text):
         end = index + 1
         while end < len(lines) and lines[end][0] > indent:
             end += 1
+        in_matrix.update(range(index + 1, end))
         block = lines[index + 1 : end]
         if any(text.partition(":")[0].strip().lstrip("- ") in WORKFLOW_MATRIX_KEYS for _, text in block):
             found |= matrix_linux_arches(block)

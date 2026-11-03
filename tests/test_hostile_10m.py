@@ -270,3 +270,108 @@ def test_10m_matrix_written_in_a_form_the_parser_does_not_read_fails_closed(text
 )
 def test_10m_cgo_import_hidden_behind_a_comment_is_excluded(content):
     assert load_inventory().go_build_excluded("pkg/x.go", content, 26)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "jobs:\n  b:\n    strategy:\n      matrix:\n        os: [linux]\n        arch: [riscv64]\n    env:\n      GOOS: ${{ matrix.os }}\n      GOARCH: ${{ matrix.arch }}\n",
+        "jobs:\n  b:\n    steps:\n      - run: for a in amd64 riscv64; do GOOS=linux GOARCH=$a go build; done\n",
+        'jobs:\n  b:\n    steps:\n      - run: |\n          export GOARCH="${ARCH}"\n          go build\n',
+        "jobs:\n  b:\n    steps:\n      - run: docker buildx build --platform linux/${{ matrix.arch }} .\n",
+        'jobs:\n  b:\n    steps:\n      - run: docker buildx build --platform "$PLATFORMS" .\n',
+        "jobs:\n  b:\n    steps:\n      - uses: wangyoucao577/go-release-action@v1\n        with:\n          goos: linux\n          goarch: ${{ inputs.arch }}\n",
+        "jobs:\n  b:\n    env:\n      GOARCH:\n    steps:\n      - run: go build\n",
+    ],
+    ids=[
+        "other-matrix-key",
+        "shell-loop",
+        "export-shell-var",
+        "platform-flag-expression",
+        "platform-flag-shell-var",
+        "action-input-expression",
+        "empty-goarch",
+    ],
+)
+def test_10m_arch_set_from_a_source_the_parser_does_not_read_fails_closed(text):
+    module = load_inventory()
+    with pytest.raises(module.ShippedArchesUnreadable):
+        module.workflow_linux_arches(text)
+
+
+@pytest.mark.parametrize(
+    ("text", "arches"),
+    [
+        ("jobs:\n  b:\n    steps:\n      - run: GOOS=linux GOARCH=riscv64 make build\n", {"riscv64"}),
+        (
+            "jobs:\n  b:\n    steps:\n      - run: |\n          export GOARCH='riscv64'\n          go build\n",
+            {"riscv64"},
+        ),
+        ("jobs:\n  b:\n    steps:\n      - run: docker buildx build --platform linux/riscv64 .\n", {"riscv64"}),
+        (
+            "jobs:\n  b:\n    steps:\n      - run: docker build --platform=linux/amd64,linux/riscv64 .\n",
+            {"amd64", "riscv64"},
+        ),
+        ('jobs:\n  b:\n    env:\n      GOOS: linux\n      GOARCH: "riscv64"\n', {"riscv64"}),
+        ("jobs:\n  b:\n    steps:\n      - with:\n          goos: linux\n          goarch: riscv64\n", {"riscv64"}),
+        (
+            'jobs:\n  b:\n    strategy:\n      matrix:\n        goos: [linux]\n        goarch: [amd64]\n    env:\n      GOARCH: ${{ matrix.goarch }}\n    steps:\n      - run: echo "${GOOS}-${GOARCH}" ${{ env.GOARCH }}\n',
+            {"amd64"},
+        ),
+    ],
+    ids=[
+        "run-env",
+        "export-quoted",
+        "platform-flag",
+        "platform-flag-equals",
+        "env-literal",
+        "action-input-literal",
+        "matrix-goarch-reference",
+    ],
+)
+def test_10m_literal_goarch_and_platform_flag_are_read(text, arches):
+    assert load_inventory().workflow_linux_arches(text) == frozenset(arches)
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    [
+        "jobs:\n  b:\n    steps:\n      - run: GOOS=linux GOARCH=riscv64 make build\n",
+        "jobs:\n  b:\n    steps:\n      - run: docker buildx build --platform linux/riscv64 .\n",
+    ],
+    ids=["run-env", "platform-flag"],
+)
+def test_10m_arch_set_on_a_run_line_at_head_is_honoured_at_gate_time(tmp_path, workflow):
+    result = moved_world(tmp_path, "c.go", "//go:build !riscv64\n\n", {".github/workflows/release.yml": workflow})
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "excluded from the build" in result.stdout, result.stdout
+
+
+def test_10m_goarch_fed_by_another_matrix_key_at_head_fails_closed(tmp_path):
+    workflow = "jobs:\n  b:\n    strategy:\n      matrix:\n        os: [linux]\n        arch: [riscv64]\n    env:\n      GOARCH: ${{ matrix.arch }}\n"
+    result = moved_world(tmp_path, "c.go", "", {".github/workflows/release.yml": workflow})
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "shipped linux arch set" in result.stdout, result.stdout
+
+
+@pytest.mark.parametrize("ref", ["86da26e5", "2d8e11f3"])
+def test_10m_real_node_workflows_stay_readable_at_both_heads(ref):
+    if not (NODE_CLONE / ".git").exists():
+        pytest.skip(f"node clone not present at {NODE_CLONE}")
+    assert node_workflow_arches(ref) == set(load_inventory().GO_SHIPPED_ARCHES)
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        f"carried-by {GHOST[:12]} security: no",
+        f"carried by {SIDE[:12]} and also {GHOST[:12]} security: no",
+        f"fixed by ({GHOST[:12]}) security: no",
+    ],
+    ids=["hyphen", "and-also", "paren"],
+)
+def test_10m_ghost_cited_with_hyphen_and_also_or_paren_is_flagged(inventory, reason):
+    problems = inventory.cited_history_problems(
+        {"where": "kit.md:3", "token": SELF, "reason": reason}, "main", frozenset({SELF})
+    )
+    assert any(GHOST[:12] in problem for problem in problems), problems
