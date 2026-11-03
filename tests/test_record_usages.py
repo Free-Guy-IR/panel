@@ -3,11 +3,13 @@ from __future__ import annotations
 import logging
 import os
 from collections import defaultdict
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import bindparam, delete, select, update
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import DatabaseError, OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool, StaticPool
@@ -41,6 +43,22 @@ class DummyNode:
 
     async def get_extra(self) -> dict[str, Any]:
         return {"usage_coefficient": self._usage_coefficient}
+
+
+def test_postgres_user_traffic_update_uses_one_unnest_statement():
+    usage_params = [
+        {"uid": 1, "value": 10},
+        {"uid": 2, "value": 20},
+        {"uid": 1, "value": 30},
+    ]
+
+    stmt, params = record_usages.build_user_traffic_update("postgresql", usage_params)
+    sql = str(stmt.compile(dialect=postgresql.dialect()))
+
+    assert "UPDATE users" in sql
+    assert "FROM unnest" in sql
+    assert "online_at" not in sql
+    assert params == {"uids": [1, 2], "traffic_values": [40, 20]}
 
 
 def _get_test_database_url() -> str:
@@ -121,6 +139,72 @@ async def session_factory(monkeypatch: pytest.MonkeyPatch):
     await engine.dispose()
     if needs_json_default_fix and proxy_column is not None:
         proxy_column.server_default = proxy_default
+
+
+@pytest.mark.asyncio
+async def test_touch_users_online_at_throttles_indexed_timestamp_writes(session_factory):
+    async with session_factory() as session:
+        user = User(username="online-write-throttle")
+        session.add(user)
+        await session.commit()
+        user_id = user.id
+
+    first_seen = datetime.now(UTC).replace(microsecond=0)
+    await record_usages.touch_users_online_at([user_id], first_seen)
+
+    async def get_online_at():
+        async with session_factory() as session:
+            return (await session.execute(select(User.online_at).where(User.id == user_id))).scalar_one()
+
+    initial_online_at = await get_online_at()
+    await record_usages.touch_users_online_at([user_id], first_seen + timedelta(seconds=30))
+    throttled_online_at = await get_online_at()
+    await record_usages.touch_users_online_at([user_id], first_seen + timedelta(seconds=60))
+    refreshed_online_at = await get_online_at()
+
+    assert initial_online_at == throttled_online_at
+    assert refreshed_online_at > throttled_online_at
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+@pytest.mark.asyncio
+async def test_apply_fenced_user_usage_throttles_online_at(session_factory):
+    admin_ids, user_ids, _ = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[],
+        user_names=["online-recent-user", "online-stale-user", "online-never-user"],
+        admin_names=["online-throttle-admin"],
+    )
+    recent_id, stale_id, never_id = user_ids
+    now = datetime.now(UTC).replace(microsecond=0)
+    recent_seen = now - timedelta(seconds=30)
+    stale_seen = now - timedelta(minutes=5)
+    async with session_factory() as session:
+        await session.execute(update(User).where(User.id == recent_id).values(online_at=recent_seen))
+        await session.execute(update(User).where(User.id == stale_id).values(online_at=stale_seen))
+        await session.execute(update(User).where(User.id == never_id).values(online_at=None))
+        await session.commit()
+
+    epoch_at_poll = await _read_usage_epochs(session_factory, user_ids)
+    user_context = await record_usages.load_user_usage_context(set(user_ids))
+    outcome = await record_usages.apply_fenced_user_usage(
+        [{"uid": recent_id, "value": 10}, {"uid": stale_id, "value": 20}, {"uid": never_id, "value": 30}],
+        user_context,
+        epoch_at_poll,
+    )
+
+    assert outcome.applied_users == 3
+    async with session_factory() as session:
+        online = dict((await session.execute(select(User.id, User.online_at).where(User.id.in_(user_ids)))).all())
+    assert _as_utc(online[recent_id]) == recent_seen
+    assert _as_utc(online[stale_id]) > stale_seen
+    assert online[never_id] is not None
+    user_totals, admin_totals, _ = await _read_totals(session_factory, user_ids, admin_ids)
+    assert [user_totals[uid] for uid in user_ids] == [10, 20, 30]
+    assert admin_totals[admin_ids[0]] == 60
 
 
 @pytest.mark.asyncio
