@@ -40,6 +40,8 @@ def self_edit_refusal(db_admin: Admin, modified_admin: AdminModify, current_admi
         return "You're not allowed to change your own limits."
     if modified_admin.data_limit is not None and (modified_admin.data_limit or 0) != (db_admin.data_limit or 0):
         return "You're not allowed to change your own data limit."
+    if modified_admin.status is not None and modified_admin.status != db_admin.status:
+        return "You're not allowed to change your own status."
     return None
 
 
