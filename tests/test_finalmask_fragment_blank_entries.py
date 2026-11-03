@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from app.core.hosts import _normalize_finalmask_link
 from app.models.host import FinalMask
+from app.subscription.base import normalize_and_remove_none_values
 from app.subscription.xray import XrayConfiguration
 
 
@@ -117,18 +118,15 @@ def test_blank_entries_are_pruned_without_mutating_the_caller_input():
         pytest.param([0], ["10-20"], "length", id="lengths-int-zero"),
     ],
 )
-def test_zero_first_entry_keeps_its_scalar_on_both_paths(build, lengths, delays, scalar_key):
+def test_zero_first_entry_scalar_is_dropped_on_both_served_paths(build, lengths, delays, scalar_key):
     link_value = _build(build, lengths, delays)
     xray_value = _stored(lengths, delays) if isinstance(link_value, str) else _build(build, lengths, delays)
 
     link = _fragment_settings(_link(link_value))
-    xray = _fragment_settings(_xray(xray_value))
+    xray = _fragment_settings(normalize_and_remove_none_values({"finalmask": _xray(xray_value)})["finalmask"])
 
     for settings in (link, xray):
         assert settings["lengths"] == lengths
         assert settings["delays"] == delays
-        assert settings["length"] == lengths[0]
-        assert settings["delay"] == delays[0]
-        assert settings[scalar_key] == 0
-        assert type(settings[scalar_key]) is int
+        assert scalar_key not in settings
     assert link == xray

@@ -14,7 +14,7 @@ from app.core.manager import DB_RELOAD_ATTEMPTS, core_manager
 from app.db import GetDB
 from app.db.crud.host import get_hosts, upsert_inbounds
 from app.db.models import ProxyHost, ProxyHostSecurity
-from app.fork.finalmask import dump_fork_final_mask_for_xray, restore_fragment_scalars
+from app.fork.finalmask import dump_fork_final_mask_for_xray
 from app.models.host import (
     BaseHost,
     FinalMask,
@@ -72,7 +72,7 @@ def _normalize_finalmask_link(final_mask_settings: FinalMask | dict | str | None
             fms = dump_fork_final_mask_for_xray(fms)
 
     if isinstance(fms, dict):
-        fms = restore_fragment_scalars(normalize_and_remove_none_values(fms))
+        fms = normalize_and_remove_none_values(fms)
 
     if fms:
         return json.dumps(fms, separators=(",", ":"))
