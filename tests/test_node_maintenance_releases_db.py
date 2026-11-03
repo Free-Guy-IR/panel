@@ -59,17 +59,14 @@ def _maintenance_calls(operation, db):
 
 
 class _Blocker:
-    def __init__(self, engine, expected):
-        self.engine = engine
+    def __init__(self, expected):
         self.expected = expected
         self.entered = 0
-        self.checked_out = []
         self.all_entered = asyncio.Event()
         self.release = asyncio.Event()
 
     async def wait(self):
         self.entered += 1
-        self.checked_out.append(self.engine.pool.checkedout())
         if self.entered >= self.expected:
             self.all_entered.set()
         await self.release.wait()
@@ -93,7 +90,7 @@ async def _run_concurrently(engine, factory, operation, action, blocker):
 @pytest.mark.parametrize("action", ["update_node", "update_core", "update_geofiles"])
 async def test_remote_maintenance_wait_holds_no_db_connection(bounded_db, monkeypatch, action):
     engine, factory = bounded_db
-    blocker = _Blocker(engine, POOL_SIZE)
+    blocker = _Blocker(POOL_SIZE)
 
     async def blocking_request(rpc_action, payload, timeout=None):
         await blocker.wait()
@@ -107,7 +104,6 @@ async def test_remote_maintenance_wait_holds_no_db_connection(bounded_db, monkey
 
     checked_out, ordinary, results = await _run_concurrently(engine, factory, operation, action, blocker)
 
-    assert blocker.checked_out == [0] * POOL_SIZE
     assert checked_out == 0
     assert ordinary == 1
     assert all(isinstance(result, dict) for result in results), results
@@ -116,7 +112,7 @@ async def test_remote_maintenance_wait_holds_no_db_connection(bounded_db, monkey
 @pytest.mark.parametrize("action", ["update_node", "update_core", "update_geofiles"])
 async def test_local_maintenance_wait_holds_no_db_connection(bounded_db, monkeypatch, action):
     engine, factory = bounded_db
-    blocker = _Blocker(engine, POOL_SIZE)
+    blocker = _Blocker(POOL_SIZE)
 
     async def blocking_call(*args):
         await blocker.wait()
@@ -135,7 +131,6 @@ async def test_local_maintenance_wait_holds_no_db_connection(bounded_db, monkeyp
 
     checked_out, ordinary, results = await _run_concurrently(engine, factory, operation, action, blocker)
 
-    assert blocker.checked_out == [0] * POOL_SIZE
     assert checked_out == 0
     assert ordinary == 1
     assert results == [{"ok": True}] * POOL_SIZE

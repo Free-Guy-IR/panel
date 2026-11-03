@@ -992,16 +992,20 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         except Exception as e:
             await self.raise_error(code=400, message=f"Deletion failed due to server error: {e!s}")
 
-    async def update_node(self, db: AsyncSession, node_id: int) -> dict:
+    async def _validate_node_then_release_db(self, db: AsyncSession, node_id: int) -> None:
         await self.get_validated_node(db, node_id, load_usage_logs=False)
+        await db.close()
+
+    async def update_node(self, db: AsyncSession, node_id: int) -> dict:
+        await self._validate_node_then_release_db(db, node_id)
         return await self._update_node_api_impl(node_id)
 
     async def update_core(self, db: AsyncSession, node_id: int, node_core_update: NodeCoreUpdate) -> dict:
-        await self.get_validated_node(db, node_id, load_usage_logs=False)
+        await self._validate_node_then_release_db(db, node_id)
         return await self._update_core_impl(node_id, node_core_update)
 
     async def update_geofiles(self, db: AsyncSession, node_id: int, node_geofiles_update: NodeGeoFilesUpdate) -> dict:
-        await self.get_validated_node(db, node_id, load_usage_logs=False)
+        await self._validate_node_then_release_db(db, node_id)
         return await self._update_geofiles_impl(node_id, node_geofiles_update)
 
     async def _update_node_local(self, db_node: Node) -> None:
@@ -1625,21 +1629,22 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         self, db: AsyncSession, bulk_nodes: BulkNodeSelection, admin: AdminDetails
     ) -> BulkNodesActionResponse:
         db_nodes = await self._get_validated_nodes(db, bulk_nodes.ids)
+        targets = [(db_node.id, db_node.name) for db_node in db_nodes]
 
-        updated_nodes = []
+        updated_names = []
         errors = []
-        for db_node in db_nodes:
+        for node_id, node_name in targets:
             try:
-                await self.update_node(db, db_node.id)
+                await self.update_node(db, node_id)
             except HTTPException as exc:
                 errors.append(exc)
-                logger.warning(f'Node "{db_node.name}" bulk update failed by admin "{admin.username}": {exc}')
+                logger.warning(f'Node "{node_name}" bulk update failed by admin "{admin.username}": {exc}')
                 continue
 
-            updated_nodes.append(db_node)
-            logger.info(f'Node "{db_node.name}" updated by admin "{admin.username}"')
+            updated_names.append(node_name)
+            logger.info(f'Node "{node_name}" updated by admin "{admin.username}"')
 
-        if not updated_nodes and errors:
+        if not updated_names and errors:
             raise errors[0]
 
-        return self._build_bulk_action_response(updated_nodes)
+        return BulkNodesActionResponse(nodes=updated_names, count=len(updated_names))
