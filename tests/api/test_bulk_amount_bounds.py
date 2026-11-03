@@ -81,6 +81,20 @@ def test_bulk_expire_amount_outside_the_bound_is_422_for_the_owner_and_keeps_exp
         delete_user(access_token, user["username"])
 
 
+def test_owner_bulk_expire_of_ten_to_the_twelve_without_dry_run_keeps_the_stored_expire(access_token):
+    user = _user(access_token)
+    try:
+        before = _fetch(access_token, user["username"])
+        response = _post(access_token, "expire", 10**12, user["id"])
+        after = _fetch(access_token, user["username"])
+        assert after["expire"] is not None, "a finite expire became never-expires"
+        assert after["expire"] == before["expire"]
+        assert after["status"] == before["status"]
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, response.text
+    finally:
+        delete_user(access_token, user["username"])
+
+
 @pytest.mark.parametrize("amount", [2**63, -(2**63), DATA_LIMIT_AMOUNT_BOUND + 1, -DATA_LIMIT_AMOUNT_BOUND - 1])
 def test_bulk_data_limit_amount_outside_the_bound_is_422_for_the_owner_and_keeps_data_limit(access_token, amount):
     user = _user(access_token)
