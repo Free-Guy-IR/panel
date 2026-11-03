@@ -285,3 +285,60 @@ def test_a_connect_whose_node_read_returns_before_an_edit_commits_never_pushes_t
         delete_db_node(node["id"])
         delete_core_if_present(access_token, old_core["id"])
         delete_core_if_present(access_token, new_core["id"])
+
+
+@pytest.mark.parametrize(
+    "start_failure", [TimeoutError("start reply lost"), asyncio.CancelledError()], ids=["start-timeout", "start-cancel"]
+)
+def test_a_newer_start_that_was_sent_but_failed_still_drops_a_stale_connect_that_runs_after_it(
+    access_token, gated_connects, start_failure
+):
+    old_core = create_core(access_token, name=unique_name("stale_fail_old"))
+    new_core = create_core(access_token, name=unique_name("stale_fail_new"))
+    node = make_node(old_core["id"], node_status=NodeStatus.error)
+    sessions: dict[int, str] = {}
+    gated_connects.monkeypatch.setattr(
+        "app.operation.node.get_node_by_id", gated_connects.tagging_loader(lambda db: sessions[id(db)])
+    )
+    push_reaching_the_node = NodeOperation._connect_fenced
+
+    async def sent_then_failed_for_the_edit(pg_node, db_node, *args, **kwargs):
+        result = await push_reaching_the_node(pg_node, db_node, *args, **kwargs)
+        if gated_connects.current_caller.get(id(db_node)) == "C2":
+            raise start_failure
+        return result
+
+    gated_connects.monkeypatch.setattr(NodeOperation, "_connect_fenced", staticmethod(sent_then_failed_for_the_edit))
+
+    async def scenario():
+        snapshot_taken, release = asyncio.Event(), asyncio.Event()
+        gated_connects.held_callers["C1"] = (snapshot_taken, release)
+        operation = NodeOperation(operator_type=OperatorType.API)
+
+        async with TestSession() as db1:
+            sessions[id(db1)] = "C1"
+            stale = asyncio.create_task(operation._connect_single_node_local(db1, node["id"], force_start=True))
+            await snapshot_taken.wait()
+
+            await move_node_to_core(node["id"], new_core["id"])
+            async with TestSession() as db2:
+                sessions[id(db2)] = "C2"
+                edit_restart = asyncio.create_task(
+                    operation._connect_single_node_local(db2, node["id"], force_start=True)
+                )
+                with pytest.raises(type(start_failure)):
+                    await edit_restart
+            await delete_core_row(old_core["id"])
+
+            release.set()
+            await stale
+
+    try:
+        asyncio.run(scenario())
+
+        assert [push.caller for push in gated_connects.pushes if push.caller == "C2"] == ["C2"]
+        assert_node_ends_on_current_core(gated_connects.pushes, node["id"], old_core["id"], new_core["id"])
+    finally:
+        delete_db_node(node["id"])
+        delete_core_if_present(access_token, old_core["id"])
+        delete_core_if_present(access_token, new_core["id"])
