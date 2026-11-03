@@ -29,7 +29,7 @@ import { BulkActionItem, BulkActionsBar } from '@/features/users/components/bulk
 import { BulkActionAlertDialog } from '@/features/users/components/bulk-action-alert-dialog'
 import { Power, PowerOff, RefreshCw, Trash2, UserCheck, UserMinus, UserX } from 'lucide-react'
 import { hasPermission, hasScopeAll, isOwner } from '@/utils/rbac'
-import { resetEligibleAdmins } from '@/fork/admins/reset-usage-eligibility'
+import { currentAdminUsername, resetEligibleAdmins } from '@/fork/admins/reset-usage-eligibility'
 
 interface AdminFilters {
   sort?: string
@@ -266,7 +266,7 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
   const selectedDisableEligibleAdmins = selectedAdmins.filter(admin => getAdminStatus(admin) !== 'disabled')
   const selectedAdminIds = compactAdminIds(selectedAdmins)
   const selectedResetEligibleIds = compactAdminIds(
-    resetEligibleAdmins(selectedAdmins, (admin: AdminDetails) => ({ username: admin.username, isOwner: isOwner(admin) }), currentAdmin?.username),
+    resetEligibleAdmins(selectedAdmins, (admin: AdminDetails) => ({ username: admin.username, isOwner: isOwner(admin) }), currentAdminUsername(currentAdmin)),
   )
   const selectedEnableEligibleIds = compactAdminIds(selectedEnableEligibleAdmins)
   const selectedDisableEligibleIds = compactAdminIds(selectedDisableEligibleAdmins)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { canResetAdminUsage, resetEligibleAdmins } from './reset-usage-eligibility'
+import { canResetAdminUsage, currentAdminUsername, resetEligibleAdmins } from './reset-usage-eligibility'
 
 const self = { username: 'alice', isOwner: false }
 const ownerSelf = { username: 'alice', isOwner: true }
@@ -31,5 +31,25 @@ describe('resetEligibleAdmins', () => {
 
   it('keeps the own row of an owner admin in a bulk selection', () => {
     expect(resetEligibleAdmins([ownerSelf, other], admin => admin, 'alice').map(admin => admin.username)).toEqual(['alice', 'bob'])
+  })
+
+  it('drops the own row when the username comes from the current admin accessor', () => {
+    expect(resetEligibleAdmins([self, other], admin => admin, currentAdminUsername({ username: 'alice', is_sudo: false })).map(admin => admin.username)).toEqual(['bob'])
+  })
+})
+
+describe('currentAdminUsername', () => {
+  it('reads the username of the loaded current admin', () => {
+    expect(currentAdminUsername({ username: 'alice', is_sudo: false })).toBe('alice')
+  })
+
+  it('returns undefined before the current admin has loaded', () => {
+    expect(currentAdminUsername(null)).toBeUndefined()
+    expect(currentAdminUsername(undefined)).toBeUndefined()
+  })
+
+  it('returns undefined when the username is missing or not a string', () => {
+    expect(currentAdminUsername({ status: 401 })).toBeUndefined()
+    expect(currentAdminUsername({ username: 42 })).toBeUndefined()
   })
 })
