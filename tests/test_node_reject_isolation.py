@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 from uuid import uuid4
 
 import certifi
-import pytest
 from grpclib.client import Channel
 from grpclib.const import Cardinality, Handler, Status
 from grpclib.exceptions import GRPCError
@@ -156,14 +155,10 @@ async def test_concurrent_writers_against_a_0622_node_converge_to_the_database(m
             assert not world.node.requires_hard_reset()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="waits for node 0.6.22: a node before it fails the whole chunk for one invalid user, and the "
-    "upstream-identical bridge retries that chunk as upstream does",
-)
-async def test_one_user_a_0620_node_rejects_stalls_its_batch_until_the_node_reports_it(monkeypatch):
+async def test_one_user_a_0620_node_rejects_is_isolated_and_the_rest_of_its_batch_is_delivered(monkeypatch):
     async with rejecting_world(monkeypatch, NODE_0620) as world:
         for index in range(10):
             await world.write(f"user-{index}", "bad" if index == 3 else f"v{index}")
         await world.node.connect(NODE_0620, "26.3.27")
         await world.drained(timeout=5)
+        assert world.receiver.applied == {f"user-{index}": [f"v{index}"] for index in range(10) if index != 3}

@@ -109,4 +109,4 @@ dev = [
 ]
 
 [tool.uv.sources]
-pasarguard-node-bridge = { git = "https://github.com/Free-Guy-IR/node_bridge_py", rev = "6116922a0026a0666a93564265c2d1a375369628" }
+pasarguard-node-bridge = { git = "https://github.com/Free-Guy-IR/node_bridge_py", rev = "f213a5036b99df83e27260b40d3adb1d19065051" }

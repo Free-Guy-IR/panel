@@ -15,6 +15,7 @@ REQUIRED_BRIDGE_API = (
     (grpclib.Node, "_probe_capabilities"),
     (grpclib, "RetirableChannel"),
     (log_stream, "deliver_stream_error"),
+    (controller, "MAINTENANCE_TIMEOUTS"),
 )
 
 
