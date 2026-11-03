@@ -154,9 +154,10 @@ DIRECTIVE_PREFIXES = (
     "# mypy:",
     "# isort:",
 )
-CGO_IMPORT_RE = re.compile(r'(?:^\s*|\bimport\s*\(?\s*)(?:[\w.]+\s+)?["`]C["`]', re.MULTILINE)
-GO_CONSTRAINT_RE = re.compile(r"^\s*//\s*(?:go:build|\+build)\b(.*)$", re.MULTILINE)
-GO_KNOWN_TAGS = frozenset(
+CGO_IMPORT_RE = re.compile(r'["`]C["`]')
+FORK_CITE_RE = re.compile(r"\bcommits?\s+(?:[0-9a-f]{9,40}\s*(?:,|and)\s*)*$", re.IGNORECASE)
+GO_MODULE_VERSION_RE = re.compile(r"^go\s+1\.(\d+)\b", re.MULTILINE)
+GO_FILENAME_OSES = frozenset(
     [
         "aix",
         "android",
@@ -176,26 +177,39 @@ GO_KNOWN_TAGS = frozenset(
         "wasip1",
         "windows",
         "zos",
+    ]
+)
+GO_FILENAME_ARCHES = frozenset(
+    [
         "386",
         "amd64",
+        "amd64p32",
         "arm",
+        "armbe",
         "arm64",
+        "arm64be",
         "loong64",
         "mips",
         "mipsle",
         "mips64",
         "mips64le",
+        "mips64p32",
+        "mips64p32le",
+        "ppc",
         "ppc64",
         "ppc64le",
+        "riscv",
         "riscv64",
+        "s390",
         "s390x",
+        "sparc",
+        "sparc64",
         "wasm",
-        "cgo",
-        "gc",
-        "gccgo",
-        "unix",
     ]
 )
+GO_SHIPPED_ARCHES = frozenset({"amd64", "arm64"})
+GO_LINUX_TRUE_TERMS = frozenset({"linux", "unix"})
+GO_CONSTRAINT_RE = re.compile(r"^\s*//\s*(?:go:build|\+build)\b(.*)$", re.MULTILINE)
 NAMED_BRANCH_RE = re.compile(
     r"\bbranch(?:es)?\s+`?([\w.-][\w./-]*[\w-])`?|`([\w./-]+)`\s+branch\b|\bfork/([\w.-][\w./-]*[\w-])", re.IGNORECASE
 )
@@ -1523,15 +1537,54 @@ def upstream_release_dropped(upstream_sha, carrier, hunk):
     return not any(block_in_place(normalised_file(tag, hunk["new"]), post) for tag in tags)
 
 
-def go_build_excluded(path, content):
+def go_filename_excluded(name):
+    if name.endswith("_test.go"):
+        return True
+    parts = name[: -len(".go")].split("_")[1:]
+    if parts and parts[-1] in GO_FILENAME_ARCHES:
+        if parts[-1] not in GO_SHIPPED_ARCHES:
+            return True
+        return len(parts) > 1 and parts[-2] in GO_FILENAME_OSES and parts[-2] != "linux"
+    return bool(parts) and parts[-1] in GO_FILENAME_OSES and parts[-1] != "linux"
+
+
+def go_term_true_on_linux(term, go_minor):
+    version = re.fullmatch(r"go1\.(\d+)", term)
+    if version:
+        return go_minor is not None and int(version.group(1)) <= go_minor
+    if term in GO_LINUX_TRUE_TERMS:
+        return True
+    negated = term[1:] if term.startswith("!") else None
+    if negated in GO_FILENAME_OSES:
+        return negated != "linux"
+    if negated in GO_FILENAME_ARCHES:
+        return negated not in GO_SHIPPED_ARCHES
+    return False
+
+
+def go_build_excluded(path, content, go_minor=None):
     parts = Path(path).parts
     if any(part == "testdata" or part.startswith(("_", ".")) for part in parts):
         return True
+    if go_filename_excluded(parts[-1]):
+        return True
     for match in GO_CONSTRAINT_RE.finditer(content):
-        for tag in re.findall(r"[\w.]+", match.group(1)):
-            if tag not in GO_KNOWN_TAGS and not re.fullmatch(r"go1\.\d+", tag):
-                return True
+        terms = match.group(1).split()
+        if len(terms) != 1 or not go_term_true_on_linux(terms[0], go_minor):
+            return True
     return False
+
+
+def go_module_minor(ref, path):
+    folder = Path(path).parent
+    while True:
+        module = head_blob(ref, str(folder / "go.mod") if str(folder) != "." else "go.mod")
+        if module is not None:
+            found = GO_MODULE_VERSION_RE.search(module)
+            return int(found.group(1)) if found else None
+        if str(folder) == ".":
+            return None
+        folder = folder.parent
 
 
 def moved_hunk_problem(ident, why, target, head, upstream_sha, hunks, carriers):
@@ -1555,7 +1608,9 @@ def moved_hunk_problem(ident, why, target, head, upstream_sha, hunks, carriers):
     if not ((post[0] or post[2]) and block_in_place(here, post)):
         return f"{label}, but its non-comment lines are not in place in {target} on {head}"
     content = head_blob(head, target)
-    if target.endswith(".go") and (content is None or go_build_excluded(target, content)):
+    if target.endswith(".go") and (
+        content is None or go_build_excluded(target, content, go_module_minor(head, target))
+    ):
         return f"{label}, but {target} is excluded from the build on {head}"
     return None
 
@@ -1599,6 +1654,10 @@ def cited_history_problems(entry, head, ledger_tokens=frozenset()):
         if any(other.startswith(token) or token.startswith(other) for other in known | tips):
             continue
         sha = resolve_commit(token)
+        if sha is not None and not sha.startswith(token):
+            sha = None
+        if sha is None and not FORK_CITE_RE.search(text[: match.start()]):
+            continue
         key = sha or token
         if key in seen:
             continue

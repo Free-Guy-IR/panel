@@ -132,7 +132,9 @@ def inventory(monkeypatch):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     known = {SIDE: SIDE}
-    monkeypatch.setattr(module, "resolve_commit", lambda token: known.get(token))
+    monkeypatch.setattr(
+        module, "resolve_commit", lambda token: next((sha for key, sha in known.items() if key.startswith(token)), None)
+    )
     monkeypatch.setattr(module, "is_ancestor", lambda ancestor, descendant: False)
     monkeypatch.setattr(module, "on_upstream_ref", lambda sha: False)
     return module
