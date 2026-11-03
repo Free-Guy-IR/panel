@@ -423,3 +423,48 @@ def test_a_side_fork_without_shared_history_is_covered_by_a_full_copy_only(unsha
         assert f"{unshared['fix'][:12]}: copied into refs/remotes/fork/main with the same patch-id, but 1 of 1" in (
             result.stdout
         )
+
+
+def side_fork(tmp_path, name, keep_fix):
+    upstream = new_repo(tmp_path / name / "upstream")
+    base = commit(upstream, "base", {"a.py": "one\ntwo\n"})
+    git(upstream, "tag", "v1.0.0")
+    fix = commit(upstream, "fix: check the token", {"a.py": "one\nCHECK_TOKEN\ntwo\n"})
+    git(upstream, "tag", "v1.1.0")
+    fork = tmp_path / name / "fork"
+    git(tmp_path, "clone", "-q", str(upstream), str(fork))
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(fork, "config", key, value)
+    git(fork, "reset", "-q", "--hard", base)
+    commit(fork, "fork feature", {"f.py": "fork\n"})
+    strategy = ("--no-ff",) if keep_fix else ("-s", "ours")
+    git(fork, "merge", "-q", *strategy, "--no-edit", "v1.1.0")
+    entry = f"""
+[[repo]]
+name = "{name}"
+mode = "ledger"
+fork = "Owner/{name}"
+upstream = "Up/{name}"
+fork_url = "{fork}"
+upstream_url = "{upstream}"
+ported_ref = "main"
+grandfathered_base = "{base}"
+ledger = "upstream-forks/{name}.md"
+reason = "no tracker of its own"
+"""
+    return entry, fix
+
+
+def test_one_run_over_several_side_forks_reads_each_fork_head_from_its_own_mirror(tmp_path):
+    green, _ = side_fork(tmp_path, "akit", keep_fix=True)
+    red, fix = side_fork(tmp_path, "bkit", keep_fix=False)
+    panel = new_repo(tmp_path / "panel")
+    forks = panel / "upstream-forks"
+    forks.mkdir()
+    (forks / "forks.toml").write_text(green + red)
+    (forks / "akit.md").write_text("## Waived\n")
+    (forks / "bkit.md").write_text("## Waived\n")
+    result = run(forks / "forks.toml", "--today", "2026-10-27")
+    assert result.returncode == 1, result.stdout + result.stderr
+    second = result.stdout.split("=== bkit:", 1)[1]
+    assert f"{fix[:12]}: merged into refs/remotes/fork/main, but 1 of 1 hunk(s)" in second
