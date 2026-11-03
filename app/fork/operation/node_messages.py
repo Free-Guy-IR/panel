@@ -90,7 +90,9 @@ def scrub_credentials(text: object) -> str:
     scrubbed = _TOKEN_WITH_AT.sub(_scrub_token, _mask_basic_auth(str(text)))
     scrubbed = _ENCODED_TOKEN.sub(_scrub_encoded_token, _AUTHORITY.sub(_scrub_authority, scrubbed))
     scrubbed = _BARE_BOT_TOKEN.sub(r"\1***", _TELEGRAM_BOT_TOKEN.sub("***", scrubbed))
-    scrubbed = _PASSWORD_COLON.sub(_mask_password_colon, _PASSWORD_QUOTED.sub(r"\1\2***", scrubbed))
+    lowered = scrubbed.lower()
+    if "pass" in lowered or "pwd" in lowered:
+        scrubbed = _PASSWORD_COLON.sub(_mask_password_colon, _PASSWORD_QUOTED.sub(r"\1\2***", scrubbed))
     return _PASSWORD_PAIR.sub(r"\1***", scrubbed)
 
 

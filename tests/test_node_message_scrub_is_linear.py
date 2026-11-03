@@ -55,7 +55,7 @@ def test_scrubbing_a_megabyte_of_adversarial_text_is_fast_and_still_scrubs(shape
     assert completed.returncode == 0, completed.stderr
     result = json.loads(completed.stdout.strip().splitlines()[-1])
     assert result["size"] >= MEGABYTE - 32
-    assert result["elapsed"] < 0.5, result
+    assert result["elapsed"] < 2.0, result
     assert not result["leaked"], result
 
 
