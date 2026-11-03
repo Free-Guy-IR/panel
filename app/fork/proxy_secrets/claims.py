@@ -199,13 +199,14 @@ def claim_proxy_secrets(connection: Connection, changes: Mapping[int, ClaimChang
 @dataclass(frozen=True)
 class ClaimCollisions:
     foreign: frozenset[ProxySecretField]
+    foreign_live: frozenset[ProxySecretField]
     retired_own: frozenset[ProxySecretField]
 
 
 async def claim_collisions(db, wanted: Mapping[ProxySecretField, str], *, user_id: int | None) -> ClaimCollisions:
     digests = {field: digest for field, value in wanted.items() if (digest := secret_digest(field, value))}
     if not digests:
-        return ClaimCollisions(frozenset(), frozenset())
+        return ClaimCollisions(frozenset(), frozenset(), frozenset())
     table = ProxySecretClaim.__table__
     by_key = {(field.value, digest): field for field, digest in digests.items()}
     rows = await read_committed_rows(
@@ -215,6 +216,7 @@ async def claim_collisions(db, wanted: Mapping[ProxySecretField, str], *, user_i
         ),
     )
     foreign: set[ProxySecretField] = set()
+    foreign_live: set[ProxySecretField] = set()
     retired_own: set[ProxySecretField] = set()
     for kind, digest, holder_id, retired_at in rows:
         field = by_key.get((kind, digest))
@@ -222,9 +224,11 @@ async def claim_collisions(db, wanted: Mapping[ProxySecretField, str], *, user_i
             continue
         if holder_id is None or holder_id != user_id:
             foreign.add(field)
+            if holder_id is not None and retired_at is None:
+                foreign_live.add(field)
         elif retired_at is not None:
             retired_own.add(field)
-    return ClaimCollisions(frozenset(foreign), frozenset(retired_own))
+    return ClaimCollisions(frozenset(foreign), frozenset(foreign_live), frozenset(retired_own))
 
 
 def _change_for(instance: User, is_new: bool) -> ClaimChange | None:

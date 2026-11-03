@@ -125,7 +125,25 @@ def test_a_credential_of_a_deleted_user_is_replaced_not_handed_on(access_token):
     assert _stored_settings(username)["hysteria2"]["password"] != value
 
 
-def test_a_revoked_credential_still_cannot_be_put_back_on_its_own_user(access_token):
+def test_a_revoked_credential_resubmitted_for_its_own_user_keeps_the_current_one(access_token):
+    value = f"auth-{uuid4().hex}"
+    user = create_user(access_token, payload={"proxy_settings": {"hysteria": {"auth": value}}})
+    revoked = client.post(f"/api/user/{user['username']}/revoke_sub", headers=auth_headers(access_token)).json()
+    current = revoked["proxy_settings"]["hysteria"]["auth"]
+
+    response = client.put(
+        f"/api/user/{user['username']}",
+        headers=auth_headers(access_token),
+        json={"proxy_settings": {**revoked["proxy_settings"], "hysteria": {"auth": value}}},
+    )
+
+    assert response.status_code == status.HTTP_200_OK, response.text
+    assert current != value
+    assert _stored_settings(user["username"])["hysteria"]["auth"] == current
+    assert response.json()["proxy_settings"]["hysteria"]["auth"] == current
+
+
+def test_strict_mode_still_refuses_a_revoked_credential_on_its_own_user(access_token, refuse_submitted_collisions):
     value = f"auth-{uuid4().hex}"
     user = create_user(access_token, payload={"proxy_settings": {"hysteria": {"auth": value}}})
     revoked = client.post(f"/api/user/{user['username']}/revoke_sub", headers=auth_headers(access_token)).json()
@@ -138,6 +156,43 @@ def test_a_revoked_credential_still_cannot_be_put_back_on_its_own_user(access_to
 
     assert response.status_code == status.HTTP_409_CONFLICT, response.text
     assert _stored_settings(user["username"])["hysteria"]["auth"] == revoked["proxy_settings"]["hysteria"]["auth"]
+
+
+def test_a_sales_bot_renewal_after_a_revoke_keeps_the_first_holders_current_credentials(access_token):
+    create_core(access_token)
+    group = create_group(access_token, name=unique_name("bot"))
+    template = _sales_bot_template()
+    username = unique_name("bot")
+    created = client.post(
+        "/api/user", headers=auth_headers(access_token), json=_sales_bot_body(username, template, [group["id"]])
+    )
+    assert created.status_code == status.HTTP_201_CREATED, created.text
+    assert client.post(f"/api/user/{username}/revoke_sub", headers=auth_headers(access_token)).status_code == 200
+    after_revoke = _stored_settings(username)
+
+    renewals = [
+        client.put(
+            f"/api/user/{username}",
+            headers=auth_headers(access_token),
+            json={
+                key: value
+                for key, value in _sales_bot_body(username, template, [group["id"]]).items()
+                if key != "username"
+            },
+        )
+        for _ in range(2)
+    ]
+
+    assert [response.status_code for response in renewals] == [status.HTTP_200_OK] * 2, [
+        response.text for response in renewals
+    ]
+    stored = _stored_settings(username)
+    for protocol, attribute in HELD_FIELDS:
+        assert _secret(after_revoke, protocol, attribute) != str(template[protocol][attribute]), (protocol, attribute)
+        assert _secret(stored, protocol, attribute) == _secret(after_revoke, protocol, attribute), (protocol, attribute)
+        assert _secret(renewals[-1].json()["proxy_settings"], protocol, attribute) == _secret(
+            stored, protocol, attribute
+        )
 
 
 def test_an_operator_submitting_a_credential_of_a_user_it_cannot_see_learns_nothing_about_that_user(access_token):

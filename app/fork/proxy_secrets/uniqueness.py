@@ -151,6 +151,7 @@ def supplied_secret_fields(proxy_settings) -> frozenset[ProxySecretField]:
 class SecretCollisions:
     stored: dict[ProxySecretField, int]
     claimed: frozenset[ProxySecretField]
+    claimed_live: frozenset[ProxySecretField]
     retired_own: frozenset[ProxySecretField]
     batch: frozenset[ProxySecretField]
 
@@ -173,6 +174,7 @@ async def secret_collisions(
     return SecretCollisions(
         stored=stored_holders,
         claimed=claims.foreign,
+        claimed_live=claims.foreign_live,
         retired_own=claims.retired_own,
         batch=frozenset(reserved_secret_collisions(pending, reserved)),
     )
@@ -187,12 +189,31 @@ def _log_replaced_submission(field: ProxySecretField, collisions: SecretCollisio
         reason = f"is already stored by {collisions.stored[field]} other user(s)"
     elif field in collisions.batch:
         reason = "was already taken by an earlier user in the same request"
+    elif field in collisions.claimed_live:
+        reason = "is held by another user"
     else:
         reason = "was held by another user before"
     logger.warning(
         f"proxy secret {field.value} submitted for this user {reason}; "
         "replacing it with a freshly generated unique value"
     )
+
+
+async def current_own_secrets(
+    db: AsyncSession, user_id: int | None, fields: set[ProxySecretField]
+) -> dict[ProxySecretField, object]:
+    if user_id is None or not fields:
+        return {}
+    rows = await read_committed_rows(db, select(User.proxy_settings).where(User.id == user_id))
+    if not rows or not isinstance(rows[0][0], dict):
+        return {}
+    current = ProxyTable.model_validate(rows[0][0])
+    kept: dict[ProxySecretField, object] = {}
+    for field in fields:
+        spec = SPEC_BY_FIELD[field]
+        if read_secret(current, spec):
+            kept[field] = getattr(getattr(current, spec.protocol), spec.attribute)
+    return kept
 
 
 async def enforce_unique_proxy_secrets(
@@ -220,28 +241,35 @@ async def enforce_unique_proxy_secrets(
             return proxy_settings
 
         submitted = colliding & submitted_unchecked
-        refused = submitted if refuses_submitted_collisions() else submitted & collisions.retired_own
-        if refused:
+        if submitted and refuses_submitted_collisions():
             logger.warning(
-                f"refusing submitted proxy secret(s) {sorted(field.value for field in refused)}: the value is held "
+                f"refusing submitted proxy secret(s) {sorted(field.value for field in submitted)}: the value is held "
                 "or was used by another user, or was retired from this user"
             )
-            raise ProxySecretConflictError(refused)
+            raise ProxySecretConflictError(submitted)
         submitted_unchecked = submitted_unchecked - colliding
 
         if regenerations_done == MAX_REGENERATION_ATTEMPTS:
             break
 
+        kept = await current_own_secrets(db, exclude_user_id, submitted & collisions.retired_own)
         pending = {}
         for field in sorted(colliding):
             spec = SPEC_BY_FIELD[field]
-            if field in submitted:
-                _log_replaced_submission(field, collisions)
-            else:
+            if field in kept:
                 logger.warning(
-                    f"generated proxy secret {field.value} collided with a held or used value; regenerating it"
+                    f"proxy secret {field.value} submitted for this user was retired from this user; "
+                    "keeping its current value"
                 )
-            replacement = spec.generate()
+                replacement = kept[field]
+            else:
+                if field in submitted:
+                    _log_replaced_submission(field, collisions)
+                else:
+                    logger.warning(
+                        f"generated proxy secret {field.value} collided with a held or used value; regenerating it"
+                    )
+                replacement = spec.generate()
             write_secret(proxy_settings, spec, replacement)
             pending[field] = str(replacement)
 

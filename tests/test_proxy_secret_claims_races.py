@@ -13,7 +13,14 @@ from sqlalchemy.pool import NullPool
 from app.db.crud.user import create_user, get_user_by_id, revoke_user_sub
 from app.db.models import Admin, AdminRole, Base, User
 from app.fork.models.proxy_secret_claim import ProxySecretClaim
-from app.fork.proxy_secrets import ProxySecretClaimConflict, supplied_secret_fields
+from app.fork.proxy_secrets import (
+    SECRET_FIELD_SPECS,
+    ProxySecretClaimConflict,
+    ProxySecretField,
+    read_stored_secret,
+    supplied_secret_fields,
+)
+from app.fork.proxy_secrets.claims import secret_digest
 from app.fork.proxy_secrets.locks import PROXY_SECRETS_LOCK, is_deadlock, named_lock_seed_statement
 from app.models.proxy import ProxyTable
 from app.models.user import UserCreate, UserModify
@@ -402,8 +409,10 @@ async def test_a_stale_edit_racing_a_rotation_never_brings_the_old_credential_ba
         _modify(sessions, user_id, stale_copy),
         _modify(sessions, other_id, {**other_before, "hysteria": {"auth": old_auth}}),
     )
+    rotated = None
     if order == "rotation-first":
         await _revoke(sessions, user_id)
+        rotated = (await _all_settings(sessions))[user_id]
         outcomes = await asyncio.gather(*stale_writes, return_exceptions=True)
     elif order == "stale-write-first":
         outcomes = await asyncio.gather(*stale_writes, return_exceptions=True)
@@ -411,14 +420,30 @@ async def test_a_stale_edit_racing_a_rotation_never_brings_the_old_credential_ba
     else:
         outcomes = (await asyncio.gather(_revoke(sessions, user_id), *stale_writes, return_exceptions=True))[1:]
 
-    unexpected = [
-        outcome
-        for outcome in outcomes
-        if isinstance(outcome, BaseException)
-        and not (isinstance(outcome, HTTPException) and outcome.status_code == 409)
-    ]
-    assert not unexpected, outcomes
+    assert not [outcome for outcome in outcomes if isinstance(outcome, BaseException)], outcomes
     stored = await _all_settings(sessions)
     assert await _holders_of(sessions, old_auth) == []
     assert stored[user_id]["hysteria"]["auth"] != old_auth
+    if rotated is not None:
+        assert _secrets(stored[user_id]) == _secrets(rotated)
+    claims = await _auth_claims(sessions, user_id)
+    assert sorted(retired_at is None for _, retired_at in claims) == [False, True], claims
+    assert [digest for digest, retired_at in claims if retired_at is None] == [
+        secret_digest(ProxySecretField.hysteria_auth, stored[user_id]["hysteria"]["auth"])
+    ]
     _assert_no_shared_credential(stored)
+
+
+def _secrets(settings):
+    return {spec.field: read_stored_secret(settings, spec) for spec in SECRET_FIELD_SPECS}
+
+
+async def _auth_claims(sessions, user_id):
+    table = ProxySecretClaim.__table__
+    async with sessions() as db:
+        rows = await db.execute(
+            select(table.c.digest, table.c.retired_at).where(
+                table.c.user_id == user_id, table.c.kind == ProxySecretField.hysteria_auth.value
+            )
+        )
+        return rows.all()
