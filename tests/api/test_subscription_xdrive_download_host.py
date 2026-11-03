@@ -1,6 +1,7 @@
 import base64
 
 import pytest
+import yaml
 
 from tests.api import client
 from tests.api.helpers import (
@@ -155,8 +156,39 @@ def test_host_with_xdrive_download_leg_is_skipped_outside_xray(xdrive_download_c
     assert remarks["xdh"] not in body
     assert remarks["xhh"] not in body
     assert remarks["xhd"] not in body
+    assert remarks["tch"] in body
+
+
+@pytest.mark.parametrize("client_type", ["links", "links_base64", "sing_box"])
+def test_formats_that_nest_the_download_host_leg_skip_a_host_whose_download_host_nests_xdrive(
+    xdrive_download_chain, client_type
+):
+    user, remarks = xdrive_download_chain
+    response = client.get(f"{user['subscription_url']}/{client_type}")
+    assert response.status_code == 200, response.text
+
+    body = _body(response, client_type)
+    assert XDRIVE_SECRET not in body
+    assert "xdrive" not in body
     assert remarks["xhn"] not in body
     assert remarks["tch"] in body
+
+
+def test_clash_meta_keeps_a_host_whose_download_host_only_nests_an_xdrive_leg(xdrive_download_chain):
+    user, remarks = xdrive_download_chain
+    response = client.get(f"{user['subscription_url']}/clash_meta")
+    assert response.status_code == 200, response.text
+
+    assert XDRIVE_SECRET not in response.text
+    assert "xdrive" not in response.text
+    proxies = {proxy["name"]: proxy for proxy in yaml.safe_load(response.text)["proxies"]}
+    assert remarks["xhh"] not in proxies
+    assert remarks["xhd"] not in proxies
+    assert remarks["xhn"] in proxies
+    download = proxies[remarks["xhn"]]["xhttp-opts"]["download-settings"]
+    assert download["server"] == "198.51.100.33"
+    assert download["port"] == 18547
+    assert download["path"] == "/xd"
 
 
 @pytest.mark.parametrize("client_type", NON_XRAY_OTHER_FORMATS)

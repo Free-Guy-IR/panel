@@ -441,7 +441,9 @@ async def _prepare_download_settings(
     return download_copy
 
 
-def _uses_xray_only_network(host_data: SubscriptionInboundData | dict | None) -> bool:
+def _uses_xray_only_network(
+    host_data: SubscriptionInboundData | dict | None, nested_download_legs: bool = True
+) -> bool:
     if isinstance(host_data, dict):
         stream_settings = host_data.get("streamSettings")
         network = host_data.get("network")
@@ -452,7 +454,10 @@ def _uses_xray_only_network(host_data: SubscriptionInboundData | dict | None) ->
         return False
     if host_data.network in XRAY_ONLY_NETWORKS:
         return True
-    return _uses_xray_only_network(getattr(host_data.transport_config, "download_settings", None))
+    download_leg = getattr(host_data.transport_config, "download_settings", None)
+    if not nested_download_legs and isinstance(download_leg, SubscriptionInboundData):
+        return download_leg.network in XRAY_ONLY_NETWORKS
+    return _uses_xray_only_network(download_leg, nested_download_legs)
 
 
 async def process_inbounds_and_tags(
@@ -489,7 +494,9 @@ async def process_inbounds_and_tags(
         return xray_template_overrides.get(template_id)
 
     for host_data in hosts:
-        if _uses_xray_only_network(host_data) and not isinstance(conf, XrayConfiguration):
+        if not isinstance(conf, XrayConfiguration) and _uses_xray_only_network(
+            host_data, nested_download_legs=not isinstance(conf, ClashMetaConfiguration)
+        ):
             # Links, sing-box, Clash and Outline cannot carry these transports.
             continue
         result = await process_host(host_data, format_variables, user.inbounds, proxy_settings, custom_variables)
