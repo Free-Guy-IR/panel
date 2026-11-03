@@ -69,13 +69,16 @@ def test_fork_wireguard_add_path_treats_nfc_and_nfd_forms_as_one_name():
     assert len({unicodedata.normalize("NFC", stem).casefold() for stem in stems}) == 2, stems
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BSUB-N-1: upstream v5.6.0 _remark_validation suffixes a duplicate remark with ' (N)' before _archive_name runs",
-)
 def test_fork_wireguard_add_path_keeps_android_sized_names_within_fifteen_characters():
     stems = _archive_stems(*["Berlin-Server1"] * 12)
     assert len(set(stems)) == 12, stems
+    assert len({unicodedata.normalize("NFC", stem).casefold() for stem in stems}) == 12, stems
+    assert all(len(stem) <= 15 for stem in stems), stems
+
+
+def test_fork_wireguard_add_path_keeps_mixed_duplicate_remarks_unique_and_android_sized():
+    stems = _archive_stems("Berlin", "Berlin", "Berlin (2)", "berlin", "Berlin-2", "Berlin")
+    assert len({unicodedata.normalize("NFC", stem).casefold() for stem in stems}) == 6, stems
     assert all(len(stem) <= 15 for stem in stems), stems
 
 
