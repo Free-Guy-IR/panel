@@ -81,7 +81,7 @@ async def _drain():
 async def _block_transition_sync(recorder_db, pushed, user_count: int) -> tuple[list[str], list[int], dict]:
     admin_id, user_ids = await _seed_admin(recorder_db, user_count, UserStatus.active)
     async with record_usages.GetDB() as db:
-        db_admin = await get_admin_by_id(db, admin_id)
+        db_admin = await db.get(Admin, admin_id)
         with recorded_statements() as statements:
             synced = await admin_sync.sync_admin_users_for_block_transition(db, db_admin, was_blocked=True)
     await _drain()
@@ -96,7 +96,7 @@ async def _block_transition_remove(recorder_db, pushed, user_count: int) -> tupl
         await session.execute(update(Admin).where(Admin.id == admin_id).values(status=AdminStatus.limited))
         await session.commit()
     async with record_usages.GetDB() as db:
-        db_admin = await get_admin_by_id(db, admin_id)
+        db_admin = await db.get(Admin, admin_id)
         with recorded_statements() as statements:
             removed = await admin_sync.sync_admin_users_for_block_transition(db, db_admin, was_blocked=False)
     await _drain()
