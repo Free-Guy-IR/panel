@@ -7,6 +7,7 @@ from packaging.version import Version
 
 FIXED_FLOORS = {
     "aiohttp": Version("3.14.4"),
+    "multidict": Version("6.9.1"),
     "yarl": Version("1.25.1"),
 }
 
