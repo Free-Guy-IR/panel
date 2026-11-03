@@ -3,7 +3,6 @@ import importlib.util
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -293,14 +292,24 @@ def test_the_dry_run_changes_nothing(tmp_path, capsys):
 
 
 def _prod_tree(tmp_path, commit=PROD_COMMIT, name="prod"):
-    if subprocess.run(
+    assert not subprocess.run(
         ["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=ROOT, capture_output=True, check=False
-    ).returncode:
-        pytest.skip(f"the prod commit {commit} is not in this checkout")
+    ).returncode, f"the prod commit {commit} is not in this checkout; fetch the full history"
     tree = tmp_path / name
     tree.mkdir()
     archive = subprocess.run(
-        ["git", "archive", commit, "app", "config.py", "role.py", "alembic.ini", "start.sh"],
+        [
+            "git",
+            "archive",
+            commit,
+            "app",
+            "config.py",
+            "role.py",
+            "alembic.ini",
+            "start.sh",
+            "pyproject.toml",
+            "uv.lock",
+        ],
         cwd=ROOT,
         capture_output=True,
         check=True,
@@ -312,15 +321,22 @@ def _prod_tree(tmp_path, commit=PROD_COMMIT, name="prod"):
 
 
 def _prod_alembic(tree, url, *arguments):
-    env = {**os.environ, "SQLALCHEMY_DATABASE_URL": url}
-    env["PYTHONPATH"] = os.pathsep.join(filter(None, (str(tree), os.environ.get("PYTHONPATH"))))
+    uv = shutil.which("uv")
+    assert uv, "uv is required to run the production image's locked dependencies"
+    env = {
+        name: value
+        for name, value in os.environ.items()
+        if name not in {"VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT", "UV_NO_SYNC", "PYTHONPATH", "PYTHONHOME"}
+    }
+    env["SQLALCHEMY_DATABASE_URL"] = url
+    env["PYTHONPATH"] = str(tree)
     return subprocess.run(
-        [sys.executable, "-m", "alembic", *arguments],
+        [uv, "run", "--project", str(tree), "--frozen", "python", "-m", "alembic", *arguments],
         cwd=tree,
         env=env,
         capture_output=True,
         text=True,
-        timeout=300,
+        timeout=900,
         check=False,
     )
 
