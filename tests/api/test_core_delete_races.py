@@ -80,12 +80,19 @@ def test_a_delete_never_moves_a_stopped_node_onto_the_default_core_behind_the_ad
         delete_core_if_present(access_token, target["id"])
 
 
+class IssuedRestarts(list):
+    def __init__(self):
+        super().__init__()
+        self.started_cores: list[tuple[int, int | None]] = []
+
+
 @pytest.fixture
 def race_restarts(monkeypatch):
-    issued: list[tuple[str, tuple[int, ...], bool]] = []
+    issued = IssuedRestarts()
 
     async def connect_nodes_bulk(self, db, nodes, *, force_start=False):
         issued.append(("connect_nodes_bulk", tuple(sorted(node.id for node in nodes)), force_start))
+        issued.started_cores.extend((node.id, node.core_config_id) for node in nodes)
 
     async def restart_nodes_by_ids(self, db, node_ids, admin):
         issued.append(("restart_nodes_by_ids", tuple(sorted(node_ids)), False))
@@ -323,6 +330,9 @@ async def test_a_delete_racing_a_node_moving_off_the_core_only_restarts_it_onto_
                 name == "connect_nodes_bulk" and force
                 for name, _node_ids, force in _restarts_reaching(race_restarts, rows["node"])
             ), context
+            assert all(
+                core == rows["home"] for node_id, core in race_restarts.started_cores if node_id == rows["node"]
+            ), f"{context} started_cores={race_restarts.started_cores}"
         else:
             assert _status(deleted) == status.HTTP_409_CONFLICT, context
             assert rows["target"] in alive, context
