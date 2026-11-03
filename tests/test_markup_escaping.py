@@ -51,12 +51,12 @@ def test_subscription_page_escapes_app_import_url():
         platform=None,
         description={"en": ""},
         download_links=[],
-        import_url="app://import/');alert(1);//",
+        import_url="happ://import/');alert(1);//",
     )
     html = _render_subscription_page(apps=[app])
 
     assert "importConfig('" not in html
-    assert 'data-url="app://import/&#39;);alert(1);//" onclick="importConfig(this.dataset.url)"' in html
+    assert 'data-url="happ://import/&#39;);alert(1);//" onclick="importConfig(this.dataset.url)"' in html
 
 
 @pytest.mark.parametrize("value", ["a'b", 'a"b', "a<b", "a>b", "a`b", "a\\b", "a b", "a\tb", "a\nb", "a\x00b"])
