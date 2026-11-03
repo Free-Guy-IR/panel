@@ -80,18 +80,25 @@ def _next_step(script: ScriptDirectory, heads: tuple[str, ...], target: str, rem
     return f"{side_heads[0]}@-1"
 
 
+def _downgrade(config: Config, step: str, echo: Callable[[str], None]) -> None:
+    echo(f"alembic downgrade {step}")
+    config.attributes[ROLLBACK_FLAG] = True
+    try:
+        command.downgrade(config, step)
+    finally:
+        config.attributes.pop(ROLLBACK_FLAG, None)
+
+
 def _downgrade_until(
     config: Config, script: ScriptDirectory, target: str, heads: tuple[str, ...], echo: Callable[[str], None]
 ) -> tuple[str, ...]:
     removals = revisions_to_remove(script, heads, target)
+    if not removals:
+        _downgrade(config, target, echo)
+        return current_heads(config)
     while removals:
         step = _next_step(script, heads, target, removals)
-        echo(f"alembic downgrade {step}")
-        config.attributes[ROLLBACK_FLAG] = True
-        try:
-            command.downgrade(config, step)
-        finally:
-            config.attributes.pop(ROLLBACK_FLAG, None)
+        _downgrade(config, step, echo)
         heads = current_heads(config)
         remaining = revisions_to_remove(script, heads, target)
         if not remaining < removals:

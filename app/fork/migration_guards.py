@@ -27,6 +27,32 @@ REVERSE_GROUP_INDEX_COLUMNS = {
     "ix_inbounds_groups_association_group_id_inbound_id": ("group_id", "inbound_id"),
     "ix_users_groups_association_groups_id_user_id": ("groups_id", "user_id"),
 }
+REVISION_OBJECTS = (
+    ("9a5c2e7f1b4d", ("admin_passkeys", "passkey_challenges"), ()),
+    ("e5a9c3f1b7d2", ("named_locks",), ()),
+    ("b7e2c4d91f60", (), (("users", "idx_users_created_at_id", ("created_at", "id")),)),
+    (
+        "86f7c2a14d3e",
+        (),
+        (("user_subscription_updates", "idx_user_subscription_updates_created_at", ("created_at",)),),
+    ),
+    ("b176d23e434c", ("pending_user_resyncs",), ()),
+    (
+        "6d8eb8fba21b",
+        ("node_stat_acks",),
+        (("node_stat_acks", "ix_node_stat_acks_node_id_stat_type", ("node_id", "stat_type")),),
+    ),
+    (
+        "009f2a24cc7b",
+        ("pending_node_removals",),
+        (("pending_node_removals", "ix_pending_node_removals_requested_at", ("requested_at",)),),
+    ),
+    (
+        "e79833e2a0b2",
+        ("proxy_secret_claims",),
+        (("proxy_secret_claims", "ix_proxy_secret_claims_user_id", ("user_id",)),),
+    ),
+)
 MIGRATION_COMMANDS = ("upgrade", "downgrade")
 MIGRATION_LOCK = "pasarguard_alembic_"
 MIGRATION_LOCK_KEY = 5_026_101_103
@@ -39,6 +65,10 @@ class MigrationLockError(RuntimeError):
 
 
 class MigrationLockTimeout(MigrationLockError):
+    pass
+
+
+class StrayMigrationObjectError(RuntimeError):
     pass
 
 
@@ -250,6 +280,8 @@ def repair_interrupted_mysql_steps(
     if connection.dialect.name not in MYSQL_FAMILY:
         return
     applied = _applied(script, heads)
+    _remove_unapplied_objects(connection, applied)
+    _restore_applied_objects(connection, script, applied)
     _reconcile_sort_order(connection, SORT_ORDER_REVISION in applied)
     if REVERSE_GROUP_INDEX_REVISION not in applied:
         _undo_reverse_group_indexes(connection)
@@ -345,3 +377,78 @@ def _drop_redundant_foreign_key_indexes(connection: Connection) -> None:
         name = _foreign_key_index_name(inspector, table, column)
         if upstream_index in indexes and name != upstream_index and indexes.get(name) == [column]:
             connection.exec_driver_sql(f"DROP INDEX {quote(name)} ON {table}")
+
+
+def _stray_tables(inspector, applied: set[str]) -> list[tuple[str, str]]:
+    return [
+        (revision, table)
+        for revision, tables, _indexes in reversed(REVISION_OBJECTS)
+        if revision not in applied
+        for table in reversed(tables)
+        if inspector.has_table(table)
+    ]
+
+
+def _refuse_filled_stray_tables(connection: Connection, strays: list[tuple[str, str]]) -> None:
+    quote = connection.dialect.identifier_preparer.quote
+    filled = []
+    for revision, table in strays:
+        rows = connection.exec_driver_sql(f"SELECT COUNT(*) FROM {quote(table)}").scalar()
+        if rows:
+            filled.append(f"table {table} holds {rows} rows although revision {revision} is not applied")
+    if filled:
+        raise StrayMigrationObjectError(
+            "; ".join(filled) + "; nothing was changed, move those rows out and drop the table by hand, then retry"
+        )
+
+
+def _remove_unapplied_objects(connection: Connection, applied: set[str]) -> None:
+    inspector = inspect(connection)
+    strays = _stray_tables(inspector, applied)
+    _refuse_filled_stray_tables(connection, strays)
+    quote = connection.dialect.identifier_preparer.quote
+    for revision, tables, indexes in reversed(REVISION_OBJECTS):
+        if revision in applied:
+            continue
+        for table, name, _columns in indexes:
+            if table not in tables and inspector.has_table(table) and name in _index_names(inspector, table):
+                connection.exec_driver_sql(f"DROP INDEX {quote(name)} ON {quote(table)}")
+    for _revision, table in strays:
+        connection.exec_driver_sql(f"DROP TABLE {quote(table)}")
+
+
+def _seed_named_locks(connection: Connection, table, module) -> None:
+    connection.execute(table.insert(), [{"name": name, "acquired_at": None} for name in module.SEEDED_LOCKS])
+
+
+def _backfill_proxy_secret_claims(connection: Connection, _table, module) -> None:
+    module._backfill(connection)
+
+
+TABLE_REFILLS = {"named_locks": _seed_named_locks, "proxy_secret_claims": _backfill_proxy_secret_claims}
+
+
+def _restore_applied_objects(connection: Connection, script: ScriptDirectory, applied: set[str]) -> None:
+    from app.db.models import Base
+
+    inspector = inspect(connection)
+    for revision, tables, _indexes in REVISION_OBJECTS:
+        if revision not in applied:
+            continue
+        for table in tables:
+            if inspector.has_table(table):
+                continue
+            model = Base.metadata.tables[table]
+            model.create(connection)
+            refill = TABLE_REFILLS.get(table)
+            if refill is not None:
+                refill(connection, model, script.get_revision(revision).module)
+    inspector = inspect(connection)
+    quote = connection.dialect.identifier_preparer.quote
+    for revision, _tables, indexes in REVISION_OBJECTS:
+        if revision not in applied:
+            continue
+        for table, name, columns in indexes:
+            if inspector.has_table(table) and name not in _index_names(inspector, table):
+                listed = ", ".join(quote(column) for column in columns)
+                connection.exec_driver_sql(f"CREATE INDEX {quote(name)} ON {quote(table)} ({listed})")
