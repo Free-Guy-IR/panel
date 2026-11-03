@@ -521,6 +521,29 @@ def test_an_unreachable_sync_point_fails_the_boundary_checks_instead_of_skipping
         _require_upstream_ref()
 
 
+def test_a_fork_commit_laundered_as_an_upstream_locale_pick_is_rejected(monkeypatch):
+    _require_upstream_ref()
+    real_trailers = _ported_public_locale_picks()
+    real_picks = _load_json_file(UPSTREAM_LOCALE_PICKS_FILE)["picks"]
+    fork_commit = real_trailers[real_picks[0]["upstream"]]
+    laundered_pick = {**real_picks[0], "upstream": fork_commit}
+    module = sys.modules[__name__]
+    monkeypatch.setattr(module, "_ported_public_locale_picks", lambda: {**real_trailers, fork_commit: fork_commit})
+    monkeypatch.setattr(module, "_recorded_locale_picks", lambda: [*real_picks, laundered_pick])
+    with pytest.raises(pytest.fail.Exception, match=fork_commit):
+        _ported_public_locale_picks_ahead_of_sync_point()
+    with pytest.raises(pytest.fail.Exception, match=fork_commit):
+        test_recorded_locale_picks_match_the_upstream_commits("en")
+
+
+def test_an_abbreviated_or_uppercase_upstream_sha_is_rejected():
+    _require_upstream_ref()
+    full = _recorded_locale_picks()[0]["upstream"]
+    for malformed in (full[:12], full.upper()):
+        with pytest.raises(pytest.fail.Exception, match=malformed):
+            _is_ahead_of_sync_point(malformed)
+
+
 def test_public_locale_check_rejects_a_new_key_in_the_real_public_file():
     _require_upstream_ref()
     baseline_flat = _locale_at(UPSTREAM_REF, "en")
