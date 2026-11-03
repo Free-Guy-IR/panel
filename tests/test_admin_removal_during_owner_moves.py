@@ -223,3 +223,117 @@ async def test_users_moved_into_an_admin_while_it_is_removed_never_abort_the_rem
     else:
         assert all(owners[user_id] == away for user_id in moved_ids), (owners, outcomes)
         assert traffic[away] == 0, (traffic, outcomes)
+
+
+MOVER_HOLDS = ["lock_owner_rows", "lock_destination_admin"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("order", INTO_ORDERS, ids=["-".join(order) for order in INTO_ORDERS])
+@pytest.mark.parametrize("hold", MOVER_HOLDS)
+@pytest.mark.parametrize("mover", ["set_owner", "bulk_set_owner"])
+async def test_a_move_into_an_admin_and_its_removal_lock_in_one_order_and_never_strand_users(
+    monkeypatch: pytest.MonkeyPatch, recorder_db, mover, hold, order
+):
+    away, away_ids, _ = await seed_users_and_nodes(recorder_db, user_count=30, node_count=0)
+    gone, gone_ids, _ = await seed_users_and_nodes(recorder_db, user_count=6, node_count=0)
+    moved_ids = tuple(away_ids[:1]) if mover == "set_owner" else tuple(away_ids)
+    everyone = [*away_ids, *gone_ids]
+    async with recorder_db() as session:
+        await session.execute(update(User).where(User.id.in_(everyone)).values(used_traffic=0))
+        await session.execute(update(Admin).where(Admin.id.in_([away, gone])).values(used_traffic=0))
+        await session.commit()
+        gone_name = (await session.execute(select(Admin.username).where(Admin.id == gone))).scalar_one()
+
+    _hold_after(monkeypatch, user_crud, hold)
+    _hold_after(monkeypatch, admin_scope, "lock_user_rows")
+
+    steps = {
+        "mover": _mover(recorder_db, "mover", mover, moved_ids, gone_name),
+        "remover": _remover(recorder_db, gone),
+    }
+    outcomes: dict[str, str] = {}
+    failures: dict[str, BaseException] = {}
+    deadlocks_before = await _deadlocks()
+    tasks = []
+    for label in order:
+        tasks.append(asyncio.create_task(_attempt(label, steps[label], outcomes, failures)))
+        await asyncio.sleep(STAGGER_SECONDS)
+    await asyncio.wait_for(asyncio.gather(*tasks), timeout=BOUND)
+    await asyncio.sleep(1)
+    deadlocks_after = await _deadlocks()
+
+    assert outcomes["remover"] == "committed", outcomes
+    if outcomes["mover"] != "committed":
+        mover_failure = failures["mover"]
+        assert isinstance(mover_failure, HTTPException) and mover_failure.status_code == 404, outcomes
+    if deadlocks_before is not None:
+        assert deadlocks_after - deadlocks_before == 0, outcomes
+
+    async with recorder_db() as session:
+        owners = dict((await session.execute(select(User.id, User.admin_id).where(User.id.in_(everyone)))).all())
+        remaining = (await session.execute(select(Admin.id).where(Admin.id.in_([away, gone])))).scalars().all()
+        still_owned = (await session.execute(select(User.id).where(User.admin_id == gone))).scalars().all()
+
+    assert gone not in remaining, (remaining, outcomes)
+    assert still_owned == [], (still_owned, outcomes)
+    assert all(owners[user_id] is None for user_id in gone_ids), (owners, outcomes)
+    kept_ids = [user_id for user_id in away_ids if user_id not in moved_ids]
+    assert all(owners[user_id] == away for user_id in kept_ids), (owners, outcomes)
+    expected = None if outcomes["mover"] == "committed" else away
+    assert all(owners[user_id] == expected for user_id in moved_ids), (owners, outcomes)
+
+
+CROSS_ORDERS = [["a-to-b", "b-to-a"], ["b-to-a", "a-to-b"]]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("order", CROSS_ORDERS, ids=["-".join(order) for order in CROSS_ORDERS])
+@pytest.mark.parametrize("mover", ["set_owner", "bulk_set_owner"])
+async def test_opposite_owner_moves_between_two_admins_lock_admins_in_one_order(
+    monkeypatch: pytest.MonkeyPatch, recorder_db, mover, order
+):
+    first, first_ids, _ = await seed_users_and_nodes(recorder_db, user_count=10, node_count=0)
+    second, second_ids, _ = await seed_users_and_nodes(recorder_db, user_count=10, node_count=0)
+    everyone = [*first_ids, *second_ids]
+    async with recorder_db() as session:
+        await session.execute(update(User).where(User.id.in_(everyone)).values(used_traffic=1000))
+        await session.execute(update(Admin).where(Admin.id.in_([first, second])).values(used_traffic=0))
+        await session.commit()
+        names = dict(
+            (await session.execute(select(Admin.id, Admin.username).where(Admin.id.in_([first, second])))).all()
+        )
+
+    _hold_after(monkeypatch, user_crud, "lock_owner_rows")
+
+    first_moved = tuple(first_ids[:1]) if mover == "set_owner" else tuple(first_ids)
+    second_moved = tuple(second_ids[:1]) if mover == "set_owner" else tuple(second_ids)
+    steps = {
+        "a-to-b": _mover(recorder_db, "a-to-b", mover, first_moved, names[second]),
+        "b-to-a": _mover(recorder_db, "b-to-a", mover, second_moved, names[first]),
+    }
+    outcomes: dict[str, str] = {}
+    failures: dict[str, BaseException] = {}
+    deadlocks_before = await _deadlocks()
+    tasks = []
+    for label in order:
+        tasks.append(asyncio.create_task(_attempt(label, steps[label], outcomes, failures)))
+        await asyncio.sleep(STAGGER_SECONDS)
+    await asyncio.wait_for(asyncio.gather(*tasks), timeout=BOUND)
+    await asyncio.sleep(1)
+    deadlocks_after = await _deadlocks()
+
+    assert outcomes == {"a-to-b": "committed", "b-to-a": "committed"}, outcomes
+    if deadlocks_before is not None:
+        assert deadlocks_after - deadlocks_before == 0, outcomes
+
+    async with recorder_db() as session:
+        owners = dict((await session.execute(select(User.id, User.admin_id).where(User.id.in_(everyone)))).all())
+        traffic = dict(
+            (await session.execute(select(Admin.id, Admin.used_traffic).where(Admin.id.in_([first, second])))).all()
+        )
+
+    assert all(owners[user_id] == second for user_id in first_moved), owners
+    assert all(owners[user_id] == first for user_id in second_moved), owners
+    assert traffic[first] == 1000 * (len(second_moved) - len(first_moved)), traffic
+    assert traffic[second] == 1000 * (len(first_moved) - len(second_moved)), traffic
