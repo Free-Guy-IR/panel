@@ -1167,6 +1167,13 @@ async def apply_fenced_user_usage(
         billed_ids = [item["uid"] for item in billable]
         for online_stmt, online_params in build_online_at_updates(sql_family(dialect), billed_ids, online_at):
             await conn.execute(online_stmt, online_params)
+        for id_batch in _chunked(billed_ids, batch_size):
+            await conn.execute(
+                update(User)
+                .where(User.id.in_(id_batch), User.online_at < func.coalesce(User.edit_at, User.created_at))
+                .values(online_at=online_at)
+                .execution_options(synchronize_session=False)
+            )
         if admin_data:
             await conn.execute(admin_stmt, admin_data)
 

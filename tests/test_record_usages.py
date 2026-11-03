@@ -205,6 +205,7 @@ async def test_apply_fenced_user_usage_throttles_online_at(session_factory):
     recent_seen = now - timedelta(seconds=30)
     stale_seen = now - timedelta(minutes=5)
     async with session_factory() as session:
+        await session.execute(update(User).where(User.id.in_(user_ids)).values(created_at=now - timedelta(days=1)))
         await session.execute(update(User).where(User.id == recent_id).values(online_at=recent_seen))
         await session.execute(update(User).where(User.id == stale_id).values(online_at=stale_seen))
         await session.execute(update(User).where(User.id == never_id).values(online_at=None))
