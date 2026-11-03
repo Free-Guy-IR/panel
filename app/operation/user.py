@@ -59,6 +59,7 @@ from app.db.crud.user import (
 )
 from app.db.crud.wireguard import tags_from_groups  # noqa: F401
 from app.db.models import User, UserStatus, UserTemplate
+from app.fork.crud.bulk_result_bounds import BulkUserResultOutOfRange, bulk_final_value, out_of_range_detail
 from app.fork.crud.user_locks import (
     MODIFY_STATUS_KEYS,
     NextPlanUnavailable,
@@ -75,6 +76,7 @@ from app.fork.operation.user_guards import (
     enforce_next_plan_limits,
     ensure_owner_target_allowed,
     reject_negative_next_plan,
+    reject_out_of_range_bulk_result,
     reject_unbounded_bulk_amount,
 )
 from app.fork.proxy_secrets import ProxySecretUniquenessError, supplied_secret_fields
@@ -2110,6 +2112,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             await self.raise_error(message="All-user update permission is required", code=403, db=db)
         await self._enforce_manual_user_write_access(admin, db)
         await reject_unbounded_bulk_amount(self, db, field, bulk_model.amount)
+        await reject_out_of_range_bulk_result(self, db, bulk_model, field, allowed_group_ids)
         if admin.is_owner:
             return {}
 
@@ -2124,11 +2127,11 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         )
         now = datetime.now(UTC)
         for _, value in targets:
-            final_value = (
-                fix_datetime_timezone(value) + td(seconds=bulk_model.amount)
-                if field == "expire"
-                else value + bulk_model.amount
+            final_value = bulk_final_value(
+                field, fix_datetime_timezone(value) if field == "expire" else value, bulk_model.amount
             )
+            if final_value is None:
+                await self.raise_error(message=out_of_range_detail(field), code=422, db=db)
             await self._enforce_user_limits(
                 db,
                 admin,
@@ -2158,6 +2161,8 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             users, users_count = await update_users_expire(db, bulk_model, allowed_group_ids, **constraints)
         except BulkUserUpdateConflict as exc:
             await self.raise_error(message=str(exc), code=409, db=db)
+        except BulkUserResultOutOfRange as exc:
+            await self.raise_error(message=str(exc), code=422, db=db)
         await sync_users(users)
 
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
@@ -2178,6 +2183,8 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             users, users_count = await update_users_datalimit(db, bulk_model, allowed_group_ids, **constraints)
         except BulkUserUpdateConflict as exc:
             await self.raise_error(message=str(exc), code=409, db=db)
+        except BulkUserResultOutOfRange as exc:
+            await self.raise_error(message=str(exc), code=422, db=db)
         await sync_users(users)
 
         if self.operator_type in (OperatorType.API, OperatorType.WEB):

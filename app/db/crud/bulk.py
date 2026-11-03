@@ -18,6 +18,7 @@ from app.db.models import (
     users_groups_association,
 )
 from app.fork.crud.admin_scope import locked_targets
+from app.fork.crud.bulk_result_bounds import BulkUserResultOutOfRange, count_out_of_range_results, out_of_range_detail
 from app.fork.crud.group_scope import user_in_allowed_groups
 from app.fork.proxy_secrets.locks import holds_row_locks
 from app.models.group import BulkGroup
@@ -347,6 +348,16 @@ async def count_bulk_datalimit_targets(
     return (await db.execute(select(func.count(User.id)).where(final_filter))).scalar_one_or_none() or 0
 
 
+async def count_bulk_out_of_range_targets(
+    db: AsyncSession,
+    bulk_model: BulkUser,
+    field: Literal["expire", "data_limit"],
+    allowed_group_ids: list[int] | None = None,
+) -> int:
+    final_filter = _bulk_user_target_filter(bulk_model, field, allowed_group_ids)
+    return await count_out_of_range_results(db, field, bulk_model.amount, final_filter)
+
+
 async def count_bulk_proxy_targets(
     db: AsyncSession, bulk_model: BulkUsersProxy, allowed_group_ids: list[int] | None = None
 ) -> int:
@@ -419,6 +430,15 @@ async def _lock_bulk_targets(
     return locked
 
 
+async def _reject_out_of_range_locked_targets(
+    db: AsyncSession, locked: dict[int, UserStatus], field: Literal["expire", "data_limit"], amount: int
+) -> None:
+    for chunk in _id_chunks(sorted(locked)):
+        if await count_out_of_range_results(db, field, amount, User.id.in_(chunk)):
+            await db.rollback()
+            raise BulkUserResultOutOfRange(out_of_range_detail(field))
+
+
 async def _apply_to_locked_targets(
     db: AsyncSession, locked: dict[int, UserStatus], conditions: tuple, *, strict: bool = False, **values
 ) -> list[User]:
@@ -454,6 +474,7 @@ async def update_users_expire(
     if not locked:
         await db.commit()
         return [], 0
+    await _reject_out_of_range_locked_targets(db, locked, "expire", bulk_model.amount)
 
     new_expire = get_datetime_add_expression(db, User.expire, bulk_model.amount)
     target_conditions = (
@@ -498,6 +519,7 @@ async def update_users_datalimit(
     if not locked:
         await db.commit()
         return [], 0
+    await _reject_out_of_range_locked_targets(db, locked, "data_limit", bulk_model.amount)
 
     status_cases = [
         (
