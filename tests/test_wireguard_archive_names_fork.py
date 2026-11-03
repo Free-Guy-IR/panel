@@ -2,8 +2,6 @@ import io
 import unicodedata
 import zipfile
 
-import pytest
-
 from app.models.subscription import SubscriptionInboundData, TCPTransportConfig, TLSConfig
 from app.subscription.wireguard import WireGuardConfiguration
 
