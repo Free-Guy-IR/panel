@@ -92,6 +92,7 @@ jobs:
                   echo "TEST_FROM=github" >> $GITHUB_ENV
                   echo "TESTING=1" >> $GITHUB_ENV
                   echo "SQLALCHEMY_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/testdb" >> $GITHUB_ENV
+                  echo "SPLICE_SCRATCH_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/postgres" >> $GITHUB_ENV
 
             - name: Install test dependencies
               run: make setup-test
@@ -146,6 +147,7 @@ jobs:
                   echo "TEST_FROM=github" >> $GITHUB_ENV
                   echo "TESTING=1" >> $GITHUB_ENV
                   echo "SQLALCHEMY_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5433/testdb" >> $GITHUB_ENV
+                  echo "SPLICE_SCRATCH_URL=postgresql+asyncpg://postgres:postgres@localhost:5433/postgres" >> $GITHUB_ENV
                   echo "NATS_ENABLED=1" >> $GITHUB_ENV
                   echo "NATS_URL=nats://localhost:4222" >> $GITHUB_ENV
                   echo "UVICORN_WORKERS=2" >> $GITHUB_ENV
@@ -236,6 +238,7 @@ jobs:
                   echo "TEST_FROM=github" >> $GITHUB_ENV
                   echo "TESTING=1" >> $GITHUB_ENV
                   echo "SQLALCHEMY_DATABASE_URL=mysql+asyncmy://root:root@localhost:3306/testdb" >> $GITHUB_ENV
+                  echo "SPLICE_SCRATCH_URL=mysql+asyncmy://root:root@localhost:3306/" >> $GITHUB_ENV
 
             - name: Install test dependencies
               run: make setup-test
@@ -291,6 +294,7 @@ jobs:
                   echo "TEST_FROM=github" >> $GITHUB_ENV
                   echo "TESTING=1" >> $GITHUB_ENV
                   echo "SQLALCHEMY_DATABASE_URL=mysql+asyncmy://testuser:testpassword@localhost:3307/testdb" >> $GITHUB_ENV
+                  echo "SPLICE_SCRATCH_URL=mariadb+asyncmy://root:root@localhost:3307/" >> $GITHUB_ENV
                   echo "NATS_ENABLED=1" >> $GITHUB_ENV
                   echo "NATS_URL=nats://localhost:4222" >> $GITHUB_ENV
                   echo "UVICORN_WORKERS=2" >> $GITHUB_ENV
