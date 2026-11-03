@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.db.models import CoreType, Node, NodeStatus
@@ -252,5 +252,81 @@ async def test_a_delete_racing_a_node_created_on_the_core_never_leaves_it_runnin
                 assert created_row[1] == rows["target"], context
     finally:
         await _drop_node_by_name(engine, name)
+        await _cleanup(engine, rows)
+        await engine.dispose()
+
+
+def _restarts_reaching(issued, node_id: int) -> list:
+    return [entry for entry in issued if entry[0] == "restart_all_node" or node_id in entry[1]]
+
+
+@pytest.mark.parametrize("bulk", [False, True], ids=["single", "bulk"])
+@pytest.mark.parametrize("policy", sorted(POLICIES))
+async def test_a_delete_racing_a_node_adding_the_core_as_an_extra_never_restarts_that_nodes_primary(
+    tmp_path, race_restarts, policy, bulk
+):
+    engine = await _race_engine(tmp_path)
+    rows = await _seed(engine, CoreType.mtproto)
+    try:
+        outcomes, trace = await _race(
+            engine,
+            POLICIES[policy](),
+            _deleter(bulk, rows["target"]),
+            _extra_adder(rows["node"], rows["target"]),
+        )
+        primary, extras, alive = await _final(engine, rows)
+        deleted, added = outcomes["delete"], outcomes["modify"]
+        context = (
+            f"policy={policy} trace={trace} delete={deleted} modify={added} extras={extras} alive={alive} "
+            f"restarts={race_restarts}"
+        )
+
+        assert deleted[0] != "crash" and added[0] != "crash", context
+        assert primary == rows["home"], context
+        assert not (deleted[0] == "ok" and added[0] == "ok"), context
+        assert _restarts_reaching(race_restarts, rows["node"]) == [], context
+    finally:
+        await _cleanup(engine, rows)
+        await engine.dispose()
+
+
+@pytest.mark.parametrize("bulk", [False, True], ids=["single", "bulk"])
+@pytest.mark.parametrize("policy", sorted(POLICIES))
+async def test_a_delete_racing_a_node_moving_off_the_core_only_restarts_it_onto_its_new_core(
+    tmp_path, race_restarts, policy, bulk
+):
+    engine = await _race_engine(tmp_path)
+    rows = await _seed(engine, CoreType.xray)
+    async with engine.begin() as connection:
+        await connection.execute(update(Node).where(Node.id == rows["node"]).values(core_config_id=rows["target"]))
+    try:
+        outcomes, trace = await _race(
+            engine,
+            POLICIES[policy](),
+            _deleter(bulk, rows["target"]),
+            _primary_mover(rows["node"], rows["home"]),
+        )
+        primary, extras, alive = await _final(engine, rows)
+        deleted, moved = outcomes["delete"], outcomes["modify"]
+        context = (
+            f"policy={policy} trace={trace} delete={deleted} modify={moved} primary={primary} alive={alive} "
+            f"restarts={race_restarts}"
+        )
+
+        assert deleted[0] != "crash" and moved[0] != "crash", context
+        assert moved[0] == "ok", context
+        assert primary == rows["home"] and primary in alive, context
+        assert extras == [], context
+        if deleted[0] == "ok":
+            assert rows["target"] not in alive, context
+            assert all(
+                name == "connect_nodes_bulk" and force
+                for name, _node_ids, force in _restarts_reaching(race_restarts, rows["node"])
+            ), context
+        else:
+            assert _status(deleted) == status.HTTP_409_CONFLICT, context
+            assert rows["target"] in alive, context
+            assert _restarts_reaching(race_restarts, rows["node"]) == [], context
+    finally:
         await _cleanup(engine, rows)
         await engine.dispose()
