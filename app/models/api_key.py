@@ -1,7 +1,7 @@
 from datetime import UTC, datetime as dt
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, field_validator
 
 from app.db.models import APIKeyStatus
 from app.models.admin_role import RolePermissions
@@ -41,12 +41,16 @@ class APIKeyCreate(APIKeyBase):
 
 class APIKeyUpdate(BaseModel):
     admin_id: int | None = Field(default=None, ge=1)
-    name: str | None = Field(default=None, min_length=1, max_length=128)
+    name: Annotated[str | None, WithJsonSchema({"type": "string", "minLength": 1, "maxLength": 128})] = Field(
+        default=None, min_length=1, max_length=128
+    )
     note: str | None = Field(default=None, max_length=512)
     permissions: RolePermissions | None = None
-    inherit_permissions: bool | None = None
+    inherit_permissions: Annotated[bool | None, WithJsonSchema({"type": "boolean"})] = None
     expire_date: dt | None = None
-    status: APIKeyStatus | None = None
+    status: Annotated[
+        APIKeyStatus | None, WithJsonSchema({"type": "string", "enum": [status.value for status in APIKeyStatus]})
+    ] = None
 
     @field_validator("name", "inherit_permissions", "status")
     @classmethod
