@@ -4,13 +4,14 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
-from alembic.command import downgrade, upgrade
+from alembic.command import upgrade
 from alembic.config import Config
 from sqlalchemy import create_engine, select, text
 
 from app.db import base
 from app.db.crud.user import remove_user as crud_remove_user
 from app.db.models import Admin, Node, User
+from app.fork.db_rollback import rollback
 from app.jobs import record_usages
 from app.models.proxy import ProxyTable
 from tests.api.helpers import unique_name
@@ -226,7 +227,7 @@ def test_a_migrated_sqlite_database_keeps_every_row_and_stops_reusing_ids(tmp_pa
         connection.close()
     assert _delete_newest_and_insert(path) == (10, 8)
 
-    _quietly(downgrade, config, BEFORE_AUTOINCREMENT)
+    _quietly(lambda config, revision: rollback(config, revision, echo=lambda _line: None), config, BEFORE_AUTOINCREMENT)
     _quietly(upgrade, config, "head")
     connection = sqlite3.connect(path)
     try:

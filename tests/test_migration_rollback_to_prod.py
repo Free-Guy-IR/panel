@@ -26,8 +26,19 @@ OFFICIAL_GRAPH_SIZE = 180
 OFFICIAL_GRAPH_FINGERPRINT = "9f251514d0c297e705615cce4fa14bb5ccb8466e889d6b9eac07062b27b44023"
 PASSKEY_TABLES = {"admin_passkeys", "passkey_challenges"}
 RELEASE_ONLY_TABLES = {"pending_user_resyncs", "node_stat_acks", "proxy_secret_claims", "pending_node_removals"}
-RELEASE_HEAD = "e79833e2a0b2"
+RELEASE_HEAD = "2e045b99a67e"
+FORK_RELEASE_HEAD = "e79833e2a0b2"
 GUARDED_MERGE = "fd33c6013baa"
+V551_MERGE = "2e045b99a67e"
+V551_TIP = "c8d2e4f6a1b3"
+V551_STEPS = [
+    "alembic downgrade c8d2e4f6a1b3@-1",
+    "alembic downgrade a8c2d491e705@-1",
+    "alembic downgrade a4d8c7e91b32@-1",
+    "alembic downgrade d73f8a2c4e91@-1",
+    "alembic downgrade 86f7c2a14d3e@-1",
+    "alembic downgrade b7e2c4d91f60@-1",
+]
 LOOPBACK_REWRITE = "bfd88026565b"
 
 
@@ -97,7 +108,7 @@ def _loopback_rewrite():
     return module.bind_client_listeners_to_loopback
 
 
-def _rows_after_the_one_way_loopback_rewrite(sync_url, tmp_path, name):
+def _rows_a_rollback_leaves(sync_url, tmp_path, name):
     copy = tmp_path / f"expected-{name}"
     shutil.copyfile(sync_url.removeprefix("sqlite:///"), copy)
     rewrite = _loopback_rewrite()
@@ -110,6 +121,7 @@ def _rows_after_the_one_way_loopback_rewrite(sync_url, tmp_path, name):
                 text("UPDATE client_templates SET content = :content WHERE id = :id"),
                 {"content": rewrite(content), "id": template_id},
             )
+        connection.execute(text("UPDATE users SET proxy_settings = json_set(proxy_settings, '$.masque', json('{}'))"))
     return _rows(f"sqlite:///{copy}")
 
 
@@ -117,7 +129,7 @@ def _at_release_head(tmp_path, name="rollback.sqlite3", revision=PROD_REVISION):
     config, sync_url = _database(tmp_path, name)
     upgrade(config, revision)
     _seed(sync_url)
-    before = (_schema(sync_url), _rows_after_the_one_way_loopback_rewrite(sync_url, tmp_path, name))
+    before = (_schema(sync_url), _rows_a_rollback_leaves(sync_url, tmp_path, name))
     upgrade(config, "heads")
     tables = set(inspect(create_engine(sync_url)).get_table_names())
     assert PASSKEY_TABLES | RELEASE_ONLY_TABLES <= tables
@@ -153,6 +165,7 @@ def test_rollback_leaves_exactly_the_prod_revision_with_the_prod_schema_and_data
     assert not (PASSKEY_TABLES | RELEASE_ONLY_TABLES) & set(_schema(sync_url))
     assert [line for line in steps if line.startswith("alembic downgrade")] == [
         f"alembic downgrade {PROD_REVISION}",
+        *V551_STEPS,
         "alembic downgrade b4c7e8f1a2d3@-1",
         "alembic downgrade 9a5c2e7f1b4d@-1",
     ]
@@ -169,6 +182,12 @@ def _unguarded_plain_downgrade(config, target):
 def test_a_plain_downgrade_past_the_passkey_merge_is_refused_before_it_can_leave_two_heads(tmp_path):
     config, sync_url, (schema_before, rows_before) = _at_release_head(tmp_path)
 
+    with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
+        downgrade(config, PROD_REVISION)
+    assert _versions(sync_url) == [V551_MERGE]
+    assert ROLLBACK_FLAG not in config.attributes
+
+    rollback(config, FORK_RELEASE_HEAD, echo=lambda _line: None)
     with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
         downgrade(config, PROD_REVISION)
 
@@ -199,6 +218,15 @@ def test_a_plain_downgrade_in_one_transaction_is_refused_and_changes_nothing(tmp
 
 def test_every_path_that_removes_the_passkey_merge_is_guarded(tmp_path):
     config, sync_url, _before = _at_release_head(tmp_path)
+    for target in (FORK_RELEASE_HEAD, V551_TIP, "b4c7e8f1a2d3", "base"):
+        with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
+            downgrade(config, target)
+        assert _versions(sync_url) == [V551_MERGE]
+    with pytest.raises(CommandError, match="Ambiguous walk"):
+        downgrade(config, "-1")
+    assert _versions(sync_url) == [V551_MERGE]
+
+    rollback(config, FORK_RELEASE_HEAD, echo=lambda _line: None)
     downgrade(config, "0374ac83604b")
     assert _versions(sync_url) == ["0374ac83604b", LOOPBACK_REWRITE]
 
@@ -214,7 +242,7 @@ def test_every_path_that_removes_the_passkey_merge_is_guarded(tmp_path):
 def test_rollback_repairs_a_database_an_older_release_left_with_two_heads(tmp_path):
     config, sync_url, (schema_before, rows_before) = _at_release_head(tmp_path)
     _unguarded_plain_downgrade(config, PROD_REVISION)
-    assert _versions(sync_url) == ["b4c7e8f1a2d3", PROD_REVISION]
+    assert _versions(sync_url) == [V551_TIP, PROD_REVISION]
 
     rollback(config, PROD_REVISION, echo=lambda _line: None)
 
@@ -257,8 +285,9 @@ def test_the_dry_run_changes_nothing(tmp_path, capsys):
     assert _versions(sync_url) == heads_before
     printed = capsys.readouterr().out
     assert (
-        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 6698b9a695e3, 6d8eb8fba21b, 8158387867c9, 9a5c2e7f1b4d, "
-        "b176d23e434c, b4c7e8f1a2d3, bfd88026565b, e79833e2a0b2, e9a7edd9de06, f7c63e209a37, fd192e9628a5, "
+        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 2e045b99a67e, 6698b9a695e3, 6d8eb8fba21b, 8158387867c9, "
+        "86f7c2a14d3e, 9a5c2e7f1b4d, a4d8c7e91b32, a8c2d491e705, b176d23e434c, b4c7e8f1a2d3, b7e2c4d91f60, "
+        "bfd88026565b, c8d2e4f6a1b3, d73f8a2c4e91, e79833e2a0b2, e9a7edd9de06, f7c63e209a37, fd192e9628a5, "
         "fd33c6013baa\n"
     ) in printed
 
@@ -306,9 +335,10 @@ def test_the_prod_image_starts_on_the_rolled_back_database_and_not_after_a_plain
     config, sync_url, _before = _at_release_head(tmp_path)
     url = config.get_main_option("sqlalchemy.url")
     _unguarded_plain_downgrade(config, PROD_REVISION)
+    assert _versions(sync_url) == [V551_TIP, PROD_REVISION]
     refused = _prod_alembic(tree, url, "upgrade", "head")
     assert refused.returncode != 0
-    assert "Can't locate revision identified by 'b4c7e8f1a2d3'" in refused.stdout + refused.stderr
+    assert f"Can't locate revision identified by '{V551_TIP}'" in refused.stdout + refused.stderr
 
     rollback(config, PROD_REVISION, echo=lambda _line: None)
     upgrade(config, "heads")
@@ -316,7 +346,7 @@ def test_the_prod_image_starts_on_the_rolled_back_database_and_not_after_a_plain
         downgrade(config, PROD_REVISION)
     refused = _prod_alembic(tree, url, "upgrade", "head")
     assert refused.returncode != 0
-    assert f"Can't locate revision identified by '{GUARDED_MERGE}'" in refused.stdout + refused.stderr
+    assert f"Can't locate revision identified by '{V551_MERGE}'" in refused.stdout + refused.stderr
 
     rollback(config, PROD_REVISION, echo=lambda _line: None)
     started = _prod_alembic(tree, config.get_main_option("sqlalchemy.url"), "upgrade", "head")
@@ -324,14 +354,14 @@ def test_the_prod_image_starts_on_the_rolled_back_database_and_not_after_a_plain
     assert _versions(sync_url) == [PROD_REVISION]
 
 
-def test_the_only_data_a_rollback_keeps_from_the_release_is_the_loopback_rewrite_of_the_system_xray_template(
+def test_the_only_data_a_rollback_keeps_from_the_release_is_the_loopback_rewrite_and_an_empty_masque_object(
     tmp_path,
 ):
     config, sync_url = _database(tmp_path)
     upgrade(config, PROD_REVISION)
     _seed(sync_url)
     exact_prod_rows = _rows(sync_url)
-    expected = _rows_after_the_one_way_loopback_rewrite(sync_url, tmp_path, "rollback.sqlite3")
+    expected = _rows_a_rollback_leaves(sync_url, tmp_path, "rollback.sqlite3")
     upgrade(config, "heads")
 
     rollback(config, PROD_REVISION, echo=lambda _line: None)
@@ -339,7 +369,10 @@ def test_the_only_data_a_rollback_keeps_from_the_release_is_the_loopback_rewrite
     after = _rows(sync_url)
     assert after == expected
     changed = {table for table in after if after[table] != exact_prod_rows[table]}
-    assert changed == {"client_templates"}
+    assert changed == {"client_templates", "users"}
+    with create_engine(sync_url).connect() as connection:
+        settings = connection.execute(text("SELECT proxy_settings FROM users")).scalars().all()
+    assert settings == ['{"masque":{}}']
     with create_engine(sync_url).connect() as connection:
         listeners = connection.execute(
             text("SELECT content FROM client_templates WHERE template_type = 'xray_subscription' AND is_system = 1")
@@ -365,6 +398,7 @@ def test_the_official_rollback_leaves_exactly_the_production_revision_with_its_s
     assert not (PASSKEY_TABLES | RELEASE_ONLY_TABLES) & set(_schema(sync_url))
     assert [line for line in steps if line.startswith("alembic downgrade")] == [
         f"alembic downgrade {OFFICIAL_REVISION}",
+        *V551_STEPS,
         "alembic downgrade b4c7e8f1a2d3@-1",
         "alembic downgrade 9a5c2e7f1b4d@-1",
     ]
@@ -378,8 +412,9 @@ def test_the_official_dry_run_lists_every_revision_the_rollback_removes(tmp_path
 
     assert _versions(sync_url) == heads_before
     assert (
-        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 6698b9a695e3, 6d8eb8fba21b, 8158387867c9, 9a5c2e7f1b4d, "
-        "b176d23e434c, b4c7e8f1a2d3, bfd88026565b, e5a9c3f1b7d2, e79833e2a0b2, e9a7edd9de06, f7c63e209a37, "
+        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 2e045b99a67e, 6698b9a695e3, 6d8eb8fba21b, 8158387867c9, "
+        "86f7c2a14d3e, 9a5c2e7f1b4d, a4d8c7e91b32, a8c2d491e705, b176d23e434c, b4c7e8f1a2d3, b7e2c4d91f60, "
+        "bfd88026565b, c8d2e4f6a1b3, d73f8a2c4e91, e5a9c3f1b7d2, e79833e2a0b2, e9a7edd9de06, f7c63e209a37, "
         "fd192e9628a5, fd33c6013baa\n"
     ) in capsys.readouterr().out
 
