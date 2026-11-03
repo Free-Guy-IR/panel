@@ -388,7 +388,7 @@ export default function CoreConfigModal({ isDialogOpen, onOpenChange, form, edit
       const backendType = values.type ?? 'xray'
 
       // api.services is Xray-only; never block a WireGuard config on Xray rules.
-      if (backendType !== 'wg') {
+      if (backendType === 'xray') {
         const unknownServices = findUnknownApiServices(configObj)
         if (unknownServices.length > 0) {
           const message = apiServicesUnknownMessage(unknownServices)
