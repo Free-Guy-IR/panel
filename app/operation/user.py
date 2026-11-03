@@ -60,6 +60,7 @@ from app.db.crud.user import (
 from app.db.crud.wireguard import tags_from_groups  # noqa: F401
 from app.db.models import User, UserStatus, UserTemplate
 from app.fork.crud.bulk_result_bounds import BulkUserResultOutOfRange, bulk_final_value, out_of_range_detail
+from app.fork.crud.creator_admin import CREATOR_ADMIN_GONE_DETAIL, CreatorAdminGone, lock_creator_admin
 from app.fork.crud.owner_traffic import DestinationAdminGone
 from app.fork.crud.user_locks import (
     MODIFY_STATUS_KEYS,
@@ -364,6 +365,16 @@ class UserOperation(UserExtrasMixin, BaseOperation):
 
         return [user for user in new_users if user.username not in existing_usernames]
 
+    async def _lock_creator_admin(self, db: AsyncSession, admin: AdminDetails, db_admin) -> None:
+        if admin.id is None:
+            return
+        if db_admin is None:
+            await self.raise_error(message=CREATOR_ADMIN_GONE_DETAIL, code=404, db=db)
+        try:
+            await lock_creator_admin(db, db_admin.id)
+        except CreatorAdminGone:
+            await self.raise_error(message=CREATOR_ADMIN_GONE_DETAIL, code=404, db=db)
+
     async def _enforce_bulk_create_quota(
         self, db: AsyncSession, admin: AdminDetails, users_to_create_count: int
     ) -> None:
@@ -443,6 +454,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             except ValueError as exc:
                 await self.raise_error(message=str(exc), code=400, db=db)
 
+        await self._lock_creator_admin(db, admin, db_admin)
         try:
             db_users = await create_users_bulk(db, users_to_create, groups, db_admin, commit=commit)
         except ValueError as exc:  # WireGuard subnet exhausted
@@ -746,6 +758,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             db, all_groups, new_user.proxy_settings, explicit_fields=supplied_secret_fields(new_user.proxy_settings)
         )
 
+        await self._lock_creator_admin(db, admin, db_admin)
         try:
             db_user = await create_user(db, new_user, all_groups, db_admin)
         except IntegrityError:
