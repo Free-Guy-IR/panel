@@ -33,8 +33,9 @@ def checked_proxy_url(proxy: str | None) -> str | None:
 
 def create_outbound_http_session(*, proxy: str | None = None, timeout_seconds: float = 10) -> aiohttp.ClientSession:
     """Create an HTTP client whose TLS changes cannot affect server sockets."""
+    checked_proxy = checked_proxy_url(proxy)
     return aiohttp.ClientSession(
         connector=aiohttp.TCPConnector(ssl=create_outbound_ssl_context()),
         timeout=aiohttp.ClientTimeout(total=timeout_seconds),
-        proxy=checked_proxy_url(proxy),
+        proxy=checked_proxy,
     )

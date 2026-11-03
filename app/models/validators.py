@@ -3,8 +3,9 @@ import unicodedata
 from datetime import UTC, datetime, datetime as dt, timedelta
 from decimal import Decimal
 from typing import Annotated, Any
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
+import yarl
 from pydantic import BeforeValidator
 
 from app.db.models import UserStatus, UserStatusCreate
@@ -257,11 +258,21 @@ class ProxyValidator:
             not match
             or not 1 <= int(match.group("port")) <= 65535
             or ProxyValidator._userinfo_breaks_netloc(f"{match.group('user') or ''}{match.group('pass') or ''}")
+            or ProxyValidator._userinfo_beyond_latin1(value, match.group("user") or "", match.group("pass") or "")
         ):
             raise ValueError(
                 "proxy_url must be a valid proxy address (e.g., http://host:port, socks5://user:pass@host:port)"
             )
         return value
+
+    @staticmethod
+    def _userinfo_beyond_latin1(value: str, user: str, password: str) -> bool:
+        try:
+            parsed = yarl.URL(value)
+            forms = (user, password, unquote(user), unquote(password), parsed.user or "", parsed.password or "")
+        except Exception:
+            return True
+        return any(ord(char) > 0xFF for form in forms for char in form)
 
     @staticmethod
     def _userinfo_breaks_netloc(userinfo: str) -> bool:

@@ -17,7 +17,7 @@ from app.notification.queue_manager import (
     shutdown_webhook_queue,
 )
 from app.settings import webhook_settings
-from app.utils.http_client import INVALID_PROXY_MESSAGE, create_outbound_http_session
+from app.utils.http_client import INVALID_PROXY_MESSAGE, InvalidProxyURL, create_outbound_http_session
 from app.utils.logger import get_logger
 from config import job_settings, runtime_settings
 
@@ -70,7 +70,7 @@ async def send_notifications():
 
     try:
         session = create_outbound_http_session(proxy=settings.proxy_url if settings.proxy_url else None)
-    except Exception:
+    except InvalidProxyURL:
         logger.error(INVALID_PROXY_MESSAGE)
         return
 
