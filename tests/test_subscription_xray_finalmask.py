@@ -1,3 +1,4 @@
+import json
 from copy import deepcopy
 
 import pytest
@@ -190,3 +191,44 @@ def test_finalmask_noise_exp_rejects_bad_packet(item):
 def test_finalmask_header_custom_rejects_exp(mask, match):
     with pytest.raises(ValidationError, match=match):
         FinalMask.model_validate(mask)
+
+
+@pytest.mark.parametrize(
+    "resolver",
+    [
+        {"addrs": ["https://dns.example/dns-query"]},
+        {"addrs": ["https://dns.example/dns-query"], "tlsConfig": {}},
+        {"addrs": ["https://dns.example/dns-query"], "tlsConfig": {"serverName": "", "alpn": []}},
+    ],
+)
+def test_xray_finalmask_xdns_doh_resolver_json_keeps_empty_tls_config(resolver):
+    finalmask = {
+        "udp": [{"type": "xdns", "settings": {"domains": [{"names": ["t.example.com"]}], "resolvers": [resolver]}}]
+    }
+
+    for source in (finalmask, FinalMask.model_validate(finalmask)):
+        stream_settings = XrayConfiguration._stream_setting_config(finalmask=deepcopy(source))
+        generated = json.dumps(stream_settings)
+
+        assert '"tlsConfig": {}' in generated
+        assert stream_settings["finalmask"]["udp"][0]["settings"]["resolvers"] == [
+            {"addrs": ["https://dns.example/dns-query"], "tlsConfig": {}}
+        ]
+
+
+def test_xray_finalmask_xdns_plain_resolver_gets_no_tls_config():
+    finalmask = {
+        "udp": [
+            {
+                "type": "xdns",
+                "settings": {
+                    "domains": [{"names": ["t.example.com"]}],
+                    "resolvers": [{"addrs": ["udp://1.1.1.1"], "tlsConfig": {}, "quicConfig": {}}],
+                },
+            }
+        ]
+    }
+
+    stream_settings = XrayConfiguration._stream_setting_config(finalmask=finalmask)
+
+    assert stream_settings["finalmask"]["udp"][0]["settings"]["resolvers"] == [{"addrs": ["udp://1.1.1.1"]}]

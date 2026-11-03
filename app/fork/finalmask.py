@@ -1,9 +1,16 @@
 from copy import deepcopy
 from typing import Any
 
-from app.models.host import FinalMask, FinalMaskTcpType, dump_final_mask_for_xray, prune_blank_values
+from app.models.host import (
+    FinalMask,
+    FinalMaskTcpType,
+    FinalMaskUdpType,
+    dump_final_mask_for_xray,
+    prune_blank_values,
+)
 
 FRAGMENT_SCALAR_KEYS = {"lengths": "length", "delays": "delay"}
+DOH_RESOLVER_SCHEME = "https://"
 
 
 def _fragment_settings(final_mask: dict[str, Any]) -> list[dict[str, Any]]:
@@ -49,4 +56,34 @@ def restore_fragment_scalars(final_mask: dict[str, Any]) -> dict[str, Any]:
             entries = settings.get(list_key)
             if scalar_key not in settings and isinstance(entries, list) and entries:
                 settings[scalar_key] = entries[0]
+    return final_mask
+
+
+def _xdns_resolvers(final_mask: dict[str, Any]) -> list[dict[str, Any]]:
+    udp_layers = final_mask.get("udp")
+    if not isinstance(udp_layers, list):
+        return []
+    resolvers = []
+    for layer in udp_layers:
+        if not isinstance(layer, dict) or layer.get("type") != FinalMaskUdpType.xdns.value:
+            continue
+        settings = layer.get("settings")
+        if isinstance(settings, dict) and isinstance(settings.get("resolvers"), list):
+            resolvers.extend(resolver for resolver in settings["resolvers"] if isinstance(resolver, dict))
+    return resolvers
+
+
+def _is_doh_resolver(resolver: dict[str, Any]) -> bool:
+    addrs = resolver.get("addrs")
+    if not isinstance(addrs, list):
+        return False
+    return any(isinstance(addr, str) and addr.lower().startswith(DOH_RESOLVER_SCHEME) for addr in addrs)
+
+
+def restore_doh_tls_configs(final_mask: Any) -> Any:
+    if not isinstance(final_mask, dict):
+        return final_mask
+    for resolver in _xdns_resolvers(final_mask):
+        if _is_doh_resolver(resolver) and not isinstance(resolver.get("tlsConfig"), dict):
+            resolver["tlsConfig"] = {}
     return final_mask
