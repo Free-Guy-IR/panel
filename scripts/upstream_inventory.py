@@ -228,8 +228,15 @@ WORKFLOW_EXPRESSION_RE = re.compile(r"\$\{\{.*?\}\}")
 WORKFLOW_MATRIX_GOARCH_RE = re.compile(r"\$\{\{\s*matrix\.goarch\s*\}\}", re.IGNORECASE)
 WORKFLOW_MATRIX_REFERENCE_RE = re.compile(r"""\bmatrix\s*(?:\.\s*([\w-]+)|\[\s*['"]([\w-]+)['"]\s*\])""", re.IGNORECASE)
 WORKFLOW_ARCH_CONTEXT_RE = re.compile(r"arch|platform|target", re.IGNORECASE)
-WORKFLOW_PLATFORM_FLAG_RE = re.compile(r"""--platforms?(?:=|\s+|$)("[^"]*"|'[^']*'|\S*)""")
-WORKFLOW_DEFAULT_PLATFORM_RE = re.compile(r"""\bDOCKER_DEFAULT_PLATFORM["']?\s*[:=]\s*("[^"]*"|'[^']*'|\S*)""")
+WORKFLOW_PLATFORM_FLAG_RE = re.compile(r"""--platforms?(?:=|\s+|$)("[^"]*"|'[^']*'|\$\{\{.*?\}\}|\S*)""")
+WORKFLOW_DEFAULT_PLATFORM_RE = re.compile(
+    r"""\bDOCKER_DEFAULT_PLATFORM["']?\s*[:=]\s*("[^"]*"|'[^']*'|\$\{\{.*?\}\}|\S*)"""
+)
+WORKFLOW_MATRIX_ONLY_RE = re.compile(
+    r"""\$\{\{\s*matrix\s*(?:\.\s*([\w-]+)|\[\s*['"]([\w-]+)['"]\s*\])\s*\}\}""", re.IGNORECASE
+)
+YAML_HEX_ESCAPE_RE = re.compile(r"\\(?:x([0-9a-fA-F]{2})|u([0-9a-fA-F]{4})|U([0-9a-fA-F]{8}))")
+ESCAPED_ARCH_WORD_RE = re.compile(r"goarch|targetarch|platform|linux/", re.IGNORECASE)
 WORKFLOW_USES_RE = re.compile(r"""^(?:-\s+)?uses:\s*["']?([^\s"'@]+)""")
 WORKFLOW_UNREAD_TOOL_RE = re.compile(r"\b(?:goreleaser|bake-action|buildx\s+bake|gox|xgo)\b", re.IGNORECASE)
 WORKFLOW_EMULATOR_ACTIONS = frozenset({"docker/setup-qemu-action"})
@@ -237,7 +244,27 @@ GOARCH_SELF_REFERENCES = frozenset({"$goarch", "${goarch}", "$(goarch)"})
 GOARCH_DOCKER_TARGET_REFERENCES = frozenset({"$targetarch", "${targetarch}"})
 DOCKER_BUILDER_PLATFORMS = frozenset({"$buildplatform", "${buildplatform}", "$targetplatform", "${targetplatform}"})
 MAKE_GOARCH_RE = re.compile(r"^(?:(?:export|override)\s+)*goarch\s*(?:::|[:?+!])?=\s*(.*)$", re.IGNORECASE)
-BUILD_TOOL_CONFIG_RE = re.compile(r"\.?goreleaser\.ya?ml|docker-bake(?:\.override)?\.(?:hcl|json)|\.?gox(?:\.json)?", re.IGNORECASE)
+MAKE_INCLUDE_RE = re.compile(r"^ *(?:-|s)?include(?:\s|$)")
+MAKEFILE_NAMES = frozenset({"Makefile", "GNUmakefile", "makefile"})
+DOCKER_LEGACY_ENV_GOARCH_RE = re.compile(r"^env\s+goarch\s+(.*)$", re.IGNORECASE)
+TARGETARCH_ASSIGNMENT_RE = re.compile(r"(?<![\w$.{-])targetarch\s*(?:::|[:?+!])?=\s*(\S+)", re.IGNORECASE)
+CONTAINER_FILE_RE = re.compile(r"(?:docker|container)file(?:[._-].*)?|.+\.(?:docker|container)file", re.IGNORECASE)
+UNREAD_ARCH_VALUE_RE = re.compile(
+    r"""(?<![\w$.{-])(?:goarch|targetarch)\s*(?:(?:::|[:?+!])?=|:(?=\s))\s*("[^"]*"|'[^']*'|[^\s;&|)]*)"""
+    r"""|^\s*env\s+(?:goarch|targetarch)\s+(\S+)""",
+    re.IGNORECASE,
+)
+UNREAD_PLATFORM_RE = re.compile(
+    r"""(?:--platforms?(?:=|\s+)|\b(?:docker_default_)?platforms?["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s;&|)]*)""",
+    re.IGNORECASE,
+)
+BUILD_TOOL_CONFIG_RE = re.compile(
+    r"\.goreleaser.*|goreleaser\.(?:ya?ml|json|toml)(?:\..*)?|docker-bake(?:\.override)?\.(?:hcl|json)|\.?gox(?:\.json)?",
+    re.IGNORECASE,
+)
+UNREAD_OS_ARCH_RE = re.compile(
+    r"(?<![\w/.-])linux/(?:" + "|".join(sorted(GO_FILENAME_ARCHES, key=len, reverse=True)) + r")\b", re.IGNORECASE
+)
 GO_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
 GO_LINUX_TRUE_TERMS = frozenset({"linux", "unix"})
 GO_CONSTRAINT_RE = re.compile(r"^\s*//\s*(?:go:build|\+build)\b(.*)$", re.MULTILINE)
@@ -1712,8 +1739,13 @@ def matrix_values(block):
     return values
 
 
-def workflow_platform_arches(value, line):
+def workflow_platform_arches(value, line, values=None):
     value = value.strip().strip("'\"")
+    reference = WORKFLOW_MATRIX_ONLY_RE.fullmatch(value)
+    if reference and values:
+        items = values.get((reference.group(1) or reference.group(2)).lower())
+        if items:
+            return workflow_platform_arches(",".join(items), line)
     if not value or "$" in value:
         raise ShippedArchesUnreadable(f"cannot read the platforms on the line {line!r}")
     found = set()
@@ -1758,6 +1790,13 @@ def workflow_goarch_arches(line, passthrough=GOARCH_SELF_REFERENCES):
     return found
 
 
+def platform_item_arch(item):
+    parts = item.strip().lower().split("/")
+    if len(parts) == 1:
+        return parts[0]
+    return parts[1] if parts[0] and len(parts) in (2, 3) else ""
+
+
 def workflow_matrix_references(line, values):
     context = WORKFLOW_EXPRESSION_RE.sub("", line)
     for match in WORKFLOW_MATRIX_REFERENCE_RE.finditer(line):
@@ -1765,7 +1804,7 @@ def workflow_matrix_references(line, values):
         if key == "goarch" or not (WORKFLOW_ARCH_CONTEXT_RE.search(context) or WORKFLOW_ARCH_CONTEXT_RE.search(key)):
             continue
         items = values.get(key)
-        if not items or not all(item.lower() in GO_FILENAME_ARCHES for item in items):
+        if not items or not all(platform_item_arch(item) in GO_FILENAME_ARCHES for item in items):
             raise ShippedArchesUnreadable(f"cannot read the arches behind matrix.{key} on the line {line!r}")
 
 
@@ -1793,8 +1832,22 @@ def workflow_block_text(lines, index):
     return ",".join(text for _, text in lines[index + 1 : end])
 
 
+def yaml_hex_unescape(text):
+    def decode(match):
+        try:
+            return chr(int(match.group(1) or match.group(2) or match.group(3), 16))
+        except ValueError:
+            return "�"
+
+    return YAML_HEX_ESCAPE_RE.sub(decode, text)
+
+
 def workflow_linux_arches(text):
     lines = workflow_lines(text)
+    for _, line in lines:
+        decoded = yaml_hex_unescape(line)
+        if decoded != line and ESCAPED_ARCH_WORD_RE.search(decoded):
+            raise ShippedArchesUnreadable(f"the line {line!r} spells an arch word through a YAML escape")
     found = set()
     in_matrix = set()
     values = {}
@@ -1826,13 +1879,13 @@ def workflow_linux_arches(text):
             value = platforms.group(1).strip()
             if value in ("|", "|-", "|+", ">", ">-", ">+"):
                 value = workflow_block_text(lines, index)
-            found |= workflow_platform_arches(value, line)
+            found |= workflow_platform_arches(value, line, values)
             continue
         found |= workflow_goarch_arches(line)
         for flag in WORKFLOW_PLATFORM_FLAG_RE.finditer(line):
-            found |= workflow_platform_arches(flag.group(1), line)
+            found |= workflow_platform_arches(flag.group(1), line, values)
         for flag in WORKFLOW_DEFAULT_PLATFORM_RE.finditer(line):
-            found |= workflow_platform_arches(flag.group(1), line)
+            found |= workflow_platform_arches(flag.group(1), line, values)
         workflow_matrix_references(line, values)
     return frozenset(found)
 
@@ -1842,6 +1895,19 @@ def build_file_linux_arches(text):
     for indent, line in workflow_lines(text):
         if WORKFLOW_UNREAD_TOOL_RE.search(line):
             raise ShippedArchesUnreadable(f"the line {line!r} builds with a tool whose config the gate does not read")
+        if TARGETARCH_ASSIGNMENT_RE.search(line):
+            raise ShippedArchesUnreadable(f"the line {line!r} sets TARGETARCH, which the gate does not read")
+        legacy = DOCKER_LEGACY_ENV_GOARCH_RE.match(line)
+        if legacy:
+            value = legacy.group(1).strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+                value = value[1:-1].strip()
+            if value.lower() in GOARCH_SELF_REFERENCES | GOARCH_DOCKER_TARGET_REFERENCES:
+                continue
+            if not re.fullmatch(r"[a-z0-9]+", value):
+                raise ShippedArchesUnreadable(f"cannot read the GOARCH on the line {line!r}")
+            found.add(value)
+            continue
         make = MAKE_GOARCH_RE.match(line) if not indent else None
         if make:
             value = make.group(1).strip().strip("'\"").strip()
@@ -1859,6 +1925,29 @@ def build_file_linux_arches(text):
     return found
 
 
+def makefile_linux_arches(text):
+    for line in text.splitlines():
+        if MAKE_INCLUDE_RE.match(line):
+            raise ShippedArchesUnreadable(f"the Makefile line {line!r} includes a file the gate does not read")
+    return build_file_linux_arches(text)
+
+
+def unread_source_linux_arches(text):
+    for raw in text.splitlines():
+        line = raw.replace("\\", "")
+        if WORKFLOW_GOARCH_BARE_RE.search(line) or UNREAD_OS_ARCH_RE.search(line):
+            raise ShippedArchesUnreadable(f"the line {raw!r} names an arch in a source the gate does not read")
+        for match in UNREAD_ARCH_VALUE_RE.finditer(line):
+            value = (match.group(1) or match.group(2) or "").strip("'\"").lower()
+            if value and value not in GOARCH_SELF_REFERENCES | GOARCH_DOCKER_TARGET_REFERENCES:
+                raise ShippedArchesUnreadable(f"the line {raw!r} sets an arch in a source the gate does not read")
+        for match in UNREAD_PLATFORM_RE.finditer(line):
+            value = match.group(1).strip("'\"").lower()
+            if value and value not in DOCKER_BUILDER_PLATFORMS:
+                raise ShippedArchesUnreadable(f"the line {raw!r} sets a platform in a source the gate does not read")
+    return set()
+
+
 def shipped_linux_arch_source(path):
     name = path.rsplit("/", 1)[-1]
     if BUILD_TOOL_CONFIG_RE.fullmatch(name):
@@ -1868,8 +1957,12 @@ def shipped_linux_arch_source(path):
         return workflow_linux_arches
     if path.startswith(".github/actions/") and name in ("action.yml", "action.yaml"):
         return workflow_linux_arches
-    if not folder and (name == "Makefile" or name.startswith("Dockerfile")):
-        return build_file_linux_arches
+    if not folder and name in MAKEFILE_NAMES:
+        return makefile_linux_arches
+    if CONTAINER_FILE_RE.fullmatch(name):
+        return unread_source_linux_arches if folder else build_file_linux_arches
+    if name.endswith(".mk") or (path.startswith("scripts/") and name.endswith(".sh")):
+        return unread_source_linux_arches
     return None
 
 
