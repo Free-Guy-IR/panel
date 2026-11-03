@@ -130,3 +130,11 @@ Port-queue lines (remove the 43 held lines of the same SHAs first):
 - `ae8681539d7482b0aa20452ef4062087fcf095db` released in v5.6.0 (tag 2b75db15cb00, 2026-11-03), owed by the v5.6.0 sync (PORT-B-DASH, specs/005 T116), first recorded on 2026-11-03: fix: display user dates in shamsi for fa locales and truncate custom column values with ellipses on desktop and mobile. security: no, dashboard-only: columns.tsx, data-table.tsx and user-field-value.tsx under dashboard/src/features/users format dates through the existing formatDateByLocale and isPersianLocaleLanguage helpers and truncate custom column text with CSS ellipsis; values stay React text, with no dangerouslySetInnerHTML or i18n escapeValue change; it needs 9e68477be176 (user-field-value.tsx) first until: 2026-12-03
 - `2b75db15cb0019a00252c59f9d1c34e6082a121f` released in v5.6.0 (tag 2b75db15cb00, 2026-11-03), owed by the v5.6.0 sync (PORT-W2, specs/005 T122, last pick), first recorded on 2026-11-03: chore: bump version to v5.6.0. security: no, it moves the version string to 5.6.0 in app/version.py, dashboard/package.json, pyproject.toml and uv.lock; no runtime code path changes. It is re-decided as Ported by design under the fork version scheme only after the other 44 commits of v5.6.0 are on main, so no fork label claims v5.6.0 code it does not contain until: 2026-12-03
 ```
+
+Held line for the branch-only pyasn1 bump found on 2026-11-03 (security yes; the fork bumps pyasn1 itself in T113):
+
+```
+- `cfdce3765ee7ad7cb46782ba00fa360d0c7134ed` only on the dependabot branch dependabot/uv/pyasn1-0.6.5, held for an upstream release (checked 2026-11-03): chore(deps): bump pyasn1 from 0.6.4 to 0.6.5 (uv.lock only). security: yes, because OSV lists four quadratic-CPU decoding advisories against pyasn1 0.6.4 (GHSA-2qm8-x737-gmw5, GHSA-9m75-vc3g-4x39, GHSA-fm9c-5rcf-2q5p, GHSA-mm57-4v3p-rchx) and none against 0.6.5 (checked 2026-11-03); the fork's uv.lock pins 0.6.4 through webauthn and pyasn1-modules, so PORT-B-INFRA bumps pyasn1 on the fork side now (the spec 004 certifi precedent) and this upstream commit stays held for its release
+```
+
+Gate dry run with all of the above plus `--write-refs-snapshot` on `a0b48fcb9`: exit 0, 466 decided, 209 owed.

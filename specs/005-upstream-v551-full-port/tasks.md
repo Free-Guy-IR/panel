@@ -119,7 +119,8 @@ above applies to every task here. Each lane starts after its own v5.5.1 picks.
 
 - [ ] T125 [PANEL-LEAD] Today, before the 18:24 UTC gate run: remove the 43 held `dev-only after v5.5.1` lines, add
   the 45 Port-queue lines and owner decision `2026-11-03-main-v560-sync` (10 security-yes commits, until
-  2026-12-03) from `v560-commits.md`, add `v5.6.0` to `.upstream-refs`; gate run green on that head.
+  2026-12-03) and the held line of `cfdce3765ee7` (pyasn1, branch-only) from `v560-commits.md`, run the gate
+  with `--write-refs-snapshot` (5 new heads); gate exit 0 on that head (dry run on `a0b48fcb9`: exit 0).
 - [ ] T110 [PANEL-DB] After T010-T015: add `b849540d85bb e5a7c3f9b214 f0420da90ff1 1a2b3c4d5e6f` byte-identical
   (blob hashes in `v560-commits.md`), the `app/db/models.py` hunks of `b063e098e a2de6dee8 547fa96d1`
   (NodeOutboundUsage, NodeStat indexes, `Settings.cleanup` with `default_factory=dict`, APIKey `max_requests`,
@@ -143,7 +144,9 @@ above applies to every task here. Each lane starts after its own v5.5.1 picks.
 - [ ] T113 [B-INFRA] Workflows `d2795ed9d250` (security) → `dddd3b9d7716` → `155ed57dcec1` (security) →
   `77238f82ca77`; then `2781be689700 e582fe7d9573 86bcd0d0a24d ada6fdf857ff f40673225fcc 4c085f24803e
   4c35d98dc9c5` (security, keep spec 004's emSign strip) `0d57c2c44a57 8e92a1212919 b1fd63493699 de75b25f5581
-  a93bdf65a261 d6c8c5032f4c 9e8a0a7deb22`, `uv lock` after each; before any T120 pick.
+  a93bdf65a261 d6c8c5032f4c 9e8a0a7deb22`, `uv lock` after each; before any T120 pick. Now, ahead of the
+  lane: fork-side `uv lock --upgrade-package pyasn1` to 0.6.5 (four OSV advisories against 0.6.4, reached through
+  webauthn), with an OSV check test of the lock.
 - [ ] T114 [B-SUB] `2f00acd1e95f` (security) → `8a706e967b53` (security; keep the fork `logger` line and upstream's
   name constants) → `4bdf321cce2a` (host-state cache key `state_v6`: cold cache after deploy, in the runbook) →
   `f16fbfa41c30` (security: XDrive s3 object reaches subscriber JSON; test that only xdrive hosts carry it).
