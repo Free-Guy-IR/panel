@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 
 from app.db.crud.bulk import (
     BulkUserUpdateConflict,
-    count_bulk_out_of_range_targets,
+    bulk_out_of_range_target_exists,
     get_bulk_user_limit_targets,
     update_users_datalimit,
     update_users_expire,
@@ -165,7 +165,7 @@ async def test_a_quota_pushed_into_overflow_range_after_the_bulk_check_is_reject
     user_ids = await _seed(recorder_db)
     bulk = BulkUser(amount=BIG_STEP, users=user_ids)
     async with recorder_db() as session:
-        assert await count_bulk_out_of_range_targets(session, bulk, "data_limit") == 0
+        assert await bulk_out_of_range_target_exists(session, bulk, "data_limit") is False
         await _set_user(recorder_db, user_ids[1], data_limit=BIG_STEP)
         await _record_usage(recorder_db, user_ids, USAGE)
         with pytest.raises(BulkUserResultOutOfRange):
@@ -189,7 +189,7 @@ async def test_an_expire_pushed_into_overflow_range_after_the_bulk_check_is_reje
         await _set_user(recorder_db, user_id, expire=start)
     bulk = BulkUser(amount=10**10, users=user_ids)
     async with recorder_db() as session:
-        assert await count_bulk_out_of_range_targets(session, bulk, "expire") == 0
+        assert await bulk_out_of_range_target_exists(session, bulk, "expire") is False
         await _set_user(recorder_db, user_ids[1], expire=FAR_FUTURE)
         await _record_usage(recorder_db, user_ids, USAGE)
         with pytest.raises(BulkUserResultOutOfRange):

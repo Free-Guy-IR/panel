@@ -1,4 +1,4 @@
-from app.db.crud.bulk import count_bulk_out_of_range_targets
+from app.db.crud.bulk import bulk_out_of_range_target_exists
 from app.fork.crud.bulk_result_bounds import out_of_range_detail
 from app.models.admin import AdminDetails
 from app.operation.permissions import PermissionDenied, enforce_permission, get_scope_admin_id
@@ -15,7 +15,7 @@ async def reject_unbounded_bulk_amount(op, db, field: str, amount: int) -> None:
 
 
 async def reject_out_of_range_bulk_result(op, db, bulk_model, field: str, allowed_group_ids: list[int] | None) -> None:
-    if await count_bulk_out_of_range_targets(db, bulk_model, field, allowed_group_ids):
+    if await bulk_out_of_range_target_exists(db, bulk_model, field, allowed_group_ids):
         await op.raise_error(message=out_of_range_detail(field), code=422, db=db)
 
 

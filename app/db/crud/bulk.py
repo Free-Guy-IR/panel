@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime as dt
 from typing import Literal
 
-from sqlalchemy import and_, case, cast, delete, func, literal, or_, select, text, true, update
+from sqlalchemy import and_, case, cast, delete, false, func, literal, or_, select, text, true, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
@@ -18,7 +18,12 @@ from app.db.models import (
     users_groups_association,
 )
 from app.fork.crud.admin_scope import locked_targets
-from app.fork.crud.bulk_result_bounds import BulkUserResultOutOfRange, count_out_of_range_results, out_of_range_detail
+from app.fork.crud.bulk_result_bounds import (
+    BulkUserResultOutOfRange,
+    bulk_result_guard,
+    out_of_range_detail,
+    out_of_range_result_exists,
+)
 from app.fork.crud.group_scope import user_in_allowed_groups
 from app.fork.proxy_secrets.locks import holds_row_locks
 from app.models.group import BulkGroup
@@ -348,14 +353,14 @@ async def count_bulk_datalimit_targets(
     return (await db.execute(select(func.count(User.id)).where(final_filter))).scalar_one_or_none() or 0
 
 
-async def count_bulk_out_of_range_targets(
+async def bulk_out_of_range_target_exists(
     db: AsyncSession,
     bulk_model: BulkUser,
     field: Literal["expire", "data_limit"],
     allowed_group_ids: list[int] | None = None,
-) -> int:
+) -> bool:
     final_filter = _bulk_user_target_filter(bulk_model, field, allowed_group_ids)
-    return await count_out_of_range_results(db, field, bulk_model.amount, final_filter)
+    return await out_of_range_result_exists(db, field, bulk_model.amount, final_filter, lock=False)
 
 
 async def count_bulk_proxy_targets(
@@ -430,24 +435,42 @@ async def _lock_bulk_targets(
     return locked
 
 
+async def _hold_write_lock_without_row_locks(db: AsyncSession) -> None:
+    if not holds_row_locks(db):
+        users_table = User.__table__
+        await db.execute(update(users_table).where(false()).values(id=users_table.c.id))
+
+
 async def _reject_out_of_range_locked_targets(
     db: AsyncSession, locked: dict[int, UserStatus], field: Literal["expire", "data_limit"], amount: int
 ) -> None:
     for chunk in _id_chunks(sorted(locked)):
-        if await count_out_of_range_results(db, field, amount, User.id.in_(chunk)):
+        if await out_of_range_result_exists(db, field, amount, User.id.in_(chunk), lock=True):
             await db.rollback()
             raise BulkUserResultOutOfRange(out_of_range_detail(field))
 
 
 async def _apply_to_locked_targets(
-    db: AsyncSession, locked: dict[int, UserStatus], conditions: tuple, *, strict: bool = False, **values
+    db: AsyncSession,
+    locked: dict[int, UserStatus],
+    conditions: tuple,
+    field: Literal["expire", "data_limit"],
+    amount: int,
+    *,
+    strict: bool = False,
+    **values,
 ) -> list[User]:
     changed_ids: list[int] = []
+    in_range = ~bulk_result_guard(db, field, amount)
     for chunk in _id_chunks(sorted(locked)):
-        result = await db.execute(update(User).where(User.id.in_(chunk), *conditions).values(**values))
-        if strict and result.rowcount != len(chunk):
-            await db.rollback()
-            raise BulkUserUpdateConflict("Selected users changed during the bulk update; retry the request")
+        result = await db.execute(update(User).where(User.id.in_(chunk), *conditions, in_range).values(**values))
+        if result.rowcount != len(chunk):
+            if await out_of_range_result_exists(db, field, amount, User.id.in_(chunk), lock=True):
+                await db.rollback()
+                raise BulkUserResultOutOfRange(out_of_range_detail(field))
+            if strict:
+                await db.rollback()
+                raise BulkUserUpdateConflict("Selected users changed during the bulk update; retry the request")
         rows = await db.execute(select(User.id, User.status).where(User.id.in_(chunk)).with_for_update())
         changed_ids.extend(user_id for user_id, status in rows.all() if status != locked[user_id])
     await db.commit()
@@ -470,6 +493,7 @@ async def update_users_expire(
     """
     Bulk update user expiration dates and return list of User objects where status changed.
     """
+    await _hold_write_lock_without_row_locks(db)
     locked = await _lock_bulk_targets(db, _bulk_user_target_filter(bulk_model, "expire", allowed_group_ids), target_ids)
     if not locked:
         await db.commit()
@@ -490,6 +514,8 @@ async def update_users_expire(
         db,
         locked,
         target_conditions,
+        "expire",
+        bulk_model.amount,
         strict=target_ids is not None,
         expire=new_expire,
         status=case(*status_cases, else_=User.status),
@@ -513,6 +539,7 @@ async def update_users_datalimit(
         *_bulk_target_conditions(bulk_model, "data_limit"),
         _bulk_final_value_bounds(User.data_limit + bulk_model.amount, minimum, maximum),
     )
+    await _hold_write_lock_without_row_locks(db)
     locked = await _lock_bulk_targets(
         db, _bulk_user_target_filter(bulk_model, "data_limit", allowed_group_ids), target_ids
     )
@@ -535,6 +562,8 @@ async def update_users_datalimit(
         db,
         locked,
         target_conditions,
+        "data_limit",
+        bulk_model.amount,
         strict=target_ids is not None,
         data_limit=User.data_limit + bulk_model.amount,
         status=case(*status_cases, else_=User.status),
