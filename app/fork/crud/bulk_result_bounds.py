@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from sqlalchemy import Integer, cast, false, func, select
+from sqlalchemy import Boolean, Integer, cast, false, func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import User
@@ -33,7 +33,8 @@ def bulk_result_out_of_range(field: Literal["expire", "data_limit"], amount: int
             return User.expire > STORABLE_EXPIRE_MAX - timedelta(seconds=amount)
         if amount < 0:
             if dialect == "sqlite":
-                return cast(func.strftime("%s", User.expire), Integer) + amount < STORABLE_EXPIRE_MIN_EPOCH
+                whole_seconds = cast(func.strftime("%s", User.expire), Integer)
+                return func.coalesce(whole_seconds + amount < STORABLE_EXPIRE_MIN_EPOCH, true(), type_=Boolean)
             return User.expire < STORABLE_EXPIRE_MIN - timedelta(seconds=amount)
         return false()
     if amount > 0:

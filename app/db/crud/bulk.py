@@ -463,7 +463,12 @@ async def _apply_to_locked_targets(
     changed_ids: list[int] = []
     in_range = ~bulk_result_guard(db, field, amount)
     for chunk in _id_chunks(sorted(locked)):
-        result = await db.execute(update(User).where(User.id.in_(chunk), *conditions, in_range).values(**values))
+        result = await db.execute(
+            update(User)
+            .where(User.id.in_(chunk), *conditions, in_range)
+            .values(**values)
+            .execution_options(synchronize_session="fetch")
+        )
         if result.rowcount != len(chunk):
             if await out_of_range_result_exists(db, field, amount, User.id.in_(chunk), lock=True):
                 await db.rollback()
