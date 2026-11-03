@@ -58,6 +58,9 @@ MIGRATION_LOCK = "pasarguard_alembic_"
 MIGRATION_LOCK_KEY = 5_026_101_103
 MIGRATION_LOCK_TIMEOUT = 3600
 MIGRATION_LOCK_HELD = "fork_migration_lock_held"
+MIGRATION_LOCK_POLL = 0.5
+MIGRATION_LOCK_KEEPALIVE = 30
+MIGRATION_LOCK_RELEASE_WAIT = 60
 
 
 class MigrationLockError(RuntimeError):
@@ -141,6 +144,11 @@ def migration_lock(connection: Connection, timeout: int = MIGRATION_LOCK_TIMEOUT
         _release_lock(connection, parameters)
 
 
+def _keep_lock_session_alive(connection: Connection) -> None:
+    connection.execute(text("SELECT 1"))
+    connection.rollback()
+
+
 class _MigrationLockHolder(threading.Thread):
     def __init__(self, url: str, timeout: int) -> None:
         super().__init__(name="migration-lock-holder", daemon=True)
@@ -164,29 +172,46 @@ class _MigrationLockHolder(threading.Thread):
             async with engine.connect() as connection:
                 parameters = await connection.run_sync(_take_lock, self.timeout)
                 self.taken.set()
-                await asyncio.to_thread(self.finished.wait)
-                await connection.run_sync(_release_lock, parameters)
+                try:
+                    await self._keep_alive(connection)
+                finally:
+                    await connection.run_sync(_release_lock, parameters)
         finally:
             await engine.dispose()
 
+    async def _keep_alive(self, connection) -> None:
+        checked = time.monotonic()
+        while not self.finished.is_set():
+            await asyncio.sleep(MIGRATION_LOCK_POLL)
+            if time.monotonic() - checked >= MIGRATION_LOCK_KEEPALIVE:
+                await connection.run_sync(_keep_lock_session_alive)
+                checked = time.monotonic()
+
+    def check(self) -> None:
+        if self.error is not None:
+            raise MigrationLockError(
+                f"the rollback lost the database migration lock ({self.error!r}); another migrator may have run, "
+                "read alembic_version before going on"
+            ) from self.error
+
 
 @contextlib.contextmanager
-def held_migration_lock(url: str, timeout: int = MIGRATION_LOCK_TIMEOUT) -> Iterator[None]:
+def held_migration_lock(url: str, timeout: int = MIGRATION_LOCK_TIMEOUT) -> Iterator[Callable[[], None]]:
     url = migration_url(url)
     if make_url(url).get_backend_name() not in LOCKS:
-        yield
+        yield lambda: None
         return
     holder = _MigrationLockHolder(url, timeout)
-    holder.start()
-    holder.taken.wait()
-    if holder.error is not None:
-        holder.join()
-        raise holder.error
     try:
-        yield
+        holder.start()
+        holder.taken.wait()
+        holder.check()
+        yield holder.check
     finally:
         holder.finished.set()
-        holder.join()
+        if holder.is_alive():
+            holder.join(MIGRATION_LOCK_RELEASE_WAIT)
+    holder.check()
 
 
 def guard_planned_steps(migration_context: MigrationContext, script: ScriptDirectory, *, commit: bool) -> None:
@@ -281,7 +306,7 @@ def repair_interrupted_mysql_steps(
         return
     applied = _applied(script, heads)
     _remove_unapplied_objects(connection, applied)
-    _restore_applied_objects(connection, script, applied)
+    _restore_applied_objects(connection, script, applied, _removed(steps))
     _reconcile_sort_order(connection, SORT_ORDER_REVISION in applied)
     if REVERSE_GROUP_INDEX_REVISION not in applied:
         _undo_reverse_group_indexes(connection)
@@ -428,7 +453,9 @@ def _backfill_proxy_secret_claims(connection: Connection, _table, module) -> Non
 TABLE_REFILLS = {"named_locks": _seed_named_locks, "proxy_secret_claims": _backfill_proxy_secret_claims}
 
 
-def _restore_applied_objects(connection: Connection, script: ScriptDirectory, applied: set[str]) -> None:
+def _restore_applied_objects(
+    connection: Connection, script: ScriptDirectory, applied: set[str], removed: set[str]
+) -> None:
     from app.db.models import Base
 
     inspector = inspect(connection)
@@ -441,7 +468,7 @@ def _restore_applied_objects(connection: Connection, script: ScriptDirectory, ap
             model = Base.metadata.tables[table]
             model.create(connection)
             refill = TABLE_REFILLS.get(table)
-            if refill is not None:
+            if refill is not None and revision not in removed:
                 refill(connection, model, script.get_revision(revision).module)
     inspector = inspect(connection)
     quote = connection.dialect.identifier_preparer.quote

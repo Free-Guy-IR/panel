@@ -80,7 +80,8 @@ def _next_step(script: ScriptDirectory, heads: tuple[str, ...], target: str, rem
     return f"{side_heads[0]}@-1"
 
 
-def _downgrade(config: Config, step: str, echo: Callable[[str], None]) -> None:
+def _downgrade(config: Config, step: str, echo: Callable[[str], None], lock_held: Callable[[], None]) -> None:
+    lock_held()
     echo(f"alembic downgrade {step}")
     config.attributes[ROLLBACK_FLAG] = True
     try:
@@ -90,15 +91,20 @@ def _downgrade(config: Config, step: str, echo: Callable[[str], None]) -> None:
 
 
 def _downgrade_until(
-    config: Config, script: ScriptDirectory, target: str, heads: tuple[str, ...], echo: Callable[[str], None]
+    config: Config,
+    script: ScriptDirectory,
+    target: str,
+    heads: tuple[str, ...],
+    echo: Callable[[str], None],
+    lock_held: Callable[[], None],
 ) -> tuple[str, ...]:
     removals = revisions_to_remove(script, heads, target)
     if not removals:
-        _downgrade(config, target, echo)
+        _downgrade(config, target, echo, lock_held)
         return current_heads(config)
     while removals:
         step = _next_step(script, heads, target, removals)
-        _downgrade(config, step, echo)
+        _downgrade(config, step, echo, lock_held)
         heads = current_heads(config)
         remaining = revisions_to_remove(script, heads, target)
         if not remaining < removals:
@@ -118,10 +124,10 @@ def rollback(
     echo(f"revisions to remove: {', '.join(sorted(removals)) or 'none'}")
     if dry_run:
         return heads
-    with held_migration_lock(config.get_main_option("sqlalchemy.url")):
+    with held_migration_lock(config.get_main_option("sqlalchemy.url")) as lock_held:
         config.attributes[MIGRATION_LOCK_HELD] = True
         try:
-            heads = _downgrade_until(config, script, target, current_heads(config), echo)
+            heads = _downgrade_until(config, script, target, current_heads(config), echo, lock_held)
         finally:
             config.attributes.pop(MIGRATION_LOCK_HELD, None)
     if heads != (target,):

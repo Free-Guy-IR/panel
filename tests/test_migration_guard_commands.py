@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,8 +10,9 @@ import pytest
 from alembic.command import check, current, downgrade, stamp, upgrade
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import OperationalError
 
-from app.fork import migration_guards
+from app.fork import db_rollback, migration_guards
 from app.fork.db_rollback import current_heads, rollback
 from tests.test_upstream_v551_migration_splice import (
     FORK_HEAD,
@@ -240,3 +242,58 @@ def test_a_rollback_holds_the_migration_lock_across_every_downgrade_and_a_migrat
         assert [returncode for returncode, _ in results] == [0], results
         assert _versions(url) == [HEAD]
         assert _migration_lock_is_free(url)
+
+
+def _fake_sqlite_migration_lock(monkeypatch) -> None:
+    monkeypatch.setitem(migration_guards.LOCKS, "sqlite", (lambda _connection, _timeout: (True, {}), "SELECT 1"))
+    monkeypatch.setattr(migration_guards, "MIGRATION_LOCK_POLL", 0.01, raising=False)
+
+
+def _lock_holders() -> list[threading.Thread]:
+    return [thread for thread in threading.enumerate() if thread.name == "migration-lock-holder"]
+
+
+def test_a_rollback_under_a_held_migration_lock_finishes_and_releases_it(tmp_path, monkeypatch):
+    url = f"sqlite+aiosqlite:///{tmp_path / 'held_lock.sqlite3'}"
+    config = _config(url)
+    _quiet(upgrade, config, "head")
+    _fake_sqlite_migration_lock(monkeypatch)
+
+    assert _quiet(rollback, config, PROD_REVISION, echo=lambda _line: None) == (PROD_REVISION,)
+
+    assert _versions(url) == [PROD_REVISION]
+    assert _lock_holders() == []
+
+
+def test_a_rollback_that_loses_its_migration_lock_session_stops_before_the_next_downgrade(tmp_path, monkeypatch):
+    url = f"sqlite+aiosqlite:///{tmp_path / 'lost_lock.sqlite3'}"
+    config = _config(url)
+    _quiet(upgrade, config, "head")
+    _fake_sqlite_migration_lock(monkeypatch)
+    lost = threading.Event()
+
+    def lose_the_session(_connection) -> None:
+        lost.set()
+        raise OperationalError("SELECT 1", {}, ConnectionResetError("lock session closed by wait_timeout"))
+
+    original_heads = db_rollback.current_heads
+
+    def heads_once_the_session_is_lost(config_):
+        if config_.attributes.get(migration_guards.MIGRATION_LOCK_HELD):
+            assert lost.wait(10)
+            deadline = time.monotonic() + 10
+            while _lock_holders() and time.monotonic() < deadline:
+                time.sleep(0.05)
+        return original_heads(config_)
+
+    monkeypatch.setattr(migration_guards, "MIGRATION_LOCK_KEEPALIVE", 0, raising=False)
+    monkeypatch.setattr(migration_guards, "_keep_lock_session_alive", lose_the_session, raising=False)
+    monkeypatch.setattr(db_rollback, "current_heads", heads_once_the_session_is_lost)
+    lines: list[str] = []
+
+    with pytest.raises(migration_guards.MigrationLockError, match="lost the database migration lock"):
+        _quiet(rollback, config, PROD_REVISION, echo=lines.append)
+
+    assert not [line for line in lines if line.startswith("alembic downgrade")]
+    assert _versions(url) == [HEAD]
+    assert _lock_holders() == []
