@@ -249,6 +249,9 @@ class APIKeyOperation(BaseOperation):
     async def _ensure_caller_may_rotate(self, db: AsyncSession, admin: AdminDetails, db_key: APIKey) -> None:
         if not admin.is_owner and db_key.admin_id != admin.id:
             await self.raise_error(message="Permission denied", code=403, db=db)
+        await self._ensure_custom_key_covers_sibling(db, admin, db_key)
+
+    async def _ensure_custom_key_covers_sibling(self, db: AsyncSession, admin: AdminDetails, db_key: APIKey) -> None:
         if admin.custom_api_key_id is None or db_key.id == admin.custom_api_key_id:
             return
         if db_key.inherit_permissions:
@@ -302,12 +305,13 @@ class APIKeyOperation(BaseOperation):
         return APIKeyResponse.model_validate(rows[0])
 
     async def delete_api_key(self, db: AsyncSession, *, admin: AdminDetails, key_id: int) -> None:
-        db_key = await get_api_key_by_id(db, key_id)
+        db_key = await get_api_key_by_id(db, key_id, for_update=True)
         if db_key is None:
-            await self.raise_error(message="API key not found", code=404)
+            await self.raise_error(message="API key not found", code=404, db=db)
 
         if not admin.is_owner and db_key.admin_id != admin.id:
-            await self.raise_error(message="Permission denied", code=403)
+            await self.raise_error(message="Permission denied", code=403, db=db)
+        await self._ensure_custom_key_covers_sibling(db, admin, db_key)
 
         api_key_resp = APIKeyResponse.model_validate(db_key)
         admin_username = db_key.admin.username if db_key.admin else "Unknown"
@@ -320,17 +324,19 @@ class APIKeyOperation(BaseOperation):
         self, db: AsyncSession, *, admin: AdminDetails, bulk_api_keys: BulkAPIKeySelection
     ) -> RemoveAPIKeysResponse:
         requested_ids = list(bulk_api_keys.ids)
-        db_keys = await get_api_keys_by_ids(db, requested_ids)
+        db_keys = await get_api_keys_by_ids(db, requested_ids, for_update=True)
         found_ids = {db_key.id for db_key in db_keys}
 
         for key_id in requested_ids:
             if key_id not in found_ids:
-                await self.raise_error(message="API key not found", code=404)
+                await self.raise_error(message="API key not found", code=404, db=db)
 
         if not admin.is_owner:
             for db_key in db_keys:
                 if db_key.admin_id != admin.id:
-                    await self.raise_error(message="Permission denied", code=403)
+                    await self.raise_error(message="Permission denied", code=403, db=db)
+        for db_key in db_keys:
+            await self._ensure_custom_key_covers_sibling(db, admin, db_key)
 
         api_key_responses: list[APIKeyResponse] = []
         admin_usernames: list[str] = []
