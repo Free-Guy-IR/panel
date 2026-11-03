@@ -198,7 +198,7 @@ def apply_custom_format_variables(format_variables: dict, custom_variables: list
             continue
         try:
             format_variables[key] = raw_value.format_map(base_variables)
-        except (ValueError, KeyError):
+        except ValueError, KeyError, OverflowError:
             format_variables[key] = raw_value
 
     return format_variables
@@ -211,7 +211,7 @@ def _format_dynamic_value(value, format_variables: dict):
             return value
         try:
             return value.format_map(format_variables)
-        except ValueError, KeyError, AttributeError, IndexError, TypeError:
+        except ValueError, KeyError, AttributeError, IndexError, TypeError, OverflowError:
             # A value the variables cannot fill (stray brace, {0}, {X.y}) is kept as it is
             return value
     if isinstance(value, list):
@@ -237,9 +237,12 @@ def setup_format_variables(user: UsersResponseWithInbounds, custom_variables: li
             seconds_left = (expire - now).total_seconds()
             expire_date_obj = expire.date()
             expire_date = expire_date_obj.strftime("%Y-%m-%d")
-            jalali_expire_date = jd.fromgregorian(
-                year=expire_date_obj.year, month=expire_date_obj.month, day=expire_date_obj.day
-            ).strftime("%Y-%m-%d")
+            try:
+                jalali_expire_date = jd.fromgregorian(
+                    year=expire_date_obj.year, month=expire_date_obj.month, day=expire_date_obj.day
+                ).strftime("%Y-%m-%d")
+            except ValueError:
+                jalali_expire_date = "-"
             if now < expire:
                 days_left = (expire - now).days + 1
                 time_left = format_time_left(seconds_left)

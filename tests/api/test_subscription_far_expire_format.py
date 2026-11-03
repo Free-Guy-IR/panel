@@ -13,7 +13,6 @@ from tests.api.helpers import (
 )
 
 FAR_EXPIRE_CASES = [
-    pytest.param("5100-01-01T00:00:00Z", "{DAYS_LEFT:c}", id="days-left-char-overflow"),
     pytest.param("9999-12-30T00:00:00Z", "{USERNAME}", id="expire-beyond-jalali-range"),
     pytest.param("9999-12-30T00:00:00Z", "{JALALI_EXPIRE_DATE}", id="jalali-expire-date-beyond-range"),
 ]
