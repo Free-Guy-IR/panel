@@ -41,6 +41,7 @@ import DenseChartAreaHint from './dense-chart-area-hint'
 import { EmptyState } from './empty-state'
 import PeriodSelector from './period-selector'
 import TimeSelector, { TRAFFIC_TIME_SELECTOR_SHORTCUTS } from './time-selector'
+import { axisPeriodOverride } from '@/fork/charts/usage-axis-period'
 
 interface UserSubUpdatePieChartProps {
   username?: string
@@ -417,9 +418,9 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
         shortcut: selectedTime,
         windowWidth,
         customRange: showCustomRange ? customRange : undefined,
-        periodOverride: resolvePeriodOverride(periodOverride),
+        periodOverride: axisPeriodOverride(resolvePeriodOverride(periodOverride), activeQueryRange.cappedFrom),
       }),
-    [activePeriod, customRange, selectedTime, showCustomRange, timeSeriesData.length, windowWidth, periodOverride],
+    [activePeriod, customRange, selectedTime, showCustomRange, timeSeriesData.length, windowWidth, periodOverride, activeQueryRange.cappedFrom],
   )
 
   const { isAnimationActive, usePerBarRadius, useAccessibilityLayer, areaCurveType } = useMemo(

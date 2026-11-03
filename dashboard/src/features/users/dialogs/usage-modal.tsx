@@ -35,6 +35,7 @@ import {
   resolvePeriodOverride,
 } from '@/utils/chart-period-utils'
 import { getChartBrushWindow, getChartRenderFlags } from '@/utils/chart-performance'
+import { axisPeriodOverride } from '@/fork/charts/usage-axis-period'
 
 interface UsageModalProps {
   open: boolean
@@ -502,9 +503,9 @@ const UsageModal = ({ open, onClose, userId }: UsageModalProps) => {
         shortcut: period,
         windowWidth: width,
         customRange: showCustomRange ? customRange : undefined,
-        periodOverride: resolvePeriodOverride(periodOverride),
+        periodOverride: axisPeriodOverride(resolvePeriodOverride(periodOverride), queryRange.cappedFrom),
       }),
-    [showCustomRange, customRange, backendPeriod, processedChartData.length, period, width, periodOverride],
+    [showCustomRange, customRange, backendPeriod, processedChartData.length, period, width, periodOverride, queryRange.cappedFrom],
   )
 
   const { isAnimationActive, usePerBarRadius, useAccessibilityLayer, areaCurveType } = useMemo(

@@ -36,6 +36,7 @@ import { EmptyState } from './empty-state'
 import PeriodSelector from './period-selector'
 import TimeSelector, { TRAFFIC_TIME_SELECTOR_SHORTCUTS } from './time-selector'
 import { TimeRangeSelector } from '@/components/common/time-range-selector'
+import { axisPeriodOverride } from '@/fork/charts/usage-axis-period'
 
 type CountDataPoint = {
   time: string
@@ -427,9 +428,9 @@ export function UserCountsChart({ nodeId, isSudo, nodesData = [] }: UserCountsCh
         shortcut: selectedTime,
         windowWidth,
         customRange: showCustomRange ? customRange : undefined,
-        periodOverride: resolvePeriodOverride(periodOverride),
+        periodOverride: axisPeriodOverride(resolvePeriodOverride(periodOverride), activeQueryRange.cappedFrom),
       }),
-    [activePeriod, chartData.length, customRange, selectedTime, showCustomRange, windowWidth, periodOverride],
+    [activePeriod, chartData.length, customRange, selectedTime, showCustomRange, windowWidth, periodOverride, activeQueryRange.cappedFrom],
   )
 
   const { isAnimationActive, usePerBarRadius, useAccessibilityLayer, areaCurveType } = useMemo(

@@ -29,6 +29,7 @@ import useDirDetection from '@/hooks/use-dir-detection'
 
 import PeriodSelector from './period-selector'
 import { capUsagePeriod } from '@/fork/charts/usage-bucket-cap'
+import { axisPeriodOverride } from '@/fork/charts/usage-axis-period'
 
 type DataPoint = {
   time: string
@@ -261,9 +262,9 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats, realtime
         dataLength: chartData.length,
         period: activePeriod,
         shortcut: periodOption.value,
-        periodOverride: resolvePeriodOverride(periodOverride),
+        periodOverride: axisPeriodOverride(resolvePeriodOverride(periodOverride), cappedPeriod.cappedFrom),
       }),
-    [activePeriod, chartData.length, periodOption.value, periodOverride],
+    [activePeriod, chartData.length, periodOption.value, periodOverride, cappedPeriod.cappedFrom],
   )
 
   const { isAnimationActive, areaCurveType } = useMemo(() => getChartRenderFlags(chartData.length, 2), [chartData.length])

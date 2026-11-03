@@ -29,6 +29,7 @@ import {
   TrafficShortcutKey,
 } from '@/utils/chart-period-utils'
 import { getChartRenderFlags } from '@/utils/chart-performance'
+import { axisPeriodOverride } from '@/fork/charts/usage-axis-period'
 
 type DataPoint = {
   time: string
@@ -237,9 +238,9 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
         shortcut: selectedTime,
         windowWidth,
         customRange: showCustomRange ? customRange : undefined,
-        periodOverride: resolvePeriodOverride(periodOverride),
+        periodOverride: axisPeriodOverride(resolvePeriodOverride(periodOverride), activeQueryRange.cappedFrom),
       }),
-    [showCustomRange, customRange, activePeriod, chartData.length, selectedTime, windowWidth, periodOverride],
+    [showCustomRange, customRange, activePeriod, chartData.length, selectedTime, windowWidth, periodOverride, activeQueryRange.cappedFrom],
   )
 
   const { isAnimationActive, useAccessibilityLayer, areaCurveType } = useMemo(() => getChartRenderFlags(chartData.length), [chartData.length])

@@ -33,6 +33,7 @@ import {
   TrafficShortcutKey,
 } from '@/utils/chart-period-utils'
 import { getChartBrushWindow, getChartRenderFlags } from '@/utils/chart-performance'
+import { axisPeriodOverride } from '@/fork/charts/usage-axis-period'
 
 type NodeChartDataPoint = {
   time: string
@@ -345,9 +346,9 @@ export default function InboundUsageChart() {
         shortcut: selectedTime,
         windowWidth,
         customRange: showCustomRange ? customRange : undefined,
-        periodOverride: resolvePeriodOverride(periodOverride),
+        periodOverride: axisPeriodOverride(resolvePeriodOverride(periodOverride), activeQueryRange.cappedFrom),
       }),
-    [showCustomRange, customRange, activePeriod, selectedTime, chartData.length, windowWidth, periodOverride],
+    [showCustomRange, customRange, activePeriod, selectedTime, chartData.length, windowWidth, periodOverride, activeQueryRange.cappedFrom],
   )
 
   const { isAnimationActive, usePerBarRadius, useAccessibilityLayer, areaCurveType } = useMemo(

@@ -52,6 +52,7 @@ import {
 } from '@/utils/chart-period-utils'
 import { getChartBrushWindow, getChartRenderFlags } from '@/utils/chart-performance'
 import { DELETED_NODES_COLOR, DELETED_NODES_KEY, DELETED_NODES_STATS_KEY, buildUsageSeries, isSeriesKey, relabelDeletedNodesRow, resolveDeletedNodesLabel } from '@/fork/charts/all-nodes-series'
+import { axisPeriodOverride } from '@/fork/charts/usage-axis-period'
 
 type NodeChartDataPoint = {
   time: string
@@ -522,9 +523,9 @@ export function AllNodesStackedBarChart() {
         shortcut: selectedTime,
         windowWidth,
         customRange: showCustomRange ? customRange : undefined,
-        periodOverride: resolvePeriodOverride(periodOverride),
+        periodOverride: axisPeriodOverride(resolvePeriodOverride(periodOverride), activeQueryRange.cappedFrom),
       }),
-    [showCustomRange, customRange, activePeriod, selectedTime, chartData.length, windowWidth, periodOverride],
+    [showCustomRange, customRange, activePeriod, selectedTime, chartData.length, windowWidth, periodOverride, activeQueryRange.cappedFrom],
   )
 
   const { isAnimationActive, usePerBarRadius, useAccessibilityLayer, areaCurveType } = useMemo(
