@@ -94,11 +94,9 @@ def test_a_message_without_a_secret_is_byte_identical_and_keeps_its_arguments(me
     raw = _raw_message(message, args)
     if raw is None:
         pytest.skip("plain logging cannot format this pair either")
-    record = _record(message, args)
-    kept = record.args
-    _scrubbed(record)
+    record = _scrubbed(_record(message, args))
     assert record.getMessage() == raw
-    assert record.args is kept
+    assert isinstance(record.args, tuple | dict)
 
 
 def test_numeric_conversions_of_non_builtin_numbers_still_format():
@@ -121,8 +119,11 @@ def test_numeric_conversions_of_non_builtin_numbers_still_format():
 def test_a_list_argument_stays_a_list():
     sample = list(range(20))
     record = _scrubbed(_record("sample %s of %d", (sample, 60)))
-    assert record.args[0] is sample
-    assert record.getMessage() == f"sample {sample} of 60"
+    assert type(record.args[0]) is list
+    assert record.args[0] == sample
+    assert len(record.args[0]) == 20
+    sample.append(URL)
+    assert record.getMessage() == f"sample {list(range(20))} of 60"
 
 
 SECRET_VALUES = [
@@ -174,9 +175,190 @@ def test_a_container_changed_after_the_scrub_is_scrubbed_again_by_a_later_handle
     assert SECRET not in record.getMessage()
 
 
-def test_an_unformattable_record_keeps_its_arguments_without_their_secrets():
+def test_an_unformattable_record_is_rendered_once_with_its_arguments_and_no_secret():
     record = _scrubbed(_record("count %d of %s", ("many", URL)))
-    with pytest.raises(TypeError):
-        record.getMessage()
-    assert SECRET not in repr(record.msg) + repr(record.args)
-    assert "many" in repr(record.args)
+    assert record.args is None
+    assert SECRET not in record.getMessage()
+    assert "many" in record.getMessage()
+    assert "http://***@h:1" in record.getMessage()
+
+
+def test_an_unformattable_mapping_record_scrubs_a_password_split_from_its_template():
+    record = _scrubbed(_record("%(password)s %(count)d", ({"password": SECRET, "count": "x"},)))
+    assert record.args is None
+    assert SECRET not in record.getMessage()
+
+
+def test_a_container_mutated_after_logging_cannot_leak_through_a_formatter_without_the_filter():
+    items = ["a"]
+    record = _scrubbed(_record("items %s", (items,)))
+    items.append(URL)
+    rendered = logging.Formatter("%(message)s").format(record)
+    assert rendered == "items ['a']"
+    assert SECRET not in repr(record.args)
+
+
+def test_an_object_whose_text_changes_after_logging_keeps_the_text_it_had():
+    class _Changing:
+        text = "clean"
+
+        def __str__(self) -> str:
+            return self.text
+
+    value = _Changing()
+    record = _scrubbed(_record("value %s", (value,)))
+    value.text = URL
+    assert record.getMessage() == "value clean"
+
+
+@pytest.mark.parametrize(
+    ("message", "args"),
+    [
+        ("%.0s", (URL,)),
+        ("%.0s%s", (URL, "shown")),
+        ("%(a)s", ({"a": 1, "b": URL},)),
+        ("%(a)s", ({"a": 1, "b": [URL]},)),
+        ("%.0r", ([URL],)),
+    ],
+    ids=repr,
+)
+def test_arguments_the_message_does_not_show_hold_no_secret(message, args):
+    record = _scrubbed(_record(message, args))
+    assert SECRET not in repr(record.args)
+    assert SECRET not in record.getMessage()
+
+
+def test_a_secret_found_only_in_the_whole_message_is_masked_and_the_arguments_keep_their_shape():
+    record = _scrubbed(_record("password: %s status %d", (SECRET, 200)))
+    assert SECRET not in record.getMessage()
+    assert SECRET not in repr(record.args)
+    assert isinstance(record.args, tuple)
+    assert len(record.args) == 2
+    assert record.args[1] == 200
+
+
+def test_the_access_log_tuple_keeps_its_length_and_scrubbed_path():
+    args = ("1.2.3.4", "GET", "/x?password=" + SECRET, "1.1", 200)
+    record = _scrubbed(_record('%s - "%s %s HTTP/%s" %d', args))
+    assert isinstance(record.args, tuple)
+    assert len(record.args) == 5
+    assert record.args[2] == "/x?password=***"
+    assert record.args[4] == 200
+    assert record.getMessage() == '1.2.3.4 - "GET /x?password=*** HTTP/1.1" 200'
+
+
+_ACCESS_SCRIPT = """
+import io
+import logging
+import logging.config
+import sys
+
+from app.utils.logger import LOGGING_CONFIG
+from app.fork.log_scrub import scrub_credentials_at_every_handler
+
+logging.config.dictConfig(LOGGING_CONFIG)
+scrub_credentials_at_every_handler()
+SECRET = sys.argv[1]
+access = logging.getLogger("uvicorn.access")
+out = io.StringIO()
+for handler in access.handlers:
+    handler.setStream(out)
+err = io.StringIO()
+sys.stderr = err
+for path in ("/api/plain", "/x?password=" + SECRET, "/r?u=http://u:" + SECRET + "@h:1"):
+    access.info('%s - "%s %s HTTP/%s" %d', "1.2.3.4", "GET", path, "1.1", 200, extra={"process_time": "1.00ms"})
+sys.stderr = sys.__stderr__
+print("ERR=" + repr(err.getvalue()))
+print(out.getvalue())
+"""
+
+
+def test_the_uvicorn_access_line_with_a_credential_is_printed_masked_through_the_app_logging_config():
+    import os
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    env = {**os.environ, "PYTHONPATH": str(root)}
+    finished = subprocess.run(
+        [sys.executable, "-c", _ACCESS_SCRIPT, SECRET],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert finished.returncode == 0, finished.stderr
+    printed = finished.stdout
+    assert "ERR=''" in printed
+    assert SECRET not in printed + finished.stderr
+    assert '"GET /api/plain HTTP/1.1" 200' in printed
+    assert '"GET /x?password=*** HTTP/1.1" 200' in printed
+    assert '"GET /r?u=http://***@h:1 HTTP/1.1" 200' in printed
+
+
+_MEMORY_SCRIPT = """
+import io
+import logging
+import logging.handlers
+import sys
+
+import app.utils.logger
+from app.fork.log_scrub import scrub_credentials_at_every_handler
+
+scrub_credentials_at_every_handler()
+URL = sys.argv[1]
+out = io.StringIO()
+target = logging.StreamHandler(out)
+target.setFormatter(logging.Formatter("%(message)s"))
+memory = logging.handlers.MemoryHandler(100, flushLevel=logging.CRITICAL, target=target)
+logger = logging.getLogger("late-flush")
+logger.propagate = False
+logger.addHandler(memory)
+items = ["a"]
+logger.warning("items %s", items)
+items.append(URL)
+memory.flush()
+print(out.getvalue())
+"""
+
+
+def test_a_memory_handler_flushed_after_the_container_changed_prints_the_logged_text():
+    import os
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    env = {**os.environ, "PYTHONPATH": str(root)}
+    finished = subprocess.run(
+        [sys.executable, "-c", _MEMORY_SCRIPT, URL],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert finished.returncode == 0, finished.stderr
+    assert SECRET not in finished.stdout + finished.stderr
+    assert "items ['a']" in finished.stdout
+
+
+@pytest.mark.parametrize(
+    ("message", "args"),
+    [
+        ("%(k)d %(k)s", ({"k": _Level.HIGH},)),
+        ("%(k)x %(k)r", ({"k": _Level.HIGH},)),
+        ("%(k)f %(k)r", ({"k": Decimal("12.75")},)),
+        ("hello", ({"a": 1},)),
+        ("100%% done", ({"a": 1},)),
+        ("hello", ({"a": URL},)),
+    ],
+    ids=repr,
+)
+def test_a_mapping_used_twice_or_not_at_all_renders_like_plain_logging(message, args):
+    raw = _raw_message(message, args)
+    record = _scrubbed(_record(message, args))
+    assert record.getMessage() == raw
+    assert SECRET not in repr(record.args)
