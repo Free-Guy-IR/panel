@@ -9,7 +9,7 @@ from app.db.crud import user as user_crud
 from app.db.models import Admin, User
 from app.fork.crud import admin_scope
 from tests.test_admin_removal_during_owner_moves import _attempt, _remover
-from tests.test_admin_wide_owner_moves_interleavings import BOUND, _mover
+from tests.test_admin_wide_owner_moves_interleavings import BOUND, _mover, quiet  # noqa: F401
 from tests.test_recorder_harness import _database_url, recorder_db_fixture, seed_users_and_nodes  # noqa: F401
 from tests.test_status_lock_order_interleavings import _deadlocks
 
