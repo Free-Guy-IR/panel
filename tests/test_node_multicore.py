@@ -150,6 +150,7 @@ async def test_a_failed_backend_restart_is_reported_and_not_added():
 
 @pytest.mark.asyncio
 async def test_a_healthy_node_is_force_started_instead_of_attached(monkeypatch):
+    from PasarGuardNodeBridge import Health
     from PasarGuardNodeBridge.storage import LifecycleStatus
 
     from app.operation import node as node_operation
@@ -160,6 +161,10 @@ async def test_a_healthy_node_is_force_started_instead_of_attached(monkeypatch):
     class HealthyNode:
         async def get_lifecycle_state(self):
             return SimpleNamespace(observed=LifecycleStatus.HEALTHY, desired=LifecycleStatus.HEALTHY, epoch=1)
+
+        async def get_health(self):
+            calls.append("health")
+            return Health.HEALTHY
 
         async def info(self):
             return SimpleNamespace(started=True, node_version="0.8.1", core_version="25.1.1")
@@ -184,6 +189,7 @@ async def test_a_healthy_node_is_force_started_instead_of_attached(monkeypatch):
     attached = await NodeOperation._start_or_attach_node(HealthyNode(), db_node, core, [], None)
     assert attached.node_version == "0.8.1"
     assert "connect" in calls and not any(isinstance(c, tuple) and c[0] == "start" for c in calls)
+    assert calls.index("health") < calls.index("connect")
 
     calls.clear()
     started = await NodeOperation._start_or_attach_node(HealthyNode(), db_node, core, [], None, force_start=True)
