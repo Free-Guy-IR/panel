@@ -122,6 +122,10 @@ SCOPED_COVER_RE = re.compile(
     r"(?<![0-9a-f])([0-9a-f]{40})(?![0-9a-f])\s+touching\s+only\s+([^\s,;]+(?:(?:\s*,\s*|\s+and\s+)[^\s,;]+)*)",
     re.IGNORECASE,
 )
+COMMENT_MARKERS = {
+    **dict.fromkeys((".go", ".js", ".jsx", ".ts", ".tsx", ".rs", ".c", ".h", ".java", ".proto"), ("//",)),
+    **dict.fromkeys((".py", ".sh", ".bash", ".yml", ".yaml", ".toml"), ("#",)),
+}
 MISSING_LINE_RE = re.compile(r"\bmissing\s+`?([^`\s]+:[+-]\d+)`?\s+because\b([^;]*)", re.IGNORECASE)
 SCOPED_PATH_SPLIT_RE = re.compile(r"\s*,\s*|\s+and\s+", re.IGNORECASE)
 SECURITY_NO_REASON_RE = re.compile(r"\bsecurity:\s*no\s*,\s*[^\W_]", re.IGNORECASE)
@@ -917,7 +921,19 @@ def hunk_ident(hunk):
     return f"{path}:-{hunk['first_removed']}"
 
 
+def is_comment_line(path, line):
+    markers = COMMENT_MARKERS.get(os.path.splitext(path)[1].lower())
+    if not markers:
+        return False
+    text = line.strip()
+    if text.startswith(markers):
+        return True
+    return "//" in markers and text.startswith("/*") and text.endswith("*/") and "*/" not in text[2:-2]
+
+
 def normalise_line(path, line):
+    if is_comment_line(path, line):
+        return ""
     return line.rstrip() if path.endswith(".py") else line.strip()
 
 
@@ -1216,7 +1232,7 @@ def first_parent_changes(sha, path):
     return bool(git("show", "--format=", "--name-only", "--no-renames", sha, "--", path).strip())
 
 
-def own_line_exceptions(reason, head, upstream_sha):
+def own_line_exceptions(reason, head, upstream_sha, decision_covers):
     named = {}
     problems = []
     for ident, why in MISSING_LINE_RE.findall(reason):
@@ -1227,6 +1243,9 @@ def own_line_exceptions(reason, head, upstream_sha):
             continue
         decision = OWNER_DECISION_RE.search(why)
         if decision and DECISION_ID_RE.match(decision.group(1).rstrip(".,")):
+            decided = decision.group(1).rstrip(".,")
+            if upstream_sha not in decision_covers.get(decided, frozenset()):
+                problems.append(f"names missing `{ident}`, which is not covered by owner decision {decided}")
             continue
         path = ident.rsplit(":", 1)[0]
         explained = False
@@ -1274,7 +1293,7 @@ def named_token_problems(reason, head, upstream_sha, hunks):
     return problems
 
 
-def security_design_problems(reason, head, upstream_sha):
+def security_design_problems(reason, head, upstream_sha, decision_covers):
     hunks = commit_hunks(upstream_sha)
     carriers = [
         sha
@@ -1283,7 +1302,7 @@ def security_design_problems(reason, head, upstream_sha):
     ]
     if not carriers:
         return None
-    named, problems = own_line_exceptions(reason, head, upstream_sha)
+    named, problems = own_line_exceptions(reason, head, upstream_sha, decision_covers)
     problems.extend(named_token_problems(reason, head, upstream_sha, hunks))
     carried = 0
     seen = set()
@@ -1725,6 +1744,12 @@ def parse_sync_ledger(path, today=None):
             errors.extend(f"{entry['where']}: {problem}" for problem in exception_problems)
             continue
         ends = [day for day in (entry["deadline"],) if day is not None]
+        entry["exception_covers"] = {
+            decision.rstrip(".,"): records[decision.rstrip(".,")]["covers"]
+            for _, why in MISSING_LINE_RE.findall(entry["reason"])
+            for decision in OWNER_DECISION_RE.findall(why)
+            if decision.rstrip(".,") in records
+        }
         entry["covers"] = records[entry["decision"]]["covers"] if entry["decision"] else frozenset()
         entry["scopes"] = records[entry["decision"]]["scopes"] if entry["decision"] else {}
         if entry["decision"]:
@@ -2046,7 +2071,7 @@ def parity_gate(
             continue
         if entry["kind"] == "ported-by-design" and entry["security"]:
             if strict_security_design:
-                problems = security_design_problems(entry["reason"], head, sha)
+                problems = security_design_problems(entry["reason"], head, sha, entry.get("exception_covers", {}))
             else:
                 problems = [] if design_fork_commit(entry["reason"], head, sha, in_range) else None
             if problems is None:

@@ -608,7 +608,7 @@ def test_every_own_line_a_security_carrier_leaves_out_is_named_with_a_reason(tmp
     assert message in result.stdout
 
 
-def chain_world(tmp_path, steps, cited, exception=""):
+def chain_world(tmp_path, steps, cited, exception="", token_length=40, covered=None):
     upstream = new_repo(tmp_path / "upstream")
     base = commit(upstream, "base", {"a.py": "one\ntwo\n", "b.py": "three\nfour\n"})
     fix = commit(
@@ -662,13 +662,13 @@ ledger = "upstream-forks/kit.md"
 reason = "no tracker of its own"
 """)
     decisions = "".join(
-        f"- `{ident}` the owner accepts the fork's own form of {fix} until: 2026-11-10\n"
+        f"- `{ident}` the owner accepts the fork's own form of {covered or fix} until: 2026-11-10\n"
         for ident in sorted(set(re.findall(r"owner-decision: (2026-10-20-[a-z-]+gateway)", exception)))
     )
     owner = f"\n## Owner decisions\n\n{decisions}" if decisions else ""
     (forks / "kit.md").write_text(
-        f"## Ported by design\n\n- `{fix}` ported in fork commits {names};{exception} security: yes, it checks tokens\n"
-        + owner
+        f"## Ported by design\n\n- `{fix[:token_length]}` ported in fork commits {names};{exception} security: yes, "
+        "it checks tokens\n" + owner
     )
     return forks / "forks.toml", fix
 
@@ -850,3 +850,70 @@ def test_a_squash_that_drops_the_security_line_needs_the_commit_that_dropped_it(
     unrelated = git(tmp_path / "upstream", "log", "-1", "--format=%H", "--grep", "chore: tidy", "main")
     assert f"`{original[:12]}` {NOT_CARRIED}" in result.stdout
     assert message.replace("<unrelated>", unrelated) in result.stdout, result.stdout
+
+
+def comment_world(tmp_path, upstream_text, fork_text, name="a.go"):
+    upstream = new_repo(tmp_path / "upstream")
+    base = commit(upstream, "base", {name: "one\ntwo\n"})
+    fix = commit(upstream, "fix: check the token", {name: upstream_text})
+    git(upstream, "tag", "v1.1.0")
+    fork = tmp_path / "fork"
+    git(tmp_path, "clone", "-q", str(upstream), str(fork))
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(fork, "config", key, value)
+    git(fork, "reset", "-q", "--hard", base)
+    port = commit(fork, "port the token check without its comments", {name: fork_text})
+    panel = new_repo(tmp_path / "panel")
+    forks = panel / "upstream-forks"
+    forks.mkdir()
+    (forks / "forks.toml").write_text(f"""
+[[repo]]
+name = "kit"
+mode = "ledger"
+fork = "Owner/kit"
+upstream = "Up/kit"
+fork_url = "{fork}"
+upstream_url = "{upstream}"
+ported_ref = "main"
+grandfathered_base = "{base}"
+ledger = "upstream-forks/kit.md"
+reason = "no tracker of its own"
+""")
+    (forks / "kit.md").write_text(
+        f"## Ported by design\n\n- `{fix}` ported in fork commit {port}; security: yes, it checks tokens\n"
+    )
+    return forks / "forks.toml", fix
+
+
+@pytest.mark.parametrize(
+    ("name", "upstream_text", "fork_text", "code"),
+    [
+        ("a.go", "one\n// explain the check\nCHECK_TOKEN\n\n/* and why */\ntwo\n", "one\nCHECK_TOKEN\ntwo\n", 0),
+        ("a.py", "one\n# explain the check\nCHECK_TOKEN\ntwo\n", "one\nCHECK_TOKEN\ntwo\n", 0),
+        ("a.go", "one\n// explain the check\nCHECK_TOKEN\nCHECK_SCOPE\ntwo\n", "one\nCHECK_TOKEN\ntwo\n", 1),
+        ("a.py", "one\n# explain the check\nCHECK_TOKEN\nCHECK_SCOPE\ntwo\n", "one\nCHECK_SCOPE\ntwo\n", 1),
+        ("a.md", "one\n# Token check\nCHECK_TOKEN\ntwo\n", "one\nCHECK_TOKEN\ntwo\n", 1),
+    ],
+    ids=["go-comments-only", "py-comments-only", "go-code-missing", "py-code-missing", "md-heading-is-content"],
+)
+def test_a_hunk_missing_only_comment_lines_is_carried_but_never_a_missing_code_line(
+    tmp_path, name, upstream_text, fork_text, code
+):
+    config, fix = comment_world(tmp_path, upstream_text, fork_text, name)
+    result = run(config, "--today", "2026-10-27")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code == 0:
+        assert "Upstream parity gate OK" in result.stdout
+        assert NOT_CARRIED not in result.stdout
+    else:
+        assert f"`{fix[:12]}` {NOT_CARRIED}" in result.stdout, result.stdout
+
+
+@pytest.mark.parametrize("token_length", [40, 12], ids=["full-token", "short-token"])
+def test_an_owner_decision_for_another_commit_never_excuses_a_security_hunk(tmp_path, token_length):
+    other = "0" * 39 + "1"
+    config, fix = chain_world(tmp_path, ["token", "feature"], ["token"], SCOPE_DECISION, token_length, other)
+    result = run(config, "--today", "2026-10-27")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert fix[:12] in result.stdout
+    assert "is not covered by owner decision 2026-10-20-scope-gateway" in result.stdout, result.stdout
