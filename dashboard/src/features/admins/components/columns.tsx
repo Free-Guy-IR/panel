@@ -8,6 +8,7 @@ import UsageSliderCompact from '@/components/common/usage-slider-compact'
 import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import { isOwner } from '@/utils/rbac'
+import { canResetAdminUsage } from '@/fork/admins/reset-usage-eligibility'
 
 interface ColumnSetupProps {
   t: (key: string) => string
@@ -188,9 +189,10 @@ export const setupColumns = ({
     id: 'actions',
     cell: ({ row }) => {
       const isOwnerTarget = isOwner(row.original)
+      const canResetUsage = canResetAdminUsage(!!onResetUsage, { username: row.original.username, isOwner: isOwnerTarget }, currentAdminUsername)
       const nonDestructiveActionCount =
         (onEdit ? 1 : 0) +
-        (onResetUsage ? 1 : 0) +
+        (canResetUsage ? 1 : 0) +
         (!isOwnerTarget && toggleStatus ? 1 : 0) +
         (!isOwnerTarget && onDisableAllActiveUsers ? 1 : 0) +
         (!isOwnerTarget && onActivateAllDisabledUsers ? 1 : 0) +
@@ -221,7 +223,7 @@ export const setupColumns = ({
                   {t('edit')}
                 </DropdownMenuItem>
               )}
-              {onResetUsage && (
+              {canResetUsage && onResetUsage && (
                 <DropdownMenuItem
                   onSelect={e => {
                     e.preventDefault()

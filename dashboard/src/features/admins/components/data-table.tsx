@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import { isOwner, roleLabel } from '@/utils/rbac'
+import { canResetAdminUsage } from '@/fork/admins/reset-usage-eligibility'
 import UsageSliderCompact from '@/components/common/usage-slider-compact'
 
 interface DataTableProps<TData extends AdminDetails> {
@@ -58,9 +59,10 @@ const ExpandedRowContent = memo(
     const { t } = useTranslation()
     const isOwnerTarget = isOwner(row)
     const isDisabled = getAdminStatus(row) === 'disabled'
+    const canResetUsage = canResetAdminUsage(!!onResetUsage, { username: row.username, isOwner: isOwnerTarget }, currentAdminUsername)
     const nonDestructiveActionCount =
       (!isOwnerTarget && row.username !== currentAdminUsername && onToggleStatus ? 1 : 0) +
-      (onResetUsage ? 1 : 0) +
+      (canResetUsage ? 1 : 0) +
       (!isOwnerTarget && onDisableAllActiveUsers ? 1 : 0) +
       (!isOwnerTarget && onActivateAllDisabledUsers ? 1 : 0) +
       (!isOwnerTarget && onRemoveAllUsers ? 1 : 0)
@@ -116,7 +118,7 @@ const ExpandedRowContent = memo(
                       {isDisabled ? t('enable') : t('disable')}
                     </DropdownMenuItem>
                   )}
-                  {onResetUsage && (
+                  {canResetUsage && onResetUsage && (
                     <DropdownMenuItem
                       onSelect={e => {
                         e.preventDefault()
