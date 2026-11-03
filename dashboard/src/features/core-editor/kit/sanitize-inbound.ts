@@ -1,5 +1,6 @@
 import type { Inbound, Profile } from '@pasarguard/xray-config-kit'
 import { coerceVerifyPeerCertByNameList } from '@/features/core-editor/kit/xray-parity-value'
+import { keepXrayWireguardInboundPeers } from '@/fork/core-editor/xray-wireguard-peers'
 
 /** xray-config-kit strict schema allows only these; empty or unknown values break compile. */
 export function normalizeTunnelNetworkForKit(v: unknown): 'tcp' | 'udp' | 'tcp,udp' {
@@ -163,7 +164,7 @@ function sanitizeSecurityArrays(inbound: Inbound): Inbound {
 function sanitizeWireguardInbound(inbound: Inbound): Inbound {
   if (inbound.protocol !== 'wireguard') return inbound
   // The kit requires an array, but user peers are supplied by the backend.
-  const draft = { ...inbound, peers: [] } as Record<string, unknown>
+  const draft = { ...inbound, peers: keepXrayWireguardInboundPeers((inbound as unknown as Record<string, unknown>).peers) } as Record<string, unknown>
   if (Array.isArray(draft.address) && draft.address.length === 0) {
     delete draft.address
   }
