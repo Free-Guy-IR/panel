@@ -2129,3 +2129,39 @@ async def test_failed_history_flush_never_bills_twice(monkeypatch: pytest.Monkey
     assert admin_used == 151
     assert _history_by_user(history) == users
     assert not record_usages._pending_user_usage_history
+
+
+@pytest.mark.asyncio
+async def test_retried_apply_writes_each_coalesced_history_row_once(monkeypatch: pytest.MonkeyPatch, session_factory):
+    admin_id, (user_one, user_two), (kept_node, _) = await _seed_node_delete_race(session_factory)
+    clock = [100.0]
+    _force_coalesced_history(monkeypatch, clock)
+    real_online_updates = record_usages.build_online_at_updates
+    attempts = []
+
+    def deadlocking_online_updates(dialect, user_ids, now):
+        attempts.append(list(user_ids))
+        if len(attempts) == 1:
+            raise OperationalError("UPDATE users SET online_at", {}, Exception("deadlock detected"))
+        return real_online_updates(dialect, user_ids, now)
+
+    monkeypatch.setattr(record_usages, "build_online_at_updates", deadlocking_online_updates)
+
+    await _coalesced_cycle(
+        monkeypatch, {kept_node: [{"uid": str(user_one), "value": 100}, {"uid": str(user_two), "value": 50}]}
+    )
+    assert len(attempts) == 2
+    users, admin_used, _ = await _race_totals(session_factory, admin_id, [user_one, user_two])
+    assert users == {user_one: 100, user_two: 50}
+    assert admin_used == 150
+
+    clock[0] = 200.0
+    await record_usages.flush_user_usage_history_if_due()
+
+    users, admin_used, history = await _race_totals(session_factory, admin_id, [user_one, user_two])
+    assert users == {user_one: 100, user_two: 50}
+    assert admin_used == 150
+    assert sorted((row.user_id, row.node_id, row.used_traffic) for row in history) == sorted(
+        [(user_one, kept_node, 100), (user_two, kept_node, 50)]
+    )
+    assert not record_usages._pending_user_usage_history
