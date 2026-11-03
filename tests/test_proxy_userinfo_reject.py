@@ -265,27 +265,23 @@ async def test_telegram_start_logs_fixed_message_for_bad_stored_proxy(url, caplo
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", [ValueError, RuntimeError, TypeError])
-async def test_telegram_start_logs_fixed_message_for_any_session_error(failure, caplog, monkeypatch):
+async def test_telegram_start_surfaces_non_proxy_session_error_as_itself(failure, caplog, monkeypatch):
     from app import telegram
     from app.utils.http_client import INVALID_PROXY_MESSAGE
 
     url = f"socks5://{USER}:{SECRET}@{HOST}:1080"
 
     def broken_session(*args, **kwargs):
-        raise failure(f"netloc {url!r} is broken")
+        raise failure("session construction failed")
 
     caplog.set_level(logging.DEBUG)
     monkeypatch.setattr(telegram, "NativeTLSAiohttpSession", broken_session)
     manager = telegram.TelegramBotManager()
-    error = None
-    try:
+    with pytest.raises(failure) as caught:
         await manager._start_locked(_telegram_settings(url))
-    except Exception as exc:
-        error = exc
-    assert error is None
     assert manager._bot is None
-    assert any(record.getMessage() == INVALID_PROXY_MESSAGE for record in caplog.records)
-    _assert_nothing_leaked(caplog, url, error)
+    assert not any(record.getMessage() == INVALID_PROXY_MESSAGE for record in caplog.records)
+    _assert_nothing_leaked(caplog, url, caught.value)
 
 
 def _webhook_job(monkeypatch, url):
@@ -320,26 +316,22 @@ async def test_webhook_job_logs_fixed_message_and_skips_run_for_bad_proxy(url, c
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", [ValueError, RuntimeError, TypeError])
-async def test_webhook_job_logs_fixed_message_for_any_session_error(failure, caplog, monkeypatch):
+async def test_webhook_job_surfaces_non_proxy_session_error_as_itself(failure, caplog, monkeypatch):
     from app.utils.http_client import INVALID_PROXY_MESSAGE
 
     url = f"socks5://{USER}:{SECRET}@{HOST}:1080"
 
     def broken_session(*args, **kwargs):
-        raise failure(f"netloc {url!r} is broken")
+        raise failure("session construction failed")
 
     caplog.set_level(logging.DEBUG)
     job, queue = _webhook_job(monkeypatch, url)
     monkeypatch.setattr(job, "create_outbound_http_session", broken_session)
-    error = None
-    try:
+    with pytest.raises(failure) as caught:
         await asyncio.wait_for(job.send_notifications(), timeout=10)
-    except Exception as exc:
-        error = exc
-    assert error is None
     queue.dequeue.assert_not_awaited()
-    assert any(record.getMessage() == INVALID_PROXY_MESSAGE for record in caplog.records)
-    _assert_nothing_leaked(caplog, url, error)
+    assert not any(record.getMessage() == INVALID_PROXY_MESSAGE for record in caplog.records)
+    _assert_nothing_leaked(caplog, url, caught.value)
 
 
 def _node_row(proxy_url):
