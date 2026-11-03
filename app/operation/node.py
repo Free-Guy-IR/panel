@@ -45,6 +45,7 @@ from app.fork.operation.node_extras import (
     connect_snapshot,
     connect_snapshot_superseded,
     current_connect_snapshot,
+    forget_connect_pushes,
     note_ambiguous_start,
     note_connect_push,
     with_connect_snapshot,
@@ -1056,6 +1057,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
 
     async def _remove_node_local(self, node_id: int) -> None:
         await node_manager.remove_node(node_id)
+        forget_connect_pushes(node_id)
         await clear_bridge_memory_for_node(node_id)
         await clear_local_user_queue(node_id)
 

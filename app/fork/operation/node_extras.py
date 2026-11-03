@@ -63,6 +63,10 @@ def note_connect_push(node_id: int, snapshot: int) -> None:
         _pushed_snapshots[node_id] = snapshot
 
 
+def forget_connect_pushes(node_id: int) -> None:
+    _pushed_snapshots.pop(node_id, None)
+
+
 AMBIGUOUS_START_MIN_WINDOW_SECONDS = 120.0
 
 _ambiguous_starts: dict[int, float] = {}
