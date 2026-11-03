@@ -311,3 +311,79 @@ def test_a_rollback_that_cannot_take_the_migration_lock_reports_the_timeout_and_
 
     assert _versions(url) == [HEAD]
     assert _lock_holders() == []
+
+
+def _lose_the_lock_session(monkeypatch) -> threading.Event:
+    lost = threading.Event()
+
+    def lose_the_session(_connection) -> None:
+        lost.set()
+        raise OperationalError("SELECT 1", {}, ConnectionResetError("lock session killed"))
+
+    monkeypatch.setattr(migration_guards, "_keep_lock_session_alive", lose_the_session, raising=False)
+    return lost
+
+
+def test_a_lock_session_lost_after_the_last_downgrade_is_still_reported(tmp_path, monkeypatch):
+    url = f"sqlite+aiosqlite:///{tmp_path / 'lost_at_end.sqlite3'}"
+    config = _config(url)
+    _quiet(upgrade, config, "head")
+    _fake_sqlite_migration_lock(monkeypatch)
+    _lose_the_lock_session(monkeypatch)
+
+    with pytest.raises(migration_guards.MigrationLockError, match="lost the database migration lock"):
+        _quiet(rollback, config, PROD_REVISION, echo=lambda _line: None)
+
+    assert _versions(url) == [PROD_REVISION]
+    assert _lock_holders() == []
+
+
+def test_a_failing_step_under_a_lost_lock_reports_the_lost_lock(tmp_path, monkeypatch):
+    url = f"sqlite+aiosqlite:///{tmp_path / 'lost_and_failed.sqlite3'}"
+    _fake_sqlite_migration_lock(monkeypatch)
+    monkeypatch.setattr(migration_guards, "MIGRATION_LOCK_KEEPALIVE", 0, raising=False)
+    lost = _lose_the_lock_session(monkeypatch)
+
+    with (
+        pytest.raises(migration_guards.MigrationLockError, match="lost the database migration lock") as caught,
+        migration_guards.held_migration_lock(url),
+    ):
+        assert lost.wait(10)
+        deadline = time.monotonic() + 10
+        while _lock_holders() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        raise RuntimeError("downgrade made no progress")
+
+    assert isinstance(caught.value.__context__, RuntimeError)
+    assert _lock_holders() == []
+
+
+def test_an_interrupt_while_waiting_for_a_busy_lock_returns_at_once(tmp_path, monkeypatch):
+    url = f"sqlite+aiosqlite:///{tmp_path / 'interrupted_wait.sqlite3'}"
+    _fake_sqlite_migration_lock(monkeypatch)
+
+    def busy(_connection, _timeout):
+        time.sleep(3)
+        return True, {}
+
+    monkeypatch.setitem(migration_guards.LOCKS, "sqlite", (busy, "SELECT 1"))
+
+    class InterruptedWait(threading.Event):
+        def wait(self, timeout=None):
+            raise KeyboardInterrupt
+
+    class Holder(migration_guards._MigrationLockHolder):
+        def __init__(self, *args) -> None:
+            super().__init__(*args)
+            self.taken = InterruptedWait()
+
+    monkeypatch.setattr(migration_guards, "_MigrationLockHolder", Holder)
+    started = time.monotonic()
+    try:
+        with pytest.raises(KeyboardInterrupt), migration_guards.held_migration_lock(url):
+            pass
+        assert time.monotonic() - started < 1
+    finally:
+        for holder in _lock_holders():
+            holder.join(10)
+    assert _lock_holders() == []

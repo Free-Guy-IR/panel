@@ -207,6 +207,7 @@ class _MigrationLockHolder(threading.Thread):
             if time.monotonic() - checked >= MIGRATION_LOCK_KEEPALIVE:
                 await connection.run_sync(_keep_lock_session_alive)
                 checked = time.monotonic()
+        await connection.run_sync(_keep_lock_session_alive)
 
     def check(self) -> None:
         if self.error is None:
@@ -231,11 +232,19 @@ def held_migration_lock(url: str, timeout: int = MIGRATION_LOCK_TIMEOUT) -> Iter
         holder.taken.wait()
         holder.check()
         yield holder.check
-    finally:
-        holder.finished.set()
-        if holder.is_alive():
-            holder.join(MIGRATION_LOCK_RELEASE_WAIT)
+    except BaseException:
+        _stop_lock_holder(holder)
+        if holder.held:
+            holder.check()
+        raise
+    _stop_lock_holder(holder)
     holder.check()
+
+
+def _stop_lock_holder(holder: _MigrationLockHolder) -> None:
+    holder.finished.set()
+    if holder.taken.is_set() and holder.is_alive():
+        holder.join(MIGRATION_LOCK_RELEASE_WAIT)
 
 
 def guard_planned_steps(migration_context: MigrationContext, script: ScriptDirectory, *, commit: bool) -> None:
