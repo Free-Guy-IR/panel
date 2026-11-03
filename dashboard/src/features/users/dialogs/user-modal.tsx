@@ -2113,6 +2113,9 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                               </FormItem>
                             )}
                           />
+                          {/* MTProto - secret stays masked by default (PasswordInput), unlike every
+                              other protocol's plain Input, since it's a bearer credential the same
+                              way an account password is. */}
                           <FormField
                             control={form.control}
                             name="proxy_settings.mtproto.secret"
