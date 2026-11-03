@@ -14,13 +14,13 @@ from app.core.manager import DB_RELOAD_ATTEMPTS, core_manager
 from app.db import GetDB
 from app.db.crud.host import get_hosts, upsert_inbounds
 from app.db.models import ProxyHost, ProxyHostSecurity
+from app.fork.finalmask import dump_fork_final_mask_for_xray
 from app.models.host import (
     BaseHost,
     FinalMask,
     OpenVPNHostOverrides,
     TransportSettings,
     WireGuardHostOverrides,
-    dump_final_mask_for_xray,
 )
 from app.models.subscription import (
     GRPCTransportConfig,
@@ -62,14 +62,14 @@ def _normalize_finalmask_link(final_mask_settings: FinalMask | dict | str | None
         return None
     fms = None
     if isinstance(final_mask_settings, (FinalMask, dict)):
-        fms = dump_final_mask_for_xray(final_mask_settings)
+        fms = dump_fork_final_mask_for_xray(final_mask_settings)
     elif isinstance(final_mask_settings, str):
         try:
             fms = json.loads(final_mask_settings)
         except Exception:
             return final_mask_settings
         if isinstance(fms, dict):
-            fms = dump_final_mask_for_xray(fms)
+            fms = dump_fork_final_mask_for_xray(fms)
 
     if isinstance(fms, dict):
         fms = normalize_and_remove_none_values(fms)

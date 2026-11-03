@@ -4,7 +4,8 @@ from random import choice
 
 from pydantic import BaseModel
 
-from app.models.host import FinalMask, dump_final_mask_for_xray, prune_blank_values
+from app.fork.finalmask import dump_fork_final_mask_for_xray
+from app.models.host import FinalMask, prune_blank_values
 from app.models.subscription import (
     GRPCTransportConfig,
     KCPTransportConfig,
@@ -695,7 +696,7 @@ class XrayConfiguration(BaseSubscription):
             with suppress(TypeError, ValueError):
                 finalmask = FinalMask.model_validate(finalmask)
             if isinstance(finalmask, (FinalMask, dict)):
-                finalmask = dump_final_mask_for_xray(finalmask)
+                finalmask = dump_fork_final_mask_for_xray(finalmask)
             # Blank optional fields must be dropped rather than emitted: Xray
             # reads a present-but-empty value as 0 and rejects the whole config.
             finalmask = prune_blank_values(finalmask)
