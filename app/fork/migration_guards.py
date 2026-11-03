@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterable, Iterator
 from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext, RevisionStep
 from alembic.script import ScriptDirectory
-from sqlalchemy import Column, inspect, pool, text, update
+from sqlalchemy import Column, DefaultClause, MetaData, Table, inspect, pool, text, update
 from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -524,6 +524,22 @@ def _backfill_proxy_secret_claims(connection: Connection, _table, module) -> Non
 
 
 TABLE_REFILLS = {"named_locks": _seed_named_locks, "proxy_secret_claims": _backfill_proxy_secret_claims}
+TABLE_SERVER_DEFAULTS = {"admin_passkeys": {"sign_count": "0", "name": "Passkey"}}
+
+
+def _create_table(connection: Connection, model: Table) -> None:
+    defaults = TABLE_SERVER_DEFAULTS.get(model.name)
+    if not defaults:
+        model.create(connection)
+        return
+    target = MetaData()
+    for key in model.foreign_keys:
+        if key.column.table.name not in target.tables:
+            key.column.table.to_metadata(target)
+    table = model.to_metadata(target)
+    for name, value in defaults.items():
+        table.c[name].server_default = DefaultClause(value)
+    table.create(connection)
 
 
 def _fill_cleanup_settings(connection: Connection, column, module) -> None:
@@ -567,7 +583,7 @@ def _restore_applied_objects(
             model = Base.metadata.tables[table]
             created = not inspector.has_table(table)
             if created:
-                model.create(connection)
+                _create_table(connection, model)
             refill = TABLE_REFILLS.get(table)
             if refill is None or revision in removed:
                 continue

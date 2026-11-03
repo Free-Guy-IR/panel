@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 
 from app.db.models import Base
-from app.fork.db_rollback import main
+from app.fork.db_rollback import default_config, main
 from app.fork.migration_guards import (
     REVERSE_GROUP_FOREIGN_KEYS,
     REVERSE_GROUP_INDEX_REVISION,
@@ -406,3 +406,19 @@ def test_a_claims_table_recreated_by_an_abandoned_rollback_is_backfilled_by_the_
     assert _claim_count(url) == 0
     _restore(url, set())
     assert _claim_count(url) == 2
+
+
+def test_a_rebuilt_admin_passkeys_table_keeps_the_migration_server_defaults(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'passkeys.db'}")
+    try:
+        with engine.begin() as connection:
+            script = ScriptDirectory.from_config(default_config())
+            _restore_applied_objects(connection, script, {"9a5c2e7f1b4d"}, set())
+            defaults = {
+                column["name"]: column["default"] for column in inspect(connection).get_columns("admin_passkeys")
+            }
+    finally:
+        engine.dispose()
+
+    assert defaults["sign_count"] == "'0'"
+    assert defaults["name"] == "'Passkey'"
