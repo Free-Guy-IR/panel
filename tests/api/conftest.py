@@ -32,6 +32,15 @@ def mock_db_session(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.fixture(autouse=True)
+def node_manager_methods_come_from_its_class():
+    from app.node import node_manager
+
+    for name, value in list(vars(node_manager).items()):
+        if getattr(value, "__func__", None) is getattr(type(node_manager), name, None) is not None:
+            delattr(node_manager, name)
+
+
+@pytest.fixture(autouse=True)
 def mock_lock(monkeypatch: pytest.MonkeyPatch):
     _lock = MagicMock(spec=RWLock(fast=True))
     monkeypatch.setattr("app.node.node_manager._lock", _lock)
