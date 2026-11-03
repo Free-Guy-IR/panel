@@ -1,4 +1,6 @@
+import functools
 import json
+import re
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -26,6 +28,12 @@ UPSTREAM_REF = (
 UPSTREAM_LOCALE_PICKS_FILE = REPO_ROOT / "tests" / "fixtures" / "upstream_locale_picks.json"
 CHERRY_PICK_TRAILER_PREFIX = "(cherry picked from commit "
 UPSTREAM_REPOSITORY_URL = "https://github.com/PasarGuard/panel.git"
+UPSTREAM_REF_NAMESPACES = ("refs/remotes/upstream", "refs/upstream-tags")
+UPSTREAM_FETCH_COMMAND = (
+    f"git fetch --no-tags {UPSTREAM_REPOSITORY_URL} '+refs/heads/*:refs/remotes/upstream/*' "
+    "'+refs/tags/*:refs/upstream-tags/*'"
+)
+FULL_COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
 
 FORK_MODULE_PREFIX = "app.fork."
 FORK_ROUTER_MODULE_PREFIX = "app.fork.routers."
@@ -202,12 +210,41 @@ def _is_commit_in_clone(commit):
     return _git("cat-file", "-e", f"{commit}^{{commit}}").returncode == 0
 
 
-def _require_upstream_ref():
-    if _git("rev-parse", "--verify", "--quiet", f"{UPSTREAM_REF}^{{commit}}").returncode != 0:
+@functools.cache
+def _fork_only_commits():
+    result = _git("rev-list", "HEAD", "--not", *(f"--glob={namespace}" for namespace in UPSTREAM_REF_NAMESPACES))
+    assert result.returncode == 0, f"cannot list the fork-only history of HEAD: {result.stderr.strip()}"
+    return frozenset(result.stdout.split())
+
+
+@functools.cache
+def _upstream_refs_containing(commit):
+    result = _git("for-each-ref", "--contains", commit, "--format=%(refname)", *UPSTREAM_REF_NAMESPACES)
+    assert result.returncode == 0, f"cannot list the upstream refs containing {commit}: {result.stderr.strip()}"
+    return tuple(result.stdout.split())
+
+
+def _require_upstream_commit(commit, role):
+    if not FULL_COMMIT_SHA.fullmatch(commit):
+        pytest.fail(f"the {role} {commit!r} is not a full lowercase 40-hex commit SHA")
+    if not _is_commit_in_clone(commit):
         pytest.fail(
-            f"the upstream sync point {UPSTREAM_REF} is not in this clone, fetch it with "
-            f"git fetch --no-tags {UPSTREAM_REPOSITORY_URL} {UPSTREAM_REF}"
+            f"the {role} {commit} is not in this clone, fetch the upstream branches and tags by name: {UPSTREAM_FETCH_COMMAND}"
         )
+    if commit in _fork_only_commits():
+        pytest.fail(f"the {role} {commit} is a commit of the fork's own history, not an upstream commit")
+    if not _upstream_refs_containing(commit):
+        pytest.fail(
+            f"the {role} {commit} is not reachable from any upstream branch or tag under "
+            f"{' or '.join(UPSTREAM_REF_NAMESPACES)}: {UPSTREAM_FETCH_COMMAND}"
+        )
+
+
+def _require_upstream_ref():
+    resolved = _git("rev-parse", "--verify", "--quiet", f"{UPSTREAM_REF}^{{commit}}")
+    if resolved.returncode != 0:
+        pytest.fail(f"the upstream sync point {UPSTREAM_REF} is not in this clone: {UPSTREAM_FETCH_COMMAND}")
+    _require_upstream_commit(resolved.stdout.strip(), f"upstream sync point {UPSTREAM_REF}")
 
 
 def _load_json_file(path):
@@ -274,11 +311,7 @@ def _ported_public_locale_picks():
 
 
 def _is_ahead_of_sync_point(upstream_commit):
-    if not _is_commit_in_clone(upstream_commit):
-        pytest.fail(
-            f"the cherry-pick trailer commit {upstream_commit} is not in this clone, so it cannot be placed against "
-            f"{UPSTREAM_REF}: fetch it from {UPSTREAM_REPOSITORY_URL} or drop the trailer"
-        )
+    _require_upstream_commit(upstream_commit, "cherry-pick trailer commit")
     result = _git("merge-base", "--is-ancestor", upstream_commit, UPSTREAM_REF)
     if result.returncode not in (0, 1):
         pytest.fail(f"cannot place {upstream_commit} against {UPSTREAM_REF}: {result.stderr.strip()}")
@@ -462,12 +495,8 @@ def test_recorded_locale_picks_match_the_fork_cherry_pick_commits(code):
 def test_recorded_locale_picks_match_the_upstream_commits(code):
     _require_upstream_ref()
     picks = _recorded_locale_picks()
-    missing = [pick["upstream"] for pick in picks if not _is_commit_in_clone(pick["upstream"])]
-    if missing:
-        pytest.fail(
-            f"recorded upstream locale picks are not in this clone, fetch each from {UPSTREAM_REPOSITORY_URL} "
-            f"or drop the forged entry: {missing}"
-        )
+    for pick in picks:
+        _require_upstream_commit(pick["upstream"], "recorded upstream locale pick")
     for pick in picks:
         upstream_commit = pick["upstream"]
         assert _commit_locale_delta(upstream_commit, code) == _recorded_pick_delta(pick, code), (
