@@ -48,6 +48,13 @@ class APIKeyUpdate(BaseModel):
     expire_date: dt | None = None
     status: APIKeyStatus | None = None
 
+    @field_validator("name", "inherit_permissions", "status")
+    @classmethod
+    def reject_explicit_null(cls, value):
+        if value is None:
+            raise ValueError("must not be null")
+        return value
+
     @field_validator("expire_date", mode="before")
     @classmethod
     def validate_expire_date(cls, value):
