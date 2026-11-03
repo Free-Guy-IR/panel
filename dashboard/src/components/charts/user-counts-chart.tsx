@@ -36,6 +36,7 @@ import { EmptyState } from './empty-state'
 import PeriodSelector from './period-selector'
 import TimeSelector, { TRAFFIC_TIME_SELECTOR_SHORTCUTS } from './time-selector'
 import { TimeRangeSelector } from '@/components/common/time-range-selector'
+import { axisPeriodOverride } from '@/fork/charts/usage-axis-period'
 
 type CountDataPoint = {
   time: string
@@ -427,9 +428,9 @@ export function UserCountsChart({ nodeId, isSudo, nodesData = [] }: UserCountsCh
         shortcut: selectedTime,
         windowWidth,
         customRange: showCustomRange ? customRange : undefined,
-        periodOverride: resolvePeriodOverride(periodOverride),
+        periodOverride: axisPeriodOverride(resolvePeriodOverride(periodOverride), activeQueryRange.cappedFrom),
       }),
-    [activePeriod, chartData.length, customRange, selectedTime, showCustomRange, windowWidth, periodOverride],
+    [activePeriod, chartData.length, customRange, selectedTime, showCustomRange, windowWidth, periodOverride, activeQueryRange.cappedFrom],
   )
 
   const { isAnimationActive, usePerBarRadius, useAccessibilityLayer, areaCurveType } = useMemo(
@@ -533,7 +534,7 @@ export function UserCountsChart({ nodeId, isSudo, nodesData = [] }: UserCountsCh
               <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                 <TimeSelector selectedTime={selectedTime} setSelectedTime={handleTimeSelect} shortcuts={TRAFFIC_TIME_SELECTOR_SHORTCUTS} maxVisible={5} className="w-full sm:w-fit" />
                 <div className="flex w-full items-center gap-2 sm:w-auto">
-                  <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} className="min-w-0 flex-1 sm:w-[7rem] sm:flex-none" />
+                  <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} cappedFrom={activeQueryRange.cappedFrom} className="min-w-0 flex-1 sm:w-[7rem] sm:flex-none" />
                   <button
                     type="button"
                     aria-label={t('statistics.customRange', { defaultValue: 'Custom Range' })}

@@ -10,7 +10,7 @@ import { EmptyState } from './empty-state'
 import { Button } from '@/components/ui/button'
 import { Activity, Clock, History, Cpu, MemoryStick } from 'lucide-react'
 import { formatOffsetDateTime } from '@/utils/dateTimeParsing'
-import { useTheme } from 'next-themes'
+import { useTheme } from '@/app/providers/theme-provider'
 import {
   buildPeriodOptions,
   CHART_PERIOD_OVERRIDE_AUTO,
@@ -28,6 +28,8 @@ import { getChartRenderFlags } from '@/utils/chart-performance'
 import useDirDetection from '@/hooks/use-dir-detection'
 
 import PeriodSelector from './period-selector'
+import { capUsagePeriod } from '@/fork/charts/usage-bucket-cap'
+import { axisPeriodOverride } from '@/fork/charts/usage-axis-period'
 
 type DataPoint = {
   time: string
@@ -102,7 +104,11 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats, realtime
     })
   }, [PERIOD_OPTIONS])
 
-  const activePeriod = resolvePeriodOverride(periodOverride) ?? periodOption.period
+  const cappedPeriod = useMemo(() => {
+    const range = getDateRangeForPeriodOption(periodOption)
+    return capUsagePeriod(resolvePeriodOverride(periodOverride), periodOption.period, range.startDate, toChartQueryEndDate(range.endDate))
+  }, [periodOption, periodOverride])
+  const activePeriod = cappedPeriod.period
   const labelPeriodOption = useMemo<PeriodOption>(
     () => ({
       ...periodOption,
@@ -256,9 +262,9 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats, realtime
         dataLength: chartData.length,
         period: activePeriod,
         shortcut: periodOption.value,
-        periodOverride: resolvePeriodOverride(periodOverride),
+        periodOverride: axisPeriodOverride(resolvePeriodOverride(periodOverride), cappedPeriod.cappedFrom),
       }),
-    [activePeriod, chartData.length, periodOption.value, periodOverride],
+    [activePeriod, chartData.length, periodOption.value, periodOverride, cappedPeriod.cappedFrom],
   )
 
   const { isAnimationActive, areaCurveType } = useMemo(() => getChartRenderFlags(chartData.length, 2), [chartData.length])
@@ -358,7 +364,7 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats, realtime
                   ))}
                 </SelectContent>
               </Select>
-              <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} />
+              <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} cappedFrom={cappedPeriod.cappedFrom} />
             </div>
           </div>
         </div>

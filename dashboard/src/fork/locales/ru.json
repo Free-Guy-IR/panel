@@ -778,5 +778,9 @@
   "trafficLog.purge.freedMb": "{{value}} МБ",
   "trafficLog.purge.freedGb": "{{value}} ГБ",
   "trafficLog.revokedBanner": "Ваш доступ к журналу трафика был отозван во время открытого потока. Поток закрыт, его строки удалены. Перезагрузите страницу.",
-  "trafficLog.accepted": "Принято"
+  "trafficLog.accepted": "Принято",
+  "statistics.periodCapped": "Интервал «{{period}}» даёт для этого диапазона больше {{max}} точек, поэтому график использует режим «Авто».",
+  "theme": {
+    "toggle": "Переключить тему"
+  }
 }

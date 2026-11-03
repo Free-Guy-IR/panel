@@ -4,7 +4,8 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, XAx
 import { DateRange } from 'react-day-picker'
 import { AlertTriangle, BarChart3, Calendar, PieChart as PieChartIcon, TrendingUp, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useTheme } from 'next-themes'
+import { useTheme } from '@/app/providers/theme-provider'
+import { getChartSeriesColor } from '@/utils/chart-colors'
 
 import AdminFilterCombobox from '@/components/common/admin-filter-combobox'
 import { TimeRangeSelector } from '@/components/common/time-range-selector'
@@ -27,12 +28,12 @@ import {
   formatPeriodLabelForPeriod,
   formatTooltipDate,
   getChartQueryRangeFromDateRange,
-  getChartQueryRangeFromShortcut,
   getChartXAxisInterval,
   resolvePeriodOverride,
   TrafficShortcutKey,
 } from '@/utils/chart-period-utils'
 import { getChartBrushWindow, getChartRenderFlags } from '@/utils/chart-performance'
+import { getSubUpdateShortcutQueryRange } from '@/fork/charts/sub-update-query-range'
 import { numberWithCommas } from '@/utils/formatByte'
 
 import ChartBrush from './chart-brush'
@@ -40,6 +41,7 @@ import DenseChartAreaHint from './dense-chart-area-hint'
 import { EmptyState } from './empty-state'
 import PeriodSelector from './period-selector'
 import TimeSelector, { TRAFFIC_TIME_SELECTOR_SHORTCUTS } from './time-selector'
+import { axisPeriodOverride } from '@/fork/charts/usage-axis-period'
 
 interface UserSubUpdatePieChartProps {
   username?: string
@@ -80,22 +82,6 @@ const buildSegmentKey = (name: string, index: number) => {
     .replace(/^-+|-+$/g, '')
 
   return sanitized || `segment-${index}`
-}
-
-const generateDistinctColor = (index: number, isDark: boolean): string => {
-  const distinctHues = [0, 30, 60, 120, 180, 210, 240, 270, 300, 330, 15, 45, 75, 150, 200, 225, 255, 285, 315, 345]
-  const hue = distinctHues[index % distinctHues.length]
-  const saturationVariations = [65, 75, 85, 70, 80, 60, 90, 55, 95, 50]
-  const lightnessVariations = isDark ? [45, 55, 35, 50, 40, 60, 30, 65, 25, 70] : [40, 50, 30, 45, 35, 55, 25, 60, 20, 65]
-  const saturation = saturationVariations[index % saturationVariations.length]
-  const lightness = lightnessVariations[index % lightnessVariations.length]
-  return `hsl(${hue}, ${saturation}%, ${lightness}%)`
-}
-
-const getSegmentColor = (index: number, isDark: boolean) => {
-  if (index === 0) return 'hsl(var(--primary))'
-  if (index < 5) return `hsl(var(--chart-${index + 1}))`
-  return generateDistinctColor(index, isDark)
 }
 
 const formatPercentage = (value: number) => {
@@ -254,11 +240,7 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
       return getChartQueryRangeFromDateRange(customRange, selectedTime, periodOptions)
     }
 
-    const range = getChartQueryRangeFromShortcut(selectedTime, new Date(), periodOptions)
-    if (!resolvedOverride && selectedTime === 'all') {
-      return { ...range, period: Period.month }
-    }
-    return range
+    return getSubUpdateShortcutQueryRange(selectedTime, new Date(), resolvedOverride)
   }, [showCustomRange, customRange, selectedTime, periodOverride])
 
   const activePeriod = activeQueryRange.period
@@ -301,7 +283,7 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
         key,
         percentage: safePercentage,
         count: safeCount,
-        color: getSegmentColor(index, isDark),
+        color: getChartSeriesColor(index, isDark),
       }
     })
   }, [data?.segments, resolvedTheme])
@@ -327,7 +309,7 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
         seen.set(key, {
           key,
           label: name,
-          color: getSegmentColor(seen.size, isDark),
+          color: getChartSeriesColor(seen.size, isDark),
         })
       }
     })
@@ -436,9 +418,9 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
         shortcut: selectedTime,
         windowWidth,
         customRange: showCustomRange ? customRange : undefined,
-        periodOverride: resolvePeriodOverride(periodOverride),
+        periodOverride: axisPeriodOverride(resolvePeriodOverride(periodOverride), activeQueryRange.cappedFrom),
       }),
-    [activePeriod, customRange, selectedTime, showCustomRange, timeSeriesData.length, windowWidth, periodOverride],
+    [activePeriod, customRange, selectedTime, showCustomRange, timeSeriesData.length, windowWidth, periodOverride, activeQueryRange.cappedFrom],
   )
 
   const { isAnimationActive, usePerBarRadius, useAccessibilityLayer, areaCurveType } = useMemo(
@@ -535,7 +517,7 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
             <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <TimeSelector selectedTime={selectedTime} setSelectedTime={handleTimeSelect} shortcuts={TRAFFIC_TIME_SELECTOR_SHORTCUTS} maxVisible={5} className="w-full sm:w-fit" />
               <div className="flex w-full items-center gap-2 sm:w-auto">
-                <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} className="min-w-0 flex-1 sm:w-[7rem] sm:flex-none" />
+                <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} cappedFrom={activeQueryRange.cappedFrom} className="min-w-0 flex-1 sm:w-[7rem] sm:flex-none" />
                 <button
                   type="button"
                   aria-label={t('statistics.customRange', { defaultValue: 'Custom Range' })}

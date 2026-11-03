@@ -23,6 +23,7 @@ import {
   useGetUsersUsage,
 } from '@/service/api'
 import { formatBytes, formatGigabytes } from '@/utils/formatByte'
+import { getChartSeriesColor } from '@/utils/chart-colors'
 import { Skeleton } from '@/components/ui/skeleton'
 import ChartBrush from './chart-brush'
 import DenseChartAreaHint from './dense-chart-area-hint'
@@ -51,6 +52,7 @@ import {
 } from '@/utils/chart-period-utils'
 import { getChartBrushWindow, getChartRenderFlags } from '@/utils/chart-performance'
 import { DELETED_NODES_COLOR, DELETED_NODES_KEY, DELETED_NODES_STATS_KEY, buildUsageSeries, isSeriesKey, relabelDeletedNodesRow, resolveDeletedNodesLabel } from '@/fork/charts/all-nodes-series'
+import { axisPeriodOverride } from '@/fork/charts/usage-axis-period'
 
 type NodeChartDataPoint = {
   time: string
@@ -305,16 +307,6 @@ export function AllNodesStackedBarChart() {
     [coresResponse, nodeList],
   )
 
-  const generateDistinctColor = useCallback((index: number, isDark: boolean): string => {
-    const distinctHues = [0, 30, 60, 120, 180, 210, 240, 270, 300, 330, 15, 45, 75, 150, 200, 225, 255, 285, 315, 345]
-    const saturationVariations = [65, 75, 85, 70, 80, 60, 90, 55, 95, 50]
-    const lightnessVariations = isDark ? [45, 55, 35, 50, 40, 60, 30, 65, 25, 70] : [40, 50, 30, 45, 35, 55, 25, 60, 20, 65]
-    const hue = distinctHues[index % distinctHues.length]
-    const saturation = saturationVariations[index % saturationVariations.length]
-    const lightness = lightnessVariations[index % lightnessVariations.length]
-    return `hsl(${hue}, ${saturation}%, ${lightness}%)`
-  }, [])
-
   const activeQueryRange = useMemo(() => {
     const periodOptions = { minuteForOneHour: true, periodOverride: resolvePeriodOverride(periodOverride) }
 
@@ -484,21 +476,11 @@ export function AllNodesStackedBarChart() {
         return
       }
 
-      if (index === 0) {
-        config[series.name] = { label: series.name, color: 'hsl(var(--primary))' }
-        return
-      }
-
-      if (index < 5) {
-        config[series.name] = { label: series.name, color: `hsl(var(--chart-${index + 1}))` }
-        return
-      }
-
-      config[series.name] = { label: series.name, color: generateDistinctColor(index, isDark) }
+      config[series.name] = { label: series.name, color: getChartSeriesColor(index, isDark) }
     })
     config[DELETED_NODES_KEY] = { label: deletedNodesLabel, color: DELETED_NODES_COLOR }
     return config
-  }, [generateDistinctColor, seriesList, resolvedTheme, deletedNodesLabel])
+  }, [seriesList, resolvedTheme, deletedNodesLabel])
 
   const modalChartConfig = useMemo<ChartConfig>(() => ({ ...chartConfig, [deletedNodesLabel]: { label: deletedNodesLabel, color: DELETED_NODES_COLOR } }), [chartConfig, deletedNodesLabel])
 
@@ -541,9 +523,9 @@ export function AllNodesStackedBarChart() {
         shortcut: selectedTime,
         windowWidth,
         customRange: showCustomRange ? customRange : undefined,
-        periodOverride: resolvePeriodOverride(periodOverride),
+        periodOverride: axisPeriodOverride(resolvePeriodOverride(periodOverride), activeQueryRange.cappedFrom),
       }),
-    [showCustomRange, customRange, activePeriod, selectedTime, chartData.length, windowWidth, periodOverride],
+    [showCustomRange, customRange, activePeriod, selectedTime, chartData.length, windowWidth, periodOverride, activeQueryRange.cappedFrom],
   )
 
   const { isAnimationActive, usePerBarRadius, useAccessibilityLayer, areaCurveType } = useMemo(
@@ -721,7 +703,7 @@ export function AllNodesStackedBarChart() {
               <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <TimeSelector selectedTime={selectedTime} setSelectedTime={handleTimeSelect} shortcuts={TRAFFIC_TIME_SELECTOR_SHORTCUTS} maxVisible={5} className="w-full sm:w-fit" />
                 <div className="flex w-full items-center gap-2 sm:w-auto">
-                  <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} className="min-w-0 flex-1 sm:w-[7rem] sm:flex-none" />
+                  <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} cappedFrom={activeQueryRange.cappedFrom} className="min-w-0 flex-1 sm:w-[7rem] sm:flex-none" />
                   <button
                     type="button"
                     aria-label="Custom Range"

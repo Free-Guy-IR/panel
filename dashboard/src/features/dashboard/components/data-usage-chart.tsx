@@ -22,6 +22,7 @@ import { SearchXIcon, TrendingDown, TrendingUp } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts'
+import { axisPeriodOverride } from '@/fork/charts/usage-axis-period'
 
 type PeriodOption = {
   label: string
@@ -221,9 +222,9 @@ const DataUsageChart = ({ adminUsername }: { adminUsername?: string }) => {
         dataLength: chartData.length,
         period: activePeriod,
         shortcut: periodOption.value,
-        periodOverride: resolvePeriodOverride(periodOverride),
+        periodOverride: axisPeriodOverride(resolvePeriodOverride(periodOverride), queryRange.cappedFrom),
       }),
-    [activePeriod, chartData.length, periodOption.value, periodOverride],
+    [activePeriod, chartData.length, periodOption.value, periodOverride, queryRange.cappedFrom],
   )
 
   const { isAnimationActive, usePerBarRadius, areaCurveType } = useMemo(() => getChartRenderFlags(chartData.length), [chartData.length])
@@ -254,7 +255,7 @@ const DataUsageChart = ({ adminUsername }: { adminUsername?: string }) => {
               ))}
             </SelectContent>
           </Select>
-          <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} />
+          <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} cappedFrom={queryRange.cappedFrom} />
         </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col justify-center overflow-hidden p-2 sm:p-6">

@@ -11,7 +11,7 @@ import { createNewWireGuardDraft, draftToPersistedConfig, wireGuardConfigToDraft
 
 export type { L2tpCoreSection, MtCoreSection, OvCoreSection, SbCoreSection } from '@/fork/stores/core-editor'
 
-export type XrayCoreSection = 'bindings' | 'inbounds' | 'outbounds' | 'routing' | 'balancers' | 'dns' | 'advanced'
+export type XrayCoreSection = 'bindings' | 'inbounds' | 'outbounds' | 'routing' | 'balancers' | 'dns' | 'api' | 'advanced'
 
 export type WgCoreSection = 'interface' | 'advanced'
 
