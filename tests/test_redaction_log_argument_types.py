@@ -234,7 +234,54 @@ def test_a_secret_found_only_in_the_whole_message_is_masked_and_the_arguments_ke
     assert SECRET not in repr(record.args)
     assert isinstance(record.args, tuple)
     assert len(record.args) == 2
-    assert record.args[1] == 200
+    assert [str(argument) for argument in record.args] == ["***", "***"]
+    assert int(record.args[1]) == 0
+
+
+@pytest.mark.parametrize(
+    ("message", "args"),
+    [
+        ("user %s password=%s%s", (SECRET[:3], SECRET[:3], SECRET[3:])),
+        ("user %(a)s password=%(b)s%(c)s", ({"a": SECRET[:3], "b": SECRET[:3], "c": SECRET[3:]},)),
+        ("%s %s password=%s", ("x", 7, SECRET)),
+    ],
+    ids=repr,
+)
+def test_every_argument_is_masked_when_the_whole_message_holds_a_secret_even_one_shown_elsewhere(message, args):
+    raw = _raw_message(message, args)
+    record = _scrubbed(_record(message, args))
+    values = list(record.args.values()) if isinstance(record.args, dict) else list(record.args)
+    assert [str(value) for value in values] == ["***"] * len(values)
+    assert [repr(value) for value in values] == ["***"] * len(values)
+    assert SECRET[:3] not in repr(record.args)
+    assert record.getMessage() == raw.replace(SECRET, "***")
+    assert type(record.args) is type(args[0] if isinstance(args[0], dict) else args)
+
+
+@pytest.mark.parametrize(
+    ("message", "args", "expected"),
+    [
+        ("%(k)d %(k)f", ({"k": Decimal("12.75"), "other": "private-data"},), "12 12.750000"),
+        ("%(k)d %(k)x", ({"k": _Indexable(), "other": "private-data"},), "42 2a"),
+    ],
+    ids=repr,
+)
+def test_a_record_whose_frozen_arguments_cannot_render_keeps_only_its_first_rendered_text(message, args, expected):
+    assert _raw_message(message, args) == expected
+    record = _scrubbed(_record(message, args))
+    assert record.args is None
+    assert record.getMessage() == expected
+    assert "private-data" not in record.getMessage()
+
+
+def test_a_mapping_without_named_directives_stays_a_dict_of_frozen_values():
+    items = ["a"]
+    record = _scrubbed(_record("hello", ({"items": items, "url": URL},)))
+    items.append(URL)
+    assert type(record.args) is dict
+    assert set(record.args) == {"items", "url"}
+    assert record.getMessage() == "hello"
+    assert SECRET not in repr(record.args)
 
 
 def test_the_access_log_tuple_keeps_its_length_and_scrubbed_path():
@@ -265,7 +312,7 @@ for handler in access.handlers:
     handler.setStream(out)
 err = io.StringIO()
 sys.stderr = err
-for path in ("/api/plain", "/x?password=" + SECRET, "/r?u=http://u:" + SECRET + "@h:1"):
+for path in ("/api/plain", "/x?password=" + SECRET, "/r?u=http://u:" + SECRET + "@h:1", "/a?pwd:"):
     access.info('%s - "%s %s HTTP/%s" %d', "1.2.3.4", "GET", path, "1.1", 200, extra={"process_time": "1.00ms"})
 sys.stderr = sys.__stderr__
 print("ERR=" + repr(err.getvalue()))
@@ -296,6 +343,8 @@ def test_the_uvicorn_access_line_with_a_credential_is_printed_masked_through_the
     assert '"GET /api/plain HTTP/1.1" 200' in printed
     assert '"GET /x?password=*** HTTP/1.1" 200' in printed
     assert '"GET /r?u=http://***@h:1 HTTP/1.1" 200' in printed
+    assert '*** - "*** *** HTTP/***" 0' in printed
+    assert "/a?pwd:" not in printed
 
 
 _MEMORY_SCRIPT = """

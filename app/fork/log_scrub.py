@@ -11,6 +11,7 @@ _EXCEPTION_FORMATTER = logging.Formatter()
 _FORMAT_EXCEPTION = logging.Formatter.formatException
 _SCRUBBED_STATE = "_credential_scrub_state"
 _PLAIN_TYPES = (int, float, bool, type(None))
+_MASK = "***"
 _DIRECTIVE = re.compile(
     r"%(?:\((?P<key>[^()]*)\))?[-+ #0]*(?P<width>\*|\d+)?(?:\.(?P<precision>\*|\d*))?[hlL]?(?P<conversion>.)",
     re.DOTALL,
@@ -153,7 +154,7 @@ def _scrub_message(record: logging.LogRecord) -> None:
         record.msg = record.msg if scrubbed == message and isinstance(record.msg, str) else scrubbed
         return
     try:
-        message % record.args
+        first = message % record.args
     except Exception:
         record.msg, record.args = scrub_credentials(f"{message} {_rendered(record.args, repr)}"), None
         return
@@ -161,23 +162,24 @@ def _scrub_message(record: logging.LogRecord) -> None:
     try:
         rendered = message % arguments
     except Exception:
-        record.msg, record.args = scrub_credentials(f"{message} {_rendered(arguments, repr)}"), None
+        record.msg, record.args = scrub_credentials(first), None
         return
     scrubbed = scrub_credentials(rendered)
     if scrubbed == rendered:
         record.msg, record.args = message, arguments
     elif isinstance(arguments, dict):
-        masked = {key: _masked_unless_shown(value, scrubbed) for key, value in arguments.items()}
-        record.msg, record.args = scrubbed.replace("%", "%%"), masked
+        record.msg, record.args = scrubbed.replace("%", "%%"), {key: _masked(value) for key, value in arguments.items()}
     else:
-        masked = tuple(_masked_unless_shown(argument, scrubbed) for argument in arguments)
+        masked = tuple(_masked(argument) for argument in arguments)
         record.msg, record.args = scrubbed.replace("%", "%%") + "%.0s" * len(masked), masked
 
 
-def _masked_unless_shown(argument: object, shown: str) -> object:
-    if isinstance(argument, str) and str(argument) not in shown:
-        return _FrozenText("***")
-    return argument
+def _masked(argument: object) -> object:
+    if isinstance(argument, int):
+        return _FrozenInt(0, _MASK, _MASK)
+    if isinstance(argument, float):
+        return _FrozenFloat(0.0, _MASK, _MASK)
+    return _FrozenText(_MASK)
 
 
 def _already_scrubbed(record: logging.LogRecord) -> bool:
