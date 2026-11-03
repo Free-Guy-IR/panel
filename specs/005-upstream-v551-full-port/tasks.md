@@ -44,7 +44,7 @@ Each batch task is done only when all of these hold, and each item is evidence i
   `4008dcbbe1a6`, `0097556b2181`, plus whole picks of `0cce8f15eb6b` (IdMixin) and `8ece69443478` (cpu_usage Float)
   and `4008dcbbe1a6`; autogenerate diff empty.
 - [ ] T012 [B-DB] Idempotence test: `bfd88026565b` then `a8c2d491e705` leaves templates byte-equal; downgrade does
-  not reopen listeners. Re-decide ledger line 147.
+  not reopen listeners. Ledger line 147 (`2d0ca814a798`) was re-decided by main on 2026-11-03: keep both.
 - [ ] T013 [B-DB] PG16 order test: `c8d2e4f6a1b3` before and after `f7c63e209a37` (JSONB); MASQUE password vs the
   proxy-secret claim registry (`e79833e2a0b2`) and `6698b9a695e3` sanitize rules.
 - [ ] T015 [B-DB] Land the `app/models/proxy.py` MASQUE model hunk of `0097556b2181` with the migration. RED test:

@@ -72,9 +72,12 @@ Upstream v5.5.1 chain after `b4c7e8f1a2d3`:
 Splice:
 
 1. Add all six upstream files byte-identical (including `a8c2d491e705`, which the fork already carries in spirit
-   as `bfd88026565b`; ledger line 147 currently says "keep only bfd88026565b" and must be re-decided, because
-   `c8d2e4f6a1b3` names `a8c2d491e705` as its parent and editing an upstream file would break byte identity for every
-   future sync). This creates a second branch from `b4c7e8f1a2d3`.
+   as `bfd88026565b`, because `c8d2e4f6a1b3` names `a8c2d491e705` as its parent and editing an upstream file would
+   break byte identity for every future sync). Decided by main on 2026-11-03: keep upstream `a8c2d491e705`
+   byte-identical beside `bfd88026565b` for chain integrity; both run the same idempotent listener rewrite, so the
+   templates end byte-equal whichever runs second (T012 proves it). The ledger entry of `2d0ca814a798` (line 147
+   before this decision, which said "keep only bfd88026565b") records it. This creates a second branch from
+   `b4c7e8f1a2d3`.
 2. Add one fork merge revision `merge_upstream_v5_5_1_migrations_with_fork_head` with
    `down_revision = ("e79833e2a0b2", "c8d2e4f6a1b3")`, no operations, upgrade and downgrade both `pass`.
 3. `app/db/models.py`: add `User` index `(created_at, id)`, `UserSubscriptionUpdate` index on `created_at`,
