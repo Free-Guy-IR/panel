@@ -107,8 +107,18 @@ async def test_bulk_start_shares_a_snapshot_only_among_nodes_that_were_ready_bef
 
     reads.side_effect = read
     nodes = [SimpleNamespace(**(vars(db_node) | {"id": index})) for index in range(12)]
+    listed = {listed_node.id: listed_node for listed_node in nodes}
+    loaded = []
+
+    async def load(db, node_id, **kwargs):
+        loaded.append(node_id)
+        return listed[node_id]
+
+    monkeypatch.setattr(node_operation, "get_node_by_id", AsyncMock(side_effect=load))
     operation = NodeOperation.__new__(NodeOperation)
     await operation._connect_nodes_bulk_local(FakeDB(), nodes)
+    assert loaded[:12] == list(range(12))
+    assert set(loaded) == set(range(12))
     assert node.start.await_count == 12
     assert 1 < reads.await_count <= 4
     assert all(any(call.kwargs["users"] is s for s in snapshots) for call in node.start.await_args_list)
