@@ -125,6 +125,17 @@ def test_a_custom_key_keeps_what_the_role_still_grants(access_token, wide_operat
     assert not _victim_visible(raw_key, wide_operator["victim"])
 
 
+def test_a_patch_revalidates_stored_permissions_against_the_current_role(access_token, wide_operator):
+    key_id, _ = _create_custom_key(wide_operator["token"], {"users": {"read": SCOPE_ALL}})
+    _set_role_permissions(access_token, wide_operator["role_id"], NARROW)
+
+    response = client.patch(
+        f"/api/api_key/{key_id}", headers=auth_headers(wide_operator["token"]), json={"inherit_permissions": False}
+    )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
+
+
 def _level(value) -> PermissionScope:
     if value is True:
         return PermissionScope.ALL
@@ -150,6 +161,7 @@ def test_role_narrowing_caps_a_key_patched_concurrently_with_stale_admin_details
     async def _scenario() -> tuple[list, list]:
         engine, sessions = _own_connection_sessions()
         narrowed = asyncio.Event()
+        first_patch = asyncio.Event()
         writers_done = asyncio.Event()
         async with sessions() as db:
             stale_actor = await get_admin(db, actor_token)
@@ -173,7 +185,8 @@ def test_role_narrowing_caps_a_key_patched_concurrently_with_stale_admin_details
             return seen
 
         async def _narrow_role() -> None:
-            await asyncio.sleep(0.004)
+            await first_patch.wait()
+            await asyncio.sleep(0.002)
             async with sessions() as db:
                 role = await get_role(db, role_id)
                 await modify_role(db, role, AdminRoleModify(permissions=RolePermissions.model_validate(NARROW)))
@@ -198,6 +211,7 @@ def test_role_narrowing_caps_a_key_patched_concurrently_with_stale_admin_details
                     except Exception as exc:
                         await db.rollback()
                         outcomes.append(type(exc).__name__)
+                first_patch.set()
             return outcomes
 
         async def _writers() -> list:
@@ -215,6 +229,7 @@ def test_role_narrowing_caps_a_key_patched_concurrently_with_stale_admin_details
 
     seen, patch_outcomes = asyncio.run(_scenario())
 
+    assert patch_outcomes[0] == "ok", patch_outcomes
     after = [level for was_narrowed, level in seen if was_narrowed]
     assert after
     assert all(level <= PermissionScope.OWN for level in after), (after, patch_outcomes)
