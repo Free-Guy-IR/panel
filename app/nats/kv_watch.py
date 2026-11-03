@@ -149,6 +149,8 @@ class KvWatcher:
                 try:
                     revision, entry = await asyncio.wait_for(self._updates.get(), self.RECONNECT_CHECK_INTERVAL)
                 except TimeoutError:
+                    if self._dropped_tail():
+                        self._gap = True
                     continue
                 if revision <= self._delivered:
                     continue
@@ -158,6 +160,13 @@ class KvWatcher:
         finally:
             await self._close_subscription(self._snapshot)
             await self._close_subscription(self._live)
+
+    def _dropped_tail(self):
+        subscription = getattr(self._live, "_sub", None)
+        jsi = getattr(subscription, "_jsi", None)
+        if jsi is None or not self._updates.empty() or not subscription._pending_queue.empty():
+            return False
+        return jsi._sseq > self._delivered
 
     async def _subscribe_live(self):
         consumer_sequence = 0
