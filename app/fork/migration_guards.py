@@ -52,6 +52,19 @@ REVISION_OBJECTS = (
         ("proxy_secret_claims",),
         (("proxy_secret_claims", "ix_proxy_secret_claims_user_id", ("user_id",)),),
     ),
+    (
+        "e5a7c3f9b214",
+        ("node_outbound_usages",),
+        (("node_outbound_usages", "ix_node_outbound_usages_node_id_created_at", ("node_id", "created_at")),),
+    ),
+    (
+        "f0420da90ff1",
+        (),
+        (
+            ("node_stats", "ix_node_stats_created_at", ("created_at",)),
+            ("node_stats", "ix_node_stats_node_id_created_at", ("node_id", "created_at")),
+        ),
+    ),
 )
 MIGRATION_COMMANDS = ("upgrade", "downgrade")
 MIGRATION_LOCK = "pasarguard_alembic_"
