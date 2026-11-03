@@ -10,6 +10,8 @@ from alembic.runtime.environment import EnvironmentContext
 from alembic.script import ScriptDirectory
 from alembic.util import CommandError
 
+from app.fork.migration_guards import MIGRATION_LOCK_HELD, held_migration_lock
+
 ROOT = Path(__file__).resolve().parents[2]
 ROLLBACK_FLAG = "fork_db_rollback"
 
@@ -78,17 +80,10 @@ def _next_step(script: ScriptDirectory, heads: tuple[str, ...], target: str, rem
     return f"{side_heads[0]}@-1"
 
 
-def rollback(
-    config: Config, target: str, *, dry_run: bool = False, echo: Callable[[str], None] = print
+def _downgrade_until(
+    config: Config, script: ScriptDirectory, target: str, heads: tuple[str, ...], echo: Callable[[str], None]
 ) -> tuple[str, ...]:
-    script = ScriptDirectory.from_config(config)
-    heads = current_heads(config)
     removals = revisions_to_remove(script, heads, target)
-    echo(f"current: {', '.join(heads)}")
-    echo(f"target: {target}")
-    echo(f"revisions to remove: {', '.join(sorted(removals)) or 'none'}")
-    if dry_run:
-        return heads
     while removals:
         step = _next_step(script, heads, target, removals)
         echo(f"alembic downgrade {step}")
@@ -102,6 +97,26 @@ def rollback(
         if not remaining < removals:
             raise RollbackError(f"downgrade {step} made no progress; the database is at {', '.join(heads)}")
         removals = remaining
+    return heads
+
+
+def rollback(
+    config: Config, target: str, *, dry_run: bool = False, echo: Callable[[str], None] = print
+) -> tuple[str, ...]:
+    script = ScriptDirectory.from_config(config)
+    heads = current_heads(config)
+    removals = revisions_to_remove(script, heads, target)
+    echo(f"current: {', '.join(heads)}")
+    echo(f"target: {target}")
+    echo(f"revisions to remove: {', '.join(sorted(removals)) or 'none'}")
+    if dry_run:
+        return heads
+    with held_migration_lock(config.get_main_option("sqlalchemy.url")):
+        config.attributes[MIGRATION_LOCK_HELD] = True
+        try:
+            heads = _downgrade_until(config, script, target, current_heads(config), echo)
+        finally:
+            config.attributes.pop(MIGRATION_LOCK_HELD, None)
     if heads != (target,):
         raise RollbackError(f"the database is at {', '.join(heads)}, not exactly {target}")
     echo(f"done: the database is at {target}")

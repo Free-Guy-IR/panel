@@ -192,3 +192,51 @@ def test_two_migrators_started_together_both_finish_at_the_head(tmp_path):
         assert [returncode for returncode, _ in results] == [0, 0], results
         assert _versions(url) == [HEAD]
         _quiet(check, _config(url))
+
+
+def _migration_lock_is_free(url: str) -> bool:
+    engine = create_engine(_sync(url))
+    try:
+        with engine.connect() as connection:
+            if make_url(url).get_backend_name() == "postgresql":
+                parameters = {"key": migration_guards.MIGRATION_LOCK_KEY}
+                free = bool(connection.execute(text("SELECT pg_try_advisory_lock(:key)"), parameters).scalar())
+                if free:
+                    connection.execute(text("SELECT pg_advisory_unlock(:key)"), parameters)
+                return free
+            parameters = {"name": migration_guards.mysql_lock_name(connection)}
+            free = connection.execute(text("SELECT GET_LOCK(:name, 0)"), parameters).scalar() == 1
+            if free:
+                connection.execute(text("SELECT RELEASE_LOCK(:name)"), parameters)
+            return free
+    finally:
+        engine.dispose()
+
+
+@lock_backends
+def test_a_rollback_holds_the_migration_lock_across_every_downgrade_and_a_migrator_waits_for_it(tmp_path):
+    with _scratch_database(tmp_path, "rollbacklock") as url:
+        config = _config(url)
+        _quiet(upgrade, config, "head")
+        probes: list[bool] = []
+        migrators: list[subprocess.Popen] = []
+
+        def echo(line: str) -> None:
+            if not line.startswith("alembic downgrade"):
+                return
+            probes.append(_migration_lock_is_free(url))
+            if not migrators:
+                migrators.append(_start_migrator(url))
+                time.sleep(5)
+
+        try:
+            assert _quiet(rollback, config, PROD_REVISION, echo=echo) == (PROD_REVISION,)
+            assert probes
+            assert not any(probes)
+            assert migrators[0].poll() is None
+        finally:
+            results = [_finish(migrator) for migrator in migrators]
+
+        assert [returncode for returncode, _ in results] == [0], results
+        assert _versions(url) == [HEAD]
+        assert _migration_lock_is_free(url)

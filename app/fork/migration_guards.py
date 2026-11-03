@@ -1,14 +1,17 @@
+import asyncio
 import contextlib
 import hashlib
+import threading
 import time
 from collections.abc import Callable, Iterable, Iterator
 
 from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext, RevisionStep
 from alembic.script import ScriptDirectory
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, pool, text
 from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import create_async_engine
 
 ID_GUARDED_TABLES = ("users", "nodes")
 AUTOINCREMENT_OWNER = "fd192e9628a5"
@@ -28,6 +31,7 @@ MIGRATION_COMMANDS = ("upgrade", "downgrade")
 MIGRATION_LOCK = "pasarguard_alembic_"
 MIGRATION_LOCK_KEY = 5_026_101_103
 MIGRATION_LOCK_TIMEOUT = 3600
+MIGRATION_LOCK_HELD = "fork_migration_lock_held"
 
 
 class MigrationLockError(RuntimeError):
@@ -76,24 +80,83 @@ LOCKS = {
 }
 
 
-@contextlib.contextmanager
-def migration_lock(connection: Connection, timeout: int = MIGRATION_LOCK_TIMEOUT) -> Iterator[None]:
+def _take_lock(connection: Connection, timeout: int) -> dict | None:
     lock = LOCKS.get(connection.dialect.name)
     if lock is None:
-        yield
-        return
-    acquire, release = lock
+        return None
+    acquire, _release = lock
     acquired, parameters = acquire(connection, timeout)
     connection.commit()
     if not acquired:
         raise MigrationLockTimeout(f"another migration held the database migration lock for {timeout} seconds")
+    return parameters
+
+
+def _release_lock(connection: Connection, parameters: dict | None) -> None:
+    if parameters is None:
+        return
+    _acquire, release = LOCKS[connection.dialect.name]
+    with contextlib.suppress(SQLAlchemyError):
+        connection.rollback()
+        connection.execute(text(release), parameters)
+        connection.commit()
+
+
+@contextlib.contextmanager
+def migration_lock(connection: Connection, timeout: int = MIGRATION_LOCK_TIMEOUT) -> Iterator[None]:
+    parameters = _take_lock(connection, timeout)
     try:
         yield
     finally:
-        with contextlib.suppress(SQLAlchemyError):
-            connection.rollback()
-            connection.execute(text(release), parameters)
-            connection.commit()
+        _release_lock(connection, parameters)
+
+
+class _MigrationLockHolder(threading.Thread):
+    def __init__(self, url: str, timeout: int) -> None:
+        super().__init__(name="migration-lock-holder", daemon=True)
+        self.url = url
+        self.timeout = timeout
+        self.taken = threading.Event()
+        self.finished = threading.Event()
+        self.error: BaseException | None = None
+
+    def run(self) -> None:
+        try:
+            asyncio.run(self._hold())
+        except BaseException as exc:
+            self.error = exc
+        finally:
+            self.taken.set()
+
+    async def _hold(self) -> None:
+        engine = create_async_engine(self.url, poolclass=pool.NullPool)
+        try:
+            async with engine.connect() as connection:
+                parameters = await connection.run_sync(_take_lock, self.timeout)
+                self.taken.set()
+                await asyncio.to_thread(self.finished.wait)
+                await connection.run_sync(_release_lock, parameters)
+        finally:
+            await engine.dispose()
+
+
+@contextlib.contextmanager
+def held_migration_lock(url: str, timeout: int = MIGRATION_LOCK_TIMEOUT) -> Iterator[None]:
+    url = migration_url(url)
+    if make_url(url).get_backend_name() not in LOCKS:
+        yield
+        return
+    holder = _MigrationLockHolder(url, timeout)
+    holder.start()
+    holder.taken.wait()
+    if holder.error is not None:
+        holder.join()
+        raise holder.error
+    try:
+        yield
+    finally:
+        holder.finished.set()
+        holder.join()
 
 
 def guard_planned_steps(migration_context: MigrationContext, script: ScriptDirectory, *, commit: bool) -> None:

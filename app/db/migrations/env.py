@@ -14,6 +14,7 @@ from app.db.base import Base
 import app.db.models
 from app.db.compiles_types import SqliteCompatibleBigInteger, WebAuthnBinary, WebAuthnChallenge, WebAuthnCredentialId
 from app.fork.migration_guards import (
+    MIGRATION_LOCK_HELD,
     SqliteIdHighWater,
     guard_planned_steps,
     migration_command,
@@ -148,7 +149,8 @@ def do_run_migrations(connection: Connection, owns_connection: bool = False) -> 
         return
 
     guard_planned_steps(migration_context, context.script, commit=owns_connection)
-    lock = migration_lock(connection) if owns_connection else contextlib.nullcontext()
+    held = bool(config.attributes.get(MIGRATION_LOCK_HELD))
+    lock = migration_lock(connection) if owns_connection and not held else contextlib.nullcontext()
     with lock, context.begin_transaction():
         if sqlite_high_water is not None:
             sqlite_high_water.prime(connection)
