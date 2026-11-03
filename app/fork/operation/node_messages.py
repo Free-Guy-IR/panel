@@ -5,6 +5,10 @@ _BARE_USER_PREFIX = re.compile(r"(?:^|(?<=['\"(\[<=,;]))[^\s:/@'\"=,;()\[\]<>]+:
 _TELEGRAM_BOT_TOKEN = re.compile(r"(?<=/bot)\d+:[A-Za-z0-9_-]+")
 _SCHEME_SEPARATOR = "://"
 _MASK = "***@"
+_AUTHORITY = re.compile(r"(?<=://)[^\s/?#@]+")
+_AUTHORITY_TRAILER = ".,;:)]}'\">"
+_BASIC_AUTH = "BasicAuth("
+_BASIC_AUTH_END = "encoding="
 
 
 def _scrub_token(match: re.Match) -> str:
@@ -21,8 +25,43 @@ def _scrub_token(match: re.Match) -> str:
     return token
 
 
+def _scrub_authority(match: re.Match) -> str:
+    authority = match.group()
+    kept = authority.rstrip(_AUTHORITY_TRAILER)
+    if kept.startswith("[") or ":" not in kept:
+        return authority
+    if kept.partition(":")[2].isdigit():
+        return authority
+    return "***" + authority[len(kept) :]
+
+
+def _mask_basic_auth(text: str) -> str:
+    start = text.find(_BASIC_AUTH)
+    if start < 0:
+        return text
+    pieces = []
+    position = 0
+    while start >= 0:
+        body = start + len(_BASIC_AUTH)
+        line_end = text.find("\n", body)
+        if line_end < 0:
+            line_end = len(text)
+        end = text.rfind(_BASIC_AUTH_END, body, line_end)
+        pieces.append(text[position:body])
+        if end < 0:
+            pieces.append("***")
+            position = line_end
+        else:
+            pieces.append("***, ")
+            position = end
+        start = text.find(_BASIC_AUTH, position)
+    pieces.append(text[position:])
+    return "".join(pieces)
+
+
 def scrub_credentials(text: object) -> str:
-    return _TELEGRAM_BOT_TOKEN.sub("***", _TOKEN_WITH_AT.sub(_scrub_token, str(text)))
+    scrubbed = _TOKEN_WITH_AT.sub(_scrub_token, _mask_basic_auth(str(text)))
+    return _TELEGRAM_BOT_TOKEN.sub("***", _AUTHORITY.sub(_scrub_authority, scrubbed))
 
 
 def scrub_and_truncate(text: object, limit: int, suffix: str = "") -> str:
