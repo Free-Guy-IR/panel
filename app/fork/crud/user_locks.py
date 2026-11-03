@@ -108,7 +108,7 @@ async def reactivate_limited_users(db: AsyncSession, users: Iterable[User]) -> N
     for start in range(0, len(ordered_ids), USER_LOCK_BATCH_SIZE):
         chunk = ordered_ids[start : start + USER_LOCK_BATCH_SIZE]
         await db.execute(
-            update(User)
+            on_primary_key(update(User))
             .where(User.id.in_(chunk))
             .values(status=_reactivated_status())
             .execution_options(synchronize_session=False)

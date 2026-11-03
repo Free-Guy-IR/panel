@@ -281,6 +281,22 @@ async def _lock_still_active_users(db, user_ids) -> list[int]:
     return still_active
 
 
+async def _reload_locked_users(db, user_ids) -> dict[int, User]:
+    ordered_ids = sorted(set(user_ids))
+    users: dict[int, User] = {}
+    for start in range(0, len(ordered_ids), USER_LOCK_BATCH_SIZE):
+        chunk = ordered_ids[start : start + USER_LOCK_BATCH_SIZE]
+        rows = await db.execute(
+            select(User)
+            .options(*USER_LOAD_OPTIONS)
+            .where(User.id.in_(chunk))
+            .order_by(User.id)
+            .execution_options(populate_existing=True)
+        )
+        users.update({user.id: user for user in rows.unique().scalars().all()})
+    return users
+
+
 async def _enforce(db, observations, settings) -> None:
     """Act on the users whose verdict has held long enough to be believed.
 
@@ -293,21 +309,7 @@ async def _enforce(db, observations, settings) -> None:
         return
 
     async def attempt():
-        still_active = await _lock_still_active_users(db, (o.user_id for o in over))
-        users = {
-            user.id: user
-            for user in (
-                await db.execute(
-                    select(User)
-                    .options(*USER_LOAD_OPTIONS)
-                    .where(User.id.in_(still_active))
-                    .execution_options(populate_existing=True)
-                )
-            )
-            .unique()
-            .scalars()
-            .all()
-        }
+        users = await _reload_locked_users(db, await _lock_still_active_users(db, (o.user_id for o in over)))
 
         changed = []
         for observation in over:

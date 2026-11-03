@@ -324,12 +324,13 @@ async def get_bulk_user_limit_targets(
     lock: bool = True,
 ) -> list[tuple]:
     column = expire_as_bulk_reads_it(db) if field == "expire" else User.data_limit
-    stmt = (
-        select(User.id, column).where(_bulk_user_target_filter(bulk_model, field, allowed_group_ids)).order_by(User.id)
-    )
-    if lock:
-        stmt = stmt.with_for_update()
-    return [tuple(row) for row in (await db.execute(stmt)).all()]
+    condition = _bulk_user_target_filter(bulk_model, field, allowed_group_ids)
+    if not lock:
+        return [
+            tuple(row) for row in (await db.execute(select(User.id, column).where(condition).order_by(User.id))).all()
+        ]
+    locked = await _lock_matching_rows(db, condition, (User.id, column))
+    return [locked[user_id] for user_id in sorted(locked)]
 
 
 def _bulk_final_value_bounds(value, minimum, maximum):
@@ -419,23 +420,39 @@ def _id_chunks(user_ids: list[int]) -> list[list[int]]:
     return [user_ids[i : i + BULK_STATUS_CHUNK_SIZE] for i in range(0, len(user_ids), BULK_STATUS_CHUNK_SIZE)]
 
 
+async def _lock_rows_by_id(db: AsyncSession, condition, columns: tuple, user_ids) -> dict[int, tuple]:
+    locked: dict[int, tuple] = {}
+    for chunk in _id_chunks(sorted(user_ids)):
+        rows = await db.execute(
+            on_primary_key(select(*columns)).where(condition, User.id.in_(chunk)).order_by(User.id).with_for_update()
+        )
+        locked.update({row[0]: tuple(row) for row in rows.all()})
+    return locked
+
+
+async def _committed_matching_ids(db: AsyncSession, condition) -> set[int]:
+    return {user_id for (user_id,) in await read_committed_rows(db, select(User.id).where(condition))}
+
+
+async def _lock_matching_rows(db: AsyncSession, condition, columns: tuple) -> dict[int, tuple]:
+    locked = await _lock_rows_by_id(db, condition, columns, await _committed_matching_ids(db, condition))
+    late = await _committed_matching_ids(db, condition) - locked.keys()
+    locked.update(await _lock_rows_by_id(db, condition, columns, late))
+    return locked
+
+
 async def _lock_bulk_targets(
     db: AsyncSession, condition, target_ids: Sequence[int] | None = None
 ) -> dict[int, UserStatus]:
+    columns = (User.id, User.status)
     if target_ids is None:
-        candidates = {user_id for (user_id,) in await read_committed_rows(db, select(User.id).where(condition))}
-    else:
-        candidates = set(target_ids)
-    locked: dict[int, UserStatus] = {}
-    for chunk in _id_chunks(sorted(candidates)):
-        rows = await db.execute(
-            on_primary_key(select(User.id, User.status))
-            .where(condition, User.id.in_(chunk))
-            .order_by(User.id)
-            .with_for_update()
-        )
-        locked.update({user_id: status for user_id, status in rows.all()})
-    if target_ids is not None and len(locked) != len(candidates):
+        rows = await _lock_matching_rows(db, condition, columns)
+        return {user_id: status for user_id, status in rows.values()}
+    candidates = set(target_ids)
+    locked = {
+        user_id: status for user_id, status in (await _lock_rows_by_id(db, condition, columns, candidates)).values()
+    }
+    if len(locked) != len(candidates):
         await db.rollback()
         raise BulkUserUpdateConflict("Selected users changed during the bulk update; retry the request")
     return locked
