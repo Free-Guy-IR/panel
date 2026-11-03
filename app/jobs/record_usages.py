@@ -23,6 +23,7 @@ from app.db import GetDB
 from app.db.base import engine
 from app.db.models import Admin, Node, NodeUsage, NodeUserUsage, System, User
 from app.fork.jobs import after_record_node_usages, apply_usage_value
+from app.fork.jobs.fenced_traffic import fenced_user_traffic_updates
 from app.fork.jobs.stat_batches import (
     StaleStatBatches,
     StatBatch,
@@ -1112,12 +1113,6 @@ async def apply_fenced_user_usage(
     batch_size = USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT.get(sql_family(dialect)) or len(user_ids) or 1
     online_at = dt.now(UTC)
 
-    user_stmt = (
-        update(User)
-        .where(User.id == bindparam("uid"), User.usage_epoch == bindparam("epoch"))
-        .values(used_traffic=User.used_traffic + bindparam("value"))
-        .execution_options(synchronize_session=False)
-    )
     admin_stmt = (
         update(Admin)
         .where(Admin.id == bindparam("admin_id"))
@@ -1162,8 +1157,8 @@ async def apply_fenced_user_usage(
                 admin_totals[admin_id] += item["value"]
         admin_data = [{"admin_id": admin_id, "value": value} for admin_id, value in sorted(admin_totals.items())]
 
-        for update_batch in _chunked(billable, batch_size):
-            await conn.execute(user_stmt, update_batch)
+        for traffic_stmt, traffic_params in fenced_user_traffic_updates(sql_family(dialect), billable, batch_size):
+            await conn.execute(traffic_stmt, traffic_params)
         billed_ids = [item["uid"] for item in billable]
         for online_stmt, online_params in build_online_at_updates(sql_family(dialect), billed_ids, online_at):
             await conn.execute(online_stmt, online_params)
