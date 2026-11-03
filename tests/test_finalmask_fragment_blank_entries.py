@@ -107,3 +107,28 @@ def test_blank_entries_are_pruned_without_mutating_the_caller_input():
     XrayConfiguration._stream_setting_config(finalmask=stored)
 
     assert json.dumps(stored, sort_keys=True) == snapshot
+
+
+@pytest.mark.parametrize("build", INPUT_BUILDERS)
+@pytest.mark.parametrize(
+    "lengths,delays,scalar_key",
+    [
+        pytest.param(["100-200"], [0], "delay", id="delays-int-zero"),
+        pytest.param([0], ["10-20"], "length", id="lengths-int-zero"),
+    ],
+)
+def test_zero_first_entry_keeps_its_scalar_on_both_paths(build, lengths, delays, scalar_key):
+    link_value = _build(build, lengths, delays)
+    xray_value = _stored(lengths, delays) if isinstance(link_value, str) else _build(build, lengths, delays)
+
+    link = _fragment_settings(_link(link_value))
+    xray = _fragment_settings(_xray(xray_value))
+
+    for settings in (link, xray):
+        assert settings["lengths"] == lengths
+        assert settings["delays"] == delays
+        assert settings["length"] == lengths[0]
+        assert settings["delay"] == delays[0]
+        assert settings[scalar_key] == 0
+        assert type(settings[scalar_key]) is int
+    assert link == xray
