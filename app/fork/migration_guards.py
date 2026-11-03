@@ -532,7 +532,7 @@ def _create_table(connection: Connection, model: Table) -> None:
     if not defaults:
         model.create(connection)
         return
-    target = MetaData()
+    target = MetaData(naming_convention=model.metadata.naming_convention)
     for key in model.foreign_keys:
         if key.column.table.name not in target.tables:
             key.column.table.to_metadata(target)

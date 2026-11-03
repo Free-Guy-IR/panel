@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 from alembic.command import check, upgrade
 from alembic.script import ScriptDirectory
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import JSON, create_engine, inspect, text
 from sqlalchemy.engine import make_url
 
 from app.db.models import Base
@@ -178,7 +178,7 @@ def _cleanup_values(url: str) -> list:
     engine = create_engine(_sync(url))
     try:
         with engine.connect() as connection:
-            return connection.execute(text("SELECT cleanup FROM settings")).scalars().all()
+            return connection.execute(text("SELECT cleanup FROM settings").columns(cleanup=JSON)).scalars().all()
     finally:
         engine.dispose()
 
@@ -417,8 +417,10 @@ def test_a_rebuilt_admin_passkeys_table_keeps_the_migration_server_defaults(tmp_
             defaults = {
                 column["name"]: column["default"] for column in inspect(connection).get_columns("admin_passkeys")
             }
+            unique_names = [unique["name"] for unique in inspect(connection).get_unique_constraints("admin_passkeys")]
     finally:
         engine.dispose()
 
     assert defaults["sign_count"] == "'0'"
     assert defaults["name"] == "'Passkey'"
+    assert unique_names == ["uq_admin_passkeys_credential_id"]
