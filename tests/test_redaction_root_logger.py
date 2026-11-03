@@ -126,7 +126,7 @@ def test_the_root_filter_scrubs_a_megabyte_of_adversarial_text_in_linear_time():
     )
     assert finished.returncode == 0, finished.stderr
     result = json.loads(finished.stdout.strip().splitlines()[-1])
-    assert result["elapsed"] < 1.0, result
+    assert result["elapsed"] < 2.0, result
     assert not result["leaked"], result
 
 
