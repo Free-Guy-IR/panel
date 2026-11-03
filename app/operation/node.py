@@ -94,7 +94,7 @@ from app.node.manager_sync import publish_node_sync
 from app.node.nats_memory import clear_bridge_memory_for_node
 from app.operation import BaseOperation, OperatorType
 from app.utils.logger import get_logger
-from config import runtime_settings
+from config import nats_settings, runtime_settings
 
 MAX_MESSAGE_LENGTH = 128
 # Cap parallel start/attach so ~100 nodes don't stampede NATS lifecycle KV.
@@ -110,6 +110,10 @@ logger = get_logger("node-operation")
 # Maintenance RPCs (split roles) wait for the node worker, which waits for node-serviced's pg-node command
 # (5 minute deadline; the bridge itself allows 330 s). The default node RPC timeout (30 s) is far too short.
 _MAINTENANCE_RPC_TIMEOUT = 340.0
+
+
+def _maintenance_rpc_timeout() -> float:
+    return max(_MAINTENANCE_RPC_TIMEOUT, nats_settings.node_rpc_timeout)
 
 
 class NodeOperation(NodeExtraCoresMixin, BaseOperation):
@@ -1456,7 +1460,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
     async def _update_node_api_remote(self, node_id: int) -> dict:
         try:
             return await node_nats_client.request(
-                "update_node_api", {"node_id": node_id}, timeout=_MAINTENANCE_RPC_TIMEOUT
+                "update_node_api", {"node_id": node_id}, timeout=_maintenance_rpc_timeout()
             )
         except RuntimeError as exc:
             await self.handle_rpc_error(exc)
@@ -1475,7 +1479,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         return await node_nats_client.request(
             "update_core",
             {"node_id": node_id, "core_update": node_core_update.model_dump(mode="json")},
-            timeout=_MAINTENANCE_RPC_TIMEOUT,
+            timeout=_maintenance_rpc_timeout(),
         )
 
     async def _update_geofiles_local(self, node_id: int, node_geofiles_update: NodeGeoFilesUpdate) -> dict:
@@ -1492,7 +1496,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         return await node_nats_client.request(
             "update_geofiles",
             {"node_id": node_id, "geofiles_update": node_geofiles_update.model_dump(mode="json")},
-            timeout=_MAINTENANCE_RPC_TIMEOUT,
+            timeout=_maintenance_rpc_timeout(),
         )
 
     async def bulk_remove_nodes(
