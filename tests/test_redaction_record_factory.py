@@ -211,6 +211,8 @@ def test_queue_handler_and_listener_print_no_secret():
         (f"password='{SECRET}' failed", "failed"),
         (f'password="{SECRET}" failed', "failed"),
         (f"pwd: {SECRET}", "pwd: "),
+        (f"pa\u017f\u017fword: {SECRET}", "word: "),
+        (f'PA\u017f\u017fWORD="{SECRET}"', 'WORD="'),
     ],
 )
 def test_password_colon_and_json_values_are_masked(text, kept):
