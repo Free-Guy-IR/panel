@@ -9,10 +9,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import bindparam, delete, select, update
-from sqlalchemy.dialects import postgresql
+from sqlalchemy.dialects import mysql, postgresql
 from sqlalchemy.exc import DatabaseError, OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool, StaticPool
+from sqlalchemy.pool import NullPool
 
 from app.db import base
 from app.db.crud.bulk import reset_all_users_data_usage
@@ -61,26 +61,43 @@ def test_postgres_user_traffic_update_uses_one_unnest_statement():
     assert params == {"uids": [1, 2], "traffic_values": [40, 20]}
 
 
-def _get_test_database_url() -> str:
+def test_mysql_user_traffic_update_uses_one_case_statement():
+    usage_params = [
+        {"uid": 1, "value": 10},
+        {"uid": 2, "value": 20},
+        {"uid": 1, "value": 30},
+    ]
+
+    stmt, params = record_usages.build_user_traffic_update("mysql", usage_params)
+    compiled = stmt.compile(dialect=mysql.dialect(), compile_kwargs={"render_postcompile": True})
+    sql = str(compiled)
+
+    assert "UPDATE users" in sql
+    assert "CASE users.id WHEN" in sql
+    assert params is None
+    # Repeated users are summed: a CASE only uses the first matching WHEN
+    assert list(compiled.params.values()) == [1, 40, 2, 20, 1, 2]
+
+
+def _get_test_database_url(tmp_path) -> str:
     test_from = os.getenv("TEST_FROM", "local").lower()
     if test_from == "local":
-        return "sqlite+aiosqlite:///:memory:"
+        # A file database, not :memory: with one shared StaticPool connection: the usage
+        # jobs write from concurrent tasks, and on a shared connection one task's
+        # ROLLBACK or COMMIT ends the other tasks' transactions
+        return f"sqlite+aiosqlite:///{tmp_path / 'record_usages.db'}"
     return database_settings.url
 
 
 @pytest.fixture
-async def session_factory(monkeypatch: pytest.MonkeyPatch):
-    database_url = _get_test_database_url()
+async def session_factory(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    database_url = _get_test_database_url(tmp_path)
     is_sqlite = database_url.startswith("sqlite")
 
-    engine_kwargs = {}
+    engine_kwargs = {"poolclass": NullPool}
     connect_args = {}
     if is_sqlite:
         connect_args["check_same_thread"] = False
-        # Keep the in-memory database alive across connections
-        engine_kwargs["poolclass"] = StaticPool
-    else:
-        engine_kwargs["poolclass"] = NullPool
 
     # MySQL/MariaDB do not allow defaults on JSON columns; strip them temporarily
     proxy_default = None
@@ -93,7 +110,7 @@ async def session_factory(monkeypatch: pytest.MonkeyPatch):
         proxy_column.server_default = None
 
     engine = create_async_engine(database_url, connect_args=connect_args, **engine_kwargs)
-    seeded = None if ":memory:" in database_url else await snapshot_seeded_rows(engine)
+    seeded = None if str(tmp_path) in database_url else await snapshot_seeded_rows(engine)
     async with engine.begin() as conn:
         await conn.run_sync(base.Base.metadata.drop_all)
         await conn.run_sync(base.Base.metadata.create_all)
@@ -617,6 +634,26 @@ async def test_record_node_usages_returns_when_totals_zero(monkeypatch: pytest.M
 
         node_usage_rows = await session.execute(select(NodeUsage.id))
         assert node_usage_rows.first() is None
+
+
+@pytest.mark.asyncio
+async def test_record_node_stats_batched_logs_write_errors(monkeypatch: pytest.MonkeyPatch, caplog):
+    written_nodes = []
+
+    async def fake_safe_execute(stmt, params=None, max_retries=5):
+        if params[0]["node_id"] == 2:
+            raise OperationalError("INSERT INTO node_usages", {}, Exception("database is locked"))
+        written_nodes.append(params[0]["node_id"])
+
+    monkeypatch.setattr(record_usages, "get_dialect", AsyncMock(return_value="postgresql"))
+    monkeypatch.setattr(record_usages, "safe_execute", fake_safe_execute)
+    caplog.set_level(logging.ERROR)
+
+    await record_usages.record_node_stats_batched({1: [{"up": 10, "down": 4}], 2: [{"up": 1, "down": 1}]})
+
+    assert written_nodes == [1]
+    assert "Failed to record node usage history for node 2" in caplog.text
+    assert "database is locked" in caplog.text
 
 
 class _DeadlockOrig(Exception):
