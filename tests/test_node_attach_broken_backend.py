@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -5,6 +6,7 @@ import pytest
 from PasarGuardNodeBridge import Health, NodeAPIError
 from PasarGuardNodeBridge.storage import LifecycleStatus
 
+from app.operation import node as node_operation
 from app.operation.node import NodeOperation
 
 
@@ -19,8 +21,18 @@ def _pg_node(health: Health, observed: LifecycleStatus | None, backend_stats_err
         get_backend_stats=AsyncMock(side_effect=backend_stats_error),
         connect=AsyncMock(),
         update_observed_lifecycle=AsyncMock(),
+        _work_available=asyncio.Event(),
+        _ensure_sync_worker_running=AsyncMock(),
     )
     return node
+
+
+def _assert_shared_sync_woken(node, shared: bool):
+    assert node._work_available.is_set() is shared
+    if shared:
+        node._ensure_sync_worker_running.assert_awaited_once()
+    else:
+        node._ensure_sync_worker_running.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -43,7 +55,9 @@ async def test_broken_backend_that_still_fails_is_not_reattached(health, observe
 
 
 @pytest.mark.asyncio
-async def test_recovered_broken_backend_is_reattached():
+@pytest.mark.parametrize("shared", [False, True])
+async def test_recovered_broken_backend_is_reattached(monkeypatch, shared):
+    monkeypatch.setattr(node_operation, "needs_shared_bridge_memory", lambda: shared)
     node = _pg_node(Health.BROKEN, None, None)
 
     result = await NodeOperation._attach_if_running(node, "n1")
@@ -51,10 +65,13 @@ async def test_recovered_broken_backend_is_reattached():
     assert result is not None
     node.get_backend_stats.assert_awaited_once()
     node.connect.assert_awaited_once_with("0.5.5", "25.10.1")
+    _assert_shared_sync_woken(node, shared)
 
 
 @pytest.mark.asyncio
-async def test_healthy_backend_is_reattached_without_a_stats_probe():
+@pytest.mark.parametrize("shared", [False, True])
+async def test_healthy_backend_is_reattached_without_a_stats_probe(monkeypatch, shared):
+    monkeypatch.setattr(node_operation, "needs_shared_bridge_memory", lambda: shared)
     node = _pg_node(Health.HEALTHY, LifecycleStatus.HEALTHY, None)
 
     result = await NodeOperation._attach_if_running(node, "n1")
@@ -62,15 +79,14 @@ async def test_healthy_backend_is_reattached_without_a_stats_probe():
     assert result is not None
     node.get_backend_stats.assert_not_awaited()
     node.connect.assert_awaited_once()
+    node.update_observed_lifecycle.assert_awaited_once_with(LifecycleStatus.HEALTHY, expected_epoch=3)
+    _assert_shared_sync_woken(node, shared)
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("probe_fails", [True, False])
 async def test_concurrent_reconnects_of_a_broken_backend_agree_with_the_probe(monkeypatch, probe_fails):
-    import asyncio
-
     from app.models.core import CoreType
-    from app.operation import node as node_operation
 
     monkeypatch.setattr(node_operation, "needs_shared_bridge_memory", lambda: False)
     calls = []
