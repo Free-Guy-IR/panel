@@ -7,11 +7,17 @@ _BARE_BOT_TOKEN = re.compile(r"(?<![A-Za-z0-9])((?:[Bb][Oo][Tt])?)\d{6,}(?::|%3[
 _ENCODED_TOKEN = re.compile(r"(?<!\S)\S*%40\S*")
 _ENCODED_SCHEME_SEPARATOR = "%3a%2f%2f"
 _ENCODED_AT = "%40"
-_PASSWORD_PAIR = re.compile(r"(?<![A-Za-z0-9_])((?:[Pp][Aa][Ss][Ss][Ww](?:[Oo][Rr])?[Dd]|[Pp][Ww][Dd])=)[^\s&;,'\"]+")
-_PASSWORD_QUOTED = re.compile(
-    r"""(?<![A-Za-z0-9])(["']?(?i:pass(?:wor|w)d|pwd)["']?[ \t]{0,8}[:=][ \t]{0,8})(["'])(?:(?!\2)[^\\\n]|\\.)+"""
+_PASSWORD_PAIR = re.compile(
+    r"""(?<![A-Za-z0-9_])((?:[Pp][Aa][Ss][Ss][Ww](?:[Oo][Rr])?[Dd]|[Pp][Ww][Dd])=)"""
+    r"""(?:((?:bytearray\()?b(["']))(?:(?!\3)[^\\\n]|\\.)*|[^\s&;,'"]+)"""
 )
-_PASSWORD_COLON = re.compile(r"(?<![A-Za-z0-9])((?i:pass(?:wor|w)d|pwd)[ \t]{0,8}:[ \t]{0,8})([^\s&;,'\"]+)")
+_PASSWORD_QUOTED = re.compile(
+    r"""(?<![A-Za-z0-9])(["']?(?i:pass(?:wor|w)d|pwd)["']?[ \t]{0,8}[:=][ \t]{0,8}(?:bytearray\(b|b)?)(["'])(?:(?!\2)[^\\\n]|\\.)+"""
+)
+_PASSWORD_COLON = re.compile(
+    r"""(?<![A-Za-z0-9])((?i:pass(?:wor|w)d|pwd)[ \t]{0,8}:[ \t]{0,8})"""
+    r"""(?:((?:bytearray\()?b(["']))(?:(?!\3)[^\\\n]|\\.)*|([^\s&;,'"]+))"""
+)
 _SCHEME_SEPARATOR = "://"
 _MASK = "***@"
 _AUTHORITY = re.compile(r"(?<=://)[^\s/?#@]+")
@@ -80,10 +86,16 @@ def _mask_basic_auth(text: str) -> str:
 
 
 def _mask_password_colon(match: re.Match) -> str:
-    value = match.group(2)
+    if match.group(2) is not None:
+        return match.group(1) + match.group(2) + "***"
+    value = match.group(4)
     if value.isalpha() and value.islower():
         return match.group()
     return match.group(1) + "***"
+
+
+def _mask_password_pair(match: re.Match) -> str:
+    return match.group(1) + (match.group(2) or "") + "***"
 
 
 def scrub_credentials(text: object) -> str:
@@ -93,7 +105,7 @@ def scrub_credentials(text: object) -> str:
     lowered = scrubbed.casefold()
     if "pass" in lowered or "pwd" in lowered:
         scrubbed = _PASSWORD_COLON.sub(_mask_password_colon, _PASSWORD_QUOTED.sub(r"\1\2***", scrubbed))
-    return _PASSWORD_PAIR.sub(r"\1***", scrubbed)
+    return _PASSWORD_PAIR.sub(_mask_password_pair, scrubbed)
 
 
 def scrub_and_truncate(text: object, limit: int, suffix: str = "") -> str:

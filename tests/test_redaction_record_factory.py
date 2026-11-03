@@ -168,7 +168,7 @@ def test_a_factory_set_before_import_is_chained_and_the_scrub_runs_once():
     assert "True once http://***@h:1" in printed
     assert printed.count("once http://") == 1
     calls = int(printed.split("calls ")[1].split()[0])
-    assert calls <= 2, printed
+    assert calls <= 3, printed
 
 
 def test_queue_handler_and_listener_print_no_secret():

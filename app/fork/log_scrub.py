@@ -165,13 +165,26 @@ def _scrub_message(record: logging.LogRecord) -> None:
         record.msg, record.args = scrub_credentials(first), None
         return
     scrubbed = scrub_credentials(rendered)
-    if scrubbed == rendered:
+    original = scrubbed if rendered == first else scrub_credentials(first)
+    if scrubbed == rendered and original == rendered:
         record.msg, record.args = message, arguments
-    elif isinstance(arguments, dict):
-        record.msg, record.args = scrubbed.replace("%", "%%"), {key: _masked(value) for key, value in arguments.items()}
+        return
+    if isinstance(arguments, dict):
+        masked = {key: _masked(value) for key, value in arguments.items()}
     else:
         masked = tuple(_masked(argument) for argument in arguments)
-        record.msg, record.args = scrubbed.replace("%", "%%") + "%.0s" * len(masked), masked
+    text = scrubbed if original == scrubbed else _template_with_masked_arguments(message, masked)
+    if isinstance(masked, dict):
+        record.msg, record.args = text.replace("%", "%%"), masked
+    else:
+        record.msg, record.args = text.replace("%", "%%") + "%.0s" * len(masked), masked
+
+
+def _template_with_masked_arguments(message: str, masked: tuple | dict) -> str:
+    try:
+        return scrub_credentials(message % masked)
+    except Exception:
+        return _MASK
 
 
 def _masked(argument: object) -> object:
