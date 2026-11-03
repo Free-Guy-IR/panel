@@ -21,6 +21,7 @@ from tests.test_upstream_v551_migration_splice import (
 SORT_ORDER_PARENT = "86f7c2a14d3e"
 SORT_ORDER_REVISION = "d73f8a2c4e91"
 SORT_ORDER_TABLES = ("nodes", "core_configs")
+REVERSE_GROUP_INDEX_REVISION = "a4d8c7e91b32"
 ASSOCIATION_TABLES = ("inbounds_groups_association", "users_groups_association")
 REVERSE_GROUP_INDEXES = (
     ("inbounds_groups_association", "ix_inbounds_groups_association_group_id_inbound_id", "group_id, inbound_id"),
@@ -256,3 +257,28 @@ def test_an_upgrade_drops_a_foreign_key_index_an_earlier_rollback_left_beside_th
         _quiet(upgrade, config, "head")
 
         assert _association_indexes(url) == fresh_head_indexes
+
+
+@pytest.mark.parametrize("then", ["rollback", "upgrade"])
+def test_a_rollback_interrupted_between_the_reverse_group_index_drops_completes(tmp_path, fresh_head_indexes, then):
+    with _scratch_database(tmp_path, f"group_index_cut_{then}") as url:
+        config = _config(url)
+        _quiet(upgrade, config, FORK_HEAD)
+        fork_head_indexes = _association_indexes(url)
+        _quiet(upgrade, config, REVERSE_GROUP_INDEX_REVISION)
+        names = _foreign_key_names(url)
+        table, dropped, _columns = REVERSE_GROUP_INDEXES[1]
+        _execute(
+            url,
+            *(f"CREATE INDEX {names[name]} ON {name} ({column})" for name, column in REVERSE_GROUP_COLUMNS.items()),
+            f"DROP INDEX {dropped} ON {table}",
+        )
+
+        if then == "rollback":
+            _rollback(config, FORK_HEAD)
+            assert _versions(url) == [FORK_HEAD]
+            assert _association_indexes(url) == fork_head_indexes
+        else:
+            _quiet(upgrade, config, "head")
+            assert _versions(url) == [HEAD]
+            assert _association_indexes(url) == fresh_head_indexes

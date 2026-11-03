@@ -20,13 +20,21 @@ REVERSE_GROUP_FOREIGN_KEYS = (
     ("inbounds_groups_association", "group_id", "ix_inbounds_groups_association_group_id_inbound_id"),
     ("users_groups_association", "groups_id", "ix_users_groups_association_groups_id_user_id"),
 )
+REVERSE_GROUP_INDEX_COLUMNS = {
+    "ix_inbounds_groups_association_group_id_inbound_id": ("group_id", "inbound_id"),
+    "ix_users_groups_association_groups_id_user_id": ("groups_id", "user_id"),
+}
 MIGRATION_COMMANDS = ("upgrade", "downgrade")
 MIGRATION_LOCK = "pasarguard_alembic_"
 MIGRATION_LOCK_KEY = 5_026_101_103
 MIGRATION_LOCK_TIMEOUT = 3600
 
 
-class MigrationLockTimeout(RuntimeError):
+class MigrationLockError(RuntimeError):
+    pass
+
+
+class MigrationLockTimeout(MigrationLockError):
     pass
 
 
@@ -44,8 +52,10 @@ def mysql_lock_name(connection: Connection) -> str:
 
 def _acquire_mysql_lock(connection: Connection, timeout: int) -> tuple[bool, dict]:
     name = mysql_lock_name(connection)
-    acquired = connection.execute(text("SELECT GET_LOCK(:name, :timeout)"), {"name": name, "timeout": timeout})
-    return acquired.scalar() == 1, {"name": name}
+    acquired = connection.execute(text("SELECT GET_LOCK(:name, :timeout)"), {"name": name, "timeout": timeout}).scalar()
+    if acquired is None:
+        raise MigrationLockError(f"GET_LOCK('{name}') returned NULL: the server failed to take the migration lock")
+    return acquired == 1, {"name": name}
 
 
 def _acquire_postgresql_lock(connection: Connection, timeout: int) -> tuple[bool, dict]:
@@ -180,7 +190,9 @@ def repair_interrupted_mysql_steps(
     _reconcile_sort_order(connection, SORT_ORDER_REVISION in applied)
     if REVERSE_GROUP_INDEX_REVISION not in applied:
         _undo_reverse_group_indexes(connection)
-    elif REVERSE_GROUP_INDEX_REVISION in _removed(steps):
+        return
+    _restore_reverse_group_indexes(connection)
+    if REVERSE_GROUP_INDEX_REVISION in _removed(steps):
         _index_reverse_group_foreign_keys(connection)
     else:
         _drop_redundant_foreign_key_indexes(connection)
@@ -188,6 +200,8 @@ def repair_interrupted_mysql_steps(
 
 class MysqlReverseGroupIndexes:
     def __call__(self, *, ctx, step, heads, run_args) -> None:
+        if step.is_stamp:
+            return
         if step.up_revision_id == REVERSE_GROUP_INDEX_REVISION and step.is_upgrade:
             _drop_redundant_foreign_key_indexes(ctx.connection)
 
@@ -236,6 +250,16 @@ def _index_reverse_group_foreign_keys(connection: Connection) -> None:
     for table, column, upstream_index in REVERSE_GROUP_FOREIGN_KEYS:
         if inspector.has_table(table):
             _ensure_foreign_key_index(connection, inspector, table, column, upstream_index)
+
+
+def _restore_reverse_group_indexes(connection: Connection) -> None:
+    inspector = inspect(connection)
+    quote = connection.dialect.identifier_preparer.quote
+    for table, _column, upstream_index in REVERSE_GROUP_FOREIGN_KEYS:
+        if not inspector.has_table(table) or upstream_index in _index_names(inspector, table):
+            continue
+        columns = ", ".join(quote(column) for column in REVERSE_GROUP_INDEX_COLUMNS[upstream_index])
+        connection.exec_driver_sql(f"CREATE INDEX {quote(upstream_index)} ON {table} ({columns})")
 
 
 def _undo_reverse_group_indexes(connection: Connection) -> None:

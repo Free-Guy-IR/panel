@@ -3,6 +3,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from alembic.command import check, current, downgrade, stamp, upgrade
@@ -23,6 +24,8 @@ from tests.test_upstream_v551_migration_splice import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+SORT_ORDER_REVISION = "d73f8a2c4e91"
+REVERSE_GROUP_INDEX_REVISION = "a4d8c7e91b32"
 SCRATCH_BACKEND = make_url(os.environ.get("SPLICE_SCRATCH_URL", "sqlite://")).get_backend_name()
 UPGRADE_SCRIPT = (
     "import sys; from alembic.command import upgrade; from app.fork.db_rollback import default_config; "
@@ -34,9 +37,10 @@ def _record_repairs(monkeypatch) -> list:
     calls = []
     original = migration_guards.repair_interrupted_mysql_steps
 
-    def record(connection, script, heads, steps=()):
+    def record(*args, **kwargs):
+        heads = args[2] if len(args) > 2 else kwargs["heads"]
         calls.append(tuple(sorted(heads)))
-        return original(connection, script, heads, steps)
+        return original(*args, **kwargs)
 
     monkeypatch.setattr(migration_guards, "repair_interrupted_mysql_steps", record)
     return calls
@@ -72,6 +76,54 @@ def test_a_downgrade_and_an_upgrade_with_nothing_to_do_still_reach_the_repairs(t
         _quiet(downgrade, config, PROD_REVISION)
 
         assert calls == [(PROD_REVISION,), (PROD_REVISION,)]
+
+
+def test_a_stamp_onto_the_reverse_group_index_revision_never_reaches_the_index_hook(tmp_path, monkeypatch):
+    with _scratch_database(tmp_path, "stamp_hook") as url:
+        config = _config(url)
+        _quiet(upgrade, config, SORT_ORDER_REVISION)
+        drops = []
+        monkeypatch.setattr(migration_guards, "_drop_redundant_foreign_key_indexes", drops.append)
+        monkeypatch.setattr(
+            migration_guards,
+            "version_hooks",
+            lambda _connection, _high_water: [migration_guards.MysqlReverseGroupIndexes()],
+        )
+
+        _quiet(stamp, config, REVERSE_GROUP_INDEX_REVISION)
+        _quiet(stamp, config, SORT_ORDER_REVISION)
+        assert drops == []
+
+        _quiet(upgrade, config, "head")
+        assert drops
+        assert _versions(url) == [HEAD]
+
+
+class _GetLockReturnsNull:
+    dialect = SimpleNamespace(name="mysql")
+
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+
+    def execute(self, statement, parameters=None):
+        self.statements.append(str(statement))
+        value = "panel" if "DATABASE()" in str(statement) else None
+        return SimpleNamespace(scalar=lambda: value)
+
+    def commit(self) -> None:
+        pass
+
+    def rollback(self) -> None:
+        pass
+
+
+def test_a_null_from_get_lock_is_reported_as_a_lock_error_not_as_a_timeout():
+    connection = _GetLockReturnsNull()
+    with pytest.raises(RuntimeError) as raised, migration_guards.migration_lock(connection, timeout=1):
+        pytest.fail("the migration ran without the lock")
+
+    assert "returned NULL" in str(raised.value)
+    assert not any("RELEASE_LOCK" in statement for statement in connection.statements)
 
 
 lock_backends = pytest.mark.skipif(
