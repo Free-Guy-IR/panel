@@ -896,5 +896,8 @@
   "trafficLog.purge.freedMb": "{{value}} مگابایت",
   "trafficLog.purge.freedGb": "{{value}} گیگابایت",
   "trafficLog.revokedBanner": "دسترسی شما به لاگ ترافیک هنگام باز بودن جریان گرفته شد. جریان زنده بسته و ردیف‌هایش دور ریخته شد. صفحه را دوباره باز کنید.",
-  "trafficLog.accepted": "پذیرفته شد"
+  "trafficLog.accepted": "پذیرفته شد",
+  "theme": {
+    "toggle": "تغییر تم"
+  }
 }

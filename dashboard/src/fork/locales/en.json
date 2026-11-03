@@ -823,5 +823,8 @@
   "trafficLog.purge.freedMb": "{{value}} MB",
   "trafficLog.purge.freedGb": "{{value}} GB",
   "trafficLog.revokedBanner": "Your access to the traffic log was withdrawn while the feed was open. The live feed was closed and its rows were discarded. Reload the page.",
-  "trafficLog.accepted": "Accepted"
+  "trafficLog.accepted": "Accepted",
+  "theme": {
+    "toggle": "Toggle theme"
+  }
 }
