@@ -1,5 +1,6 @@
 from aiogram.client.session.aiohttp import AiohttpSession
 
+from app.utils.http_client import checked_proxy_url
 from app.utils.ssl_context import create_outbound_ssl_context
 
 
@@ -8,7 +9,7 @@ class NativeTLSAiohttpSession(AiohttpSession):
 
     def __init__(self, proxy=None, limit: int = 100, **kwargs):
         """Initialize aiogram and apply the scoped outbound SSL context."""
-        super().__init__(proxy=proxy, limit=limit, **kwargs)
+        super().__init__(proxy=checked_proxy_url(proxy), limit=limit, **kwargs)
         # aiogram has no public SSLContext argument. It builds its connector
         # from this mapping for both direct and proxied sessions.
         self._connector_init["ssl"] = create_outbound_ssl_context()

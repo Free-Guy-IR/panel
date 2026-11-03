@@ -247,7 +247,7 @@ class ProxyValidator:
             return None
         pattern = (
             r"^(?P<scheme>http|https|socks4|socks5)://"
-            r"((?P<user>[^\s:@]+):(?P<pass>[^\s:@]+)@)?"
+            r"((?P<user>[^\s:@\[\]\\/?#]+):(?P<pass>[^\s:@\[\]\\/?#]+)@)?"
             r"(?P<host>[a-zA-Z0-9\.-]+)"
             r":(?P<port>\d{1,5})$"
         )

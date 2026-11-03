@@ -14,6 +14,7 @@ from app.models.settings import RunMethod, Telegram
 from app.nats import is_nats_enabled
 from app.nats.client import setup_nats_kv
 from app.settings import telegram_settings
+from app.utils.http_client import INVALID_PROXY_MESSAGE, InvalidProxyURL
 from app.utils.logger import get_logger
 from config import nats_settings
 
@@ -210,7 +211,11 @@ class TelegramBotManager:
             return
 
         logger.info("Telegram bot starting")
-        session = NativeTLSAiohttpSession(proxy=settings.proxy_url)
+        try:
+            session = NativeTLSAiohttpSession(proxy=settings.proxy_url)
+        except InvalidProxyURL:
+            logger.error(INVALID_PROXY_MESSAGE)
+            return
         self._bot = Bot(token=settings.token, session=session, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
         if not self._handlers_registered:
