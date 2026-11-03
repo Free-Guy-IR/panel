@@ -27,6 +27,7 @@ from app.fork.proxy_secrets import group_repair
 from app.fork.proxy_secrets.claims import secret_digest
 from app.fork.proxy_secrets.fields import ProxySecretField
 from app.fork.proxy_secrets.locks import is_deadlock
+from app.fork.proxy_secrets.uniqueness import refuses_submitted_collisions
 from app.models.admin import AdminDetails, AdminRoleData
 from app.models.group import GroupModify
 from app.models.proxy import ProxyTable
@@ -75,6 +76,14 @@ ROTATED_BY_A_REVOKE = (
     ("tuic", "password"),
 )
 SUBMITTED_BY_ANOTHER_USER = (("vless", "id"), ("trojan", "password"), ("hysteria", "auth"))
+EVERY_STORED_CREDENTIAL = (
+    *ROTATED_BY_A_REVOKE,
+    ("wireguard", "private_key"),
+    ("wireguard", "public_key"),
+    ("openvpn", "password"),
+    ("mtproto", "secret"),
+    ("l2tp", "password"),
+)
 DISPATCH_DELAYS = (0, 0, 0.01, 0.05, 0.3)
 SERVER_DATABASE = not IS_SQLITE
 FREE_RUNNING_ROUNDS = 10
@@ -631,7 +640,64 @@ async def holders_in_database(user_ids: list[int], credentials: set[tuple[str, s
     return found
 
 
-async def run_mixed_writers_round(monkeypatch, round_number: int, plan: dict) -> list[str]:
+def credential_values(settings: dict | None) -> set[str]:
+    return {value for _, _, value in stored_credentials(settings, EVERY_STORED_CREDENTIAL)}
+
+
+def issued_by(revoke: Outcome) -> dict | None:
+    return revoke.value.proxy_settings.dict(no_obj=True) if revoke.ok else None
+
+
+async def peer_holding_problems(remote, world: World, target_values: set[str]) -> list[str]:
+    problems = []
+    stored = await stored_settings(world.peer)
+    taken = sorted(
+        f"{protocol}.{attribute}"
+        for protocol, attribute, value in stored_credentials(stored, EVERY_STORED_CREDENTIAL)
+        if value in target_values
+    )
+    if taken:
+        problems.append(f"user {world.peer} stores user {world.target}'s credentials {taken}")
+    on_node = remote.receiver.live.get(str(world.peer))
+    served = sorted(
+        f"{protocol}.{attribute}"
+        for protocol, attribute, value in (live_credentials(on_node) if on_node is not None else set())
+        if value in target_values
+    )
+    if served:
+        problems.append(f"user {world.peer} is served user {world.target}'s credentials {served}")
+    return problems
+
+
+async def kept_current_problems(world: World, revoke: Outcome) -> list[str]:
+    if not revoke.ok:
+        return []
+    stored = stored_credentials(await stored_settings(world.target))
+    issued = stored_credentials(issued_by(revoke))
+    differing = sorted({credential[:2] for credential in stored ^ issued})
+    if differing:
+        return [f"user {world.target} does not store the {differing} its revoke issued"]
+    return []
+
+
+async def target_values_ever(world: World, revoke: Outcome) -> set[str]:
+    return (
+        credential_values(world.initial[world.target])
+        | credential_values(await stored_settings(world.target))
+        | credential_values(issued_by(revoke))
+    )
+
+
+def replaced_submission_problems(label: str, outcomes: dict[str, Outcome], names: tuple[str, ...]) -> list[str]:
+    return [
+        f"{label}: the {name} submission ended {outcomes[name]!r} although a colliding submitted value is replaced"
+        for name in names
+        if not outcomes[name].ok
+    ]
+
+
+async def run_mixed_writers_round(monkeypatch, round_number: int, plan: dict, refusing: bool) -> list[str]:
+    assert refuses_submitted_collisions() is refusing
     rng = random.Random(round_number)
     operator = UserOperation(OperatorType.API)
     writer, change, grow = plan["status"], plan["change"], plan["grow"]
@@ -669,16 +735,21 @@ async def run_mixed_writers_round(monkeypatch, round_number: int, plan: dict) ->
         legal = {
             "revoke": (503,),
             "modify": (503,),
-            "save": (409, 503),
-            "foreign": (409, 503),
+            "save": (409, 503) if refusing else (503,),
+            "foreign": (409, 503) if refusing else (503,),
             "group": (503,),
             "status": (),
         }
         for name, outcome in outcomes.items():
             if not outcome.ok and not outcome.refused_with(*legal[name]):
                 problems.append(f"{label}: {name} ended {outcome!r}")
-        if outcomes["foreign"].ok:
+        if refusing and outcomes["foreign"].ok:
             problems.append(f"{label}: user {world.peer} was allowed to store user {world.target}'s credentials")
+        if not refusing and steps is not None:
+            problems += replaced_submission_problems(label, outcomes, ("save", "foreign"))
+        target_values = await target_values_ever(world, outcomes["revoke"])
+        problems += [f"{label}: {problem}" for problem in await peer_holding_problems(remote, world, target_values)]
+        problems += [f"{label}: {problem}" for problem in await kept_current_problems(world, outcomes["revoke"])]
         rotated = stored_credentials(target_initial) if outcomes["revoke"].ok else set()
         problems += [f"{label}: {problem}" for problem in rotated_away_live(remote, rotated)]
         held = await holders_in_database([world.target, world.peer], rotated)
@@ -686,7 +757,7 @@ async def run_mixed_writers_round(monkeypatch, round_number: int, plan: dict) ->
             problems.append(f"{label}: rotated-away credentials are stored again: {held}")
         problems += [f"{label}: {problem}" for problem in empty_credential_pushes(remote)]
         problems += [f"{label}: {problem}" for problem in shared_live_credentials(remote)]
-        if steps is not None and outcomes["revoke"].ok:
+        if refusing and steps is not None and outcomes["revoke"].ok:
             save_before_revoke = steps.index("save:write") < steps.index("revoke:write")
             if outcomes["save"].ok != save_before_revoke:
                 problems.append(
@@ -752,15 +823,28 @@ def mixed_plans() -> list[dict | None]:
     return plans
 
 
-async def test_mixed_writers_leave_the_node_serving_exactly_the_committed_row(monkeypatch):
+async def mixed_writers_failures(monkeypatch, refusing: bool) -> list[str]:
     quiet(monkeypatch)
     failures = []
     for round_number, plan in enumerate(mixed_plans()):
-        failures += await run_mixed_writers_round(monkeypatch, round_number, plan)
+        failures += await run_mixed_writers_round(monkeypatch, round_number, plan, refusing)
+    return failures
+
+
+async def test_mixed_writers_leave_the_node_serving_exactly_the_committed_row(monkeypatch, refuse_submitted_collisions):
+    failures = await mixed_writers_failures(monkeypatch, refusing=True)
     assert failures == [], "\n".join(failures)
 
 
-async def run_delete_round(monkeypatch, round_number: int, plan: dict) -> list[str]:
+async def test_mixed_writers_replacing_a_foreign_submission_never_share_a_credential(
+    monkeypatch, replace_submitted_collisions
+):
+    failures = await mixed_writers_failures(monkeypatch, refusing=False)
+    assert failures == [], "\n".join(failures)
+
+
+async def run_delete_round(monkeypatch, round_number: int, plan: dict, refusing: bool) -> list[str]:
+    assert refuses_submitted_collisions() is refusing
     rng = random.Random(7000 + round_number)
     operator = UserOperation(OperatorType.API)
     grow = plan["grow"]
@@ -856,8 +940,23 @@ async def run_delete_round(monkeypatch, round_number: int, plan: dict) -> list[s
                 *form_save_of(operator, world.peer, form_from(world.initial[world.peer], taken_from(target_initial))),
             )
         )
-        if not reuse[0].refused_with(409):
+        if refusing and not reuse[0].refused_with(409):
             problems.append(f"{label}: another user submitting the deleted user's credentials ended {reuse[0]!r}")
+        if not refusing:
+            problems += replaced_submission_problems(label, {"reuse": reuse[0]}, ("reuse",))
+        await dispatch.settled()
+        await drained(remote.node)
+        target_values = credential_values(target_initial) | credential_values(issued_by(outcomes["revoke"]))
+        problems += [f"{label}: {problem}" for problem in await peer_holding_problems(remote, world, target_values)]
+        after_reuse = await claim_rows(held)
+        handed_out = sorted(credential[:2] for credential, (holder, _) in after_reuse.items() if holder is not None)
+        if handed_out or len(after_reuse) != len(rows):
+            problems.append(
+                f"{label}: after another user submitted them the deleted user's tombstoned claims {handed_out} "
+                f"name a holder or {len(rows) - len(after_reuse)} vanished"
+            )
+        problems += [f"{label}: {problem}" for problem in shared_live_credentials(remote)]
+        problems += [f"{label}: {problem}" for problem in empty_credential_pushes(remote)]
         return problems
 
 
@@ -896,15 +995,30 @@ def delete_plans() -> list[dict]:
     return plans
 
 
-async def test_a_delete_racing_a_group_change_and_a_revoke_ends_removed_with_tombstoned_claims(monkeypatch):
+async def delete_failures(monkeypatch, refusing: bool) -> list[str]:
     quiet(monkeypatch)
     failures = []
     for round_number, plan in enumerate(delete_plans()):
-        failures += await run_delete_round(monkeypatch, round_number, plan)
+        failures += await run_delete_round(monkeypatch, round_number, plan, refusing)
+    return failures
+
+
+async def test_a_delete_racing_a_group_change_and_a_revoke_ends_removed_with_tombstoned_claims(
+    monkeypatch, refuse_submitted_collisions
+):
+    failures = await delete_failures(monkeypatch, refusing=True)
     assert failures == [], "\n".join(failures)
 
 
-async def run_claims_round(monkeypatch, round_number: int, steps: list[str] | None) -> list[str]:
+async def test_a_deleted_users_tombstoned_claims_are_never_handed_out_when_a_submission_is_replaced(
+    monkeypatch, replace_submitted_collisions
+):
+    failures = await delete_failures(monkeypatch, refusing=False)
+    assert failures == [], "\n".join(failures)
+
+
+async def run_claims_round(monkeypatch, round_number: int, steps: list[str] | None, refusing: bool) -> list[str]:
+    assert refuses_submitted_collisions() is refusing
     rng = random.Random(9000 + round_number)
     operator = UserOperation(OperatorType.API)
     isolate_node_manager(monkeypatch, node_manager, {})
@@ -931,11 +1045,16 @@ async def run_claims_round(monkeypatch, round_number: int, steps: list[str] | No
         problems = []
         if not revoke.ok:
             problems.append(f"{label}: the revoke ended {revoke!r}")
-        if not foreign.refused_with(409):
+        if refusing and not foreign.refused_with(409):
             problems.append(f"{label}: another user submitting the held or rotated credential ended {foreign!r}")
-        if not save.ok and not save.refused_with(409):
+        if refusing and not save.ok and not save.refused_with(409):
             problems.append(f"{label}: the stale form save ended {save!r}")
-        if steps is not None:
+        if not refusing:
+            problems += replaced_submission_problems(label, {"save": save, "foreign": foreign}, ("save", "foreign"))
+        target_values = await target_values_ever(world, revoke)
+        problems += [f"{label}: {problem}" for problem in await peer_holding_problems(remote, world, target_values)]
+        problems += [f"{label}: {problem}" for problem in await kept_current_problems(world, revoke)]
+        if refusing and steps is not None:
             save_before_revoke = steps.index("save:write") < steps.index("revoke:write")
             if save.ok != save_before_revoke:
                 problems.append(
@@ -978,9 +1097,23 @@ def claims_plans() -> list[list[str] | None]:
     return plans
 
 
-async def test_a_revoke_racing_stale_and_foreign_submissions_of_the_old_credential_never_hands_it_out(monkeypatch):
+async def claims_failures(monkeypatch, refusing: bool) -> list[str]:
     quiet(monkeypatch)
     failures = []
     for round_number, steps in enumerate(claims_plans()):
-        failures += await run_claims_round(monkeypatch, round_number, steps)
+        failures += await run_claims_round(monkeypatch, round_number, steps, refusing)
+    return failures
+
+
+async def test_a_revoke_racing_stale_and_foreign_submissions_of_the_old_credential_never_hands_it_out(
+    monkeypatch, refuse_submitted_collisions
+):
+    failures = await claims_failures(monkeypatch, refusing=True)
+    assert failures == [], "\n".join(failures)
+
+
+async def test_a_revoke_racing_replaced_submissions_of_the_old_credential_keeps_it_retired_and_unshared(
+    monkeypatch, replace_submitted_collisions
+):
+    failures = await claims_failures(monkeypatch, refusing=False)
     assert failures == [], "\n".join(failures)
