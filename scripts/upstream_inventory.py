@@ -216,10 +216,28 @@ WORKFLOW_DIRECTORY = ".github/workflows"
 WORKFLOW_PLATFORMS_RE = re.compile(r"^\s*-?\s*platforms:\s*(.*)$")
 WORKFLOW_MATRIX_KEYS = ("goos", "goarch")
 WORKFLOW_MATRIX_KEY_RE = re.compile(r"""\bmatrix['"]?\s*:""")
-WORKFLOW_GOARCH_RE = re.compile(r"(?<![\w${.-])goarch(?:(=)|\s*:(?=\s|$))\s*(.*)$", re.IGNORECASE)
-WORKFLOW_SHELL_WORD_RE = re.compile(r"""\$\{\{.*?\}\}|"[^"]*"|'[^']*'|[^\s;&|)]*""")
-WORKFLOW_MATRIX_GOARCH_RE = re.compile(r"\$\{\{\s*matrix\.goarch\s*\}\}")
-WORKFLOW_PLATFORM_FLAG_RE = re.compile(r"--platforms?(?:=|\s+|$)(\S*)")
+WORKFLOW_GOARCH_RE = re.compile(
+    r"""(?<![\w$.-])(?<!\$\{)(["']?)goarch\1(?:(=)|\s*:(?=\s|$))\s*(.*)$""", re.IGNORECASE
+)
+WORKFLOW_GOARCH_BARE_RE = re.compile(
+    r"\b(?:for|read|export|readonly|declare|typeset|local)\b[^;&|]*?(?<![\w$.{-])goarch\b(?!\s*=)", re.IGNORECASE
+)
+WORKFLOW_FLOW_VALUE_RE = re.compile(r"""\s*(["']?)([^,}"'\s]*)\1\s*(?:[,}].*)?""")
+WORKFLOW_SHELL_WORD_RE = re.compile(r"""(?:\$\{\{.*?\}\}|\$\([^)]*\)|"[^"]*"|'[^']*'|[^\s;&|)"'])*""")
+WORKFLOW_EXPRESSION_RE = re.compile(r"\$\{\{.*?\}\}")
+WORKFLOW_MATRIX_GOARCH_RE = re.compile(r"\$\{\{\s*matrix\.goarch\s*\}\}", re.IGNORECASE)
+WORKFLOW_MATRIX_REFERENCE_RE = re.compile(r"""\bmatrix\s*(?:\.\s*([\w-]+)|\[\s*['"]([\w-]+)['"]\s*\])""", re.IGNORECASE)
+WORKFLOW_ARCH_CONTEXT_RE = re.compile(r"arch|platform|target", re.IGNORECASE)
+WORKFLOW_PLATFORM_FLAG_RE = re.compile(r"""--platforms?(?:=|\s+|$)("[^"]*"|'[^']*'|\S*)""")
+WORKFLOW_DEFAULT_PLATFORM_RE = re.compile(r"""\bDOCKER_DEFAULT_PLATFORM["']?\s*[:=]\s*("[^"]*"|'[^']*'|\S*)""")
+WORKFLOW_USES_RE = re.compile(r"""^(?:-\s+)?uses:\s*["']?([^\s"'@]+)""")
+WORKFLOW_UNREAD_TOOL_RE = re.compile(r"\b(?:goreleaser|bake-action|buildx\s+bake|gox|xgo)\b", re.IGNORECASE)
+WORKFLOW_EMULATOR_ACTIONS = frozenset({"docker/setup-qemu-action"})
+GOARCH_SELF_REFERENCES = frozenset({"$goarch", "${goarch}", "$(goarch)"})
+GOARCH_DOCKER_TARGET_REFERENCES = frozenset({"$targetarch", "${targetarch}"})
+DOCKER_BUILDER_PLATFORMS = frozenset({"$buildplatform", "${buildplatform}", "$targetplatform", "${targetplatform}"})
+MAKE_GOARCH_RE = re.compile(r"^(?:(?:export|override)\s+)*goarch\s*(?:::|[:?+!])?=\s*(.*)$", re.IGNORECASE)
+BUILD_TOOL_CONFIG_RE = re.compile(r"\.?goreleaser\.ya?ml|docker-bake(?:\.override)?\.(?:hcl|json)|\.?gox(?:\.json)?", re.IGNORECASE)
 GO_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
 GO_LINUX_TRUE_TERMS = frozenset({"linux", "unix"})
 GO_CONSTRAINT_RE = re.compile(r"^\s*//\s*(?:go:build|\+build)\b(.*)$", re.MULTILINE)
@@ -1597,7 +1615,7 @@ def workflow_mappings(children):
             raise ShippedArchesUnreadable(f"cannot read the matrix entry line {text!r}")
         if "${{" in value:
             raise ShippedArchesUnreadable(f"cannot read the matrix entry line {text!r}")
-        items[-1][key.strip()] = value.strip().strip("'\"").strip()
+        items[-1][key.strip().strip("'\"").lower()] = value.strip().strip("'\"").strip()
     return items
 
 
@@ -1608,11 +1626,18 @@ def workflow_lines(text):
         if not stripped or stripped.startswith("#"):
             continue
         cut = re.sub(r"\s+#.*$", "", raw).rstrip()
+        if lines and lines[-1][1].endswith("\\"):
+            lines[-1] = (lines[-1][0], f"{lines[-1][1][:-1].rstrip()} {cut.strip()}")
+            continue
         lines.append((len(cut) - len(cut.lstrip()), cut.strip()))
     return lines
 
 
-def matrix_linux_arches(block):
+def arch_tokens(text):
+    return {token for token in re.split(r"[^a-z0-9]+", text.lower()) if token in GO_FILENAME_ARCHES}
+
+
+def matrix_keys(block):
     if not block:
         raise ShippedArchesUnreadable("an empty matrix")
     child = block[0][0]
@@ -1628,10 +1653,19 @@ def matrix_linux_arches(block):
         end = index + 1
         while end < len(block) and (block[end][0] > child or block[end][1].startswith("- ")):
             end += 1
-        keys[key.strip()] = (value, block[index + 1 : end])
+        keys[key.strip().strip("'\"").lower()] = (value, block[index + 1 : end])
         index = end
+    return keys
+
+
+def matrix_linux_arches(block):
+    keys = matrix_keys(block)
     present = [key for key in WORKFLOW_MATRIX_KEYS if key in keys]
     combos = []
+    found = set()
+    for key, (value, children) in keys.items():
+        if key not in (*WORKFLOW_MATRIX_KEYS, "include", "exclude"):
+            found |= arch_tokens(" ".join([value, *(text for _, text in children)]))
     if present:
         if len(present) != len(WORKFLOW_MATRIX_KEYS):
             raise ShippedArchesUnreadable("a matrix with only one of goos and goarch")
@@ -1653,7 +1687,29 @@ def matrix_linux_arches(block):
                 raise ShippedArchesUnreadable(f"a matrix include without both goos and goarch: {entry}")
             if named:
                 combos.append({key: workflow_scalar(entry[key]) for key in WORKFLOW_MATRIX_KEYS})
-    return {combo["goarch"] for combo in combos if combo["goos"] == "linux"}
+            found |= arch_tokens(" ".join(value for key, value in entry.items() if key not in WORKFLOW_MATRIX_KEYS))
+    return found | {combo["goarch"] for combo in combos if combo["goos"] == "linux"}
+
+
+def matrix_values(block):
+    values = {}
+    for key, (value, children) in matrix_keys(block).items():
+        if key == "exclude":
+            continue
+        if key == "include":
+            for entry in workflow_mappings(children):
+                for name, item in entry.items():
+                    if values.get(name, []) is not None:
+                        values.setdefault(name, []).append(item)
+            continue
+        try:
+            items = workflow_values(value, children)
+        except ShippedArchesUnreadable:
+            values[key] = None
+            continue
+        if values.get(key, []) is not None:
+            values.setdefault(key, []).extend(items)
+    return values
 
 
 def workflow_platform_arches(value, line):
@@ -1670,13 +1726,31 @@ def workflow_platform_arches(value, line):
     return found
 
 
-def workflow_goarch_arches(line):
+def workflow_goarch_arches(line, passthrough=GOARCH_SELF_REFERENCES):
+    if WORKFLOW_GOARCH_BARE_RE.search(line):
+        raise ShippedArchesUnreadable(f"cannot read the GOARCH on the line {line!r}")
     found = set()
     for match in WORKFLOW_GOARCH_RE.finditer(line):
-        rest = match.group(2)
-        value = WORKFLOW_SHELL_WORD_RE.match(rest).group(0) if match.group(1) else rest
-        value = value.strip().strip("'\"").strip()
-        if WORKFLOW_MATRIX_GOARCH_RE.fullmatch(value):
+        rest = match.group(3)
+        prefix = WORKFLOW_EXPRESSION_RE.sub("", line[: match.start()])
+        quote = next((mark for mark in "\"'" if prefix.count(mark) % 2), None)
+        if match.group(2) and quote:
+            value, closed, _ = rest.partition(quote)
+            if not closed:
+                raise ShippedArchesUnreadable(f"cannot read the GOARCH on the line {line!r}")
+        elif match.group(2):
+            value = WORKFLOW_SHELL_WORD_RE.match(rest).group(0)
+        elif prefix.count("{") > prefix.count("}"):
+            flow = WORKFLOW_FLOW_VALUE_RE.fullmatch(rest)
+            if not flow:
+                raise ShippedArchesUnreadable(f"cannot read the flow mapping on the line {line!r}")
+            value = flow.group(2)
+        else:
+            value = rest
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1].strip()
+        if WORKFLOW_MATRIX_GOARCH_RE.fullmatch(value) or value.lower() in passthrough:
             continue
         if not re.fullmatch(r"[a-z0-9]+", value):
             raise ShippedArchesUnreadable(f"cannot read the GOARCH on the line {line!r}")
@@ -1684,19 +1758,47 @@ def workflow_goarch_arches(line):
     return found
 
 
+def workflow_matrix_references(line, values):
+    context = WORKFLOW_EXPRESSION_RE.sub("", line)
+    for match in WORKFLOW_MATRIX_REFERENCE_RE.finditer(line):
+        key = (match.group(1) or match.group(2)).lower()
+        if key == "goarch" or not (WORKFLOW_ARCH_CONTEXT_RE.search(context) or WORKFLOW_ARCH_CONTEXT_RE.search(key)):
+            continue
+        items = values.get(key)
+        if not items or not all(item.lower() in GO_FILENAME_ARCHES for item in items):
+            raise ShippedArchesUnreadable(f"cannot read the arches behind matrix.{key} on the line {line!r}")
+
+
+def workflow_step_action(lines, index):
+    indent = lines[index][0]
+    start = index - 1
+    while start >= 0 and not (lines[start][0] < indent and lines[start][1].startswith("- ")):
+        start -= 1
+    if start < 0:
+        return ""
+    end = start + 1
+    while end < len(lines) and lines[end][0] > lines[start][0]:
+        end += 1
+    for _, text in lines[start:end]:
+        uses = WORKFLOW_USES_RE.match(text)
+        if uses:
+            return uses.group(1).lower()
+    return ""
+
+
+def workflow_block_text(lines, index):
+    end = index + 1
+    while end < len(lines) and lines[end][0] > lines[index][0]:
+        end += 1
+    return ",".join(text for _, text in lines[index + 1 : end])
+
+
 def workflow_linux_arches(text):
     lines = workflow_lines(text)
     found = set()
     in_matrix = set()
+    values = {}
     for index, (indent, line) in enumerate(lines):
-        platforms = WORKFLOW_PLATFORMS_RE.match(line)
-        if platforms:
-            found |= workflow_platform_arches(platforms.group(1), line)
-            continue
-        if index not in in_matrix:
-            found |= workflow_goarch_arches(line)
-            for flag in WORKFLOW_PLATFORM_FLAG_RE.finditer(line):
-                found |= workflow_platform_arches(flag.group(1), line)
         key, colon, value = line.partition(":")
         if key.strip() != "matrix" or not colon:
             if WORKFLOW_MATRIX_KEY_RE.search(line):
@@ -1709,15 +1811,72 @@ def workflow_linux_arches(text):
             end += 1
         in_matrix.update(range(index + 1, end))
         block = lines[index + 1 : end]
-        if any(text.partition(":")[0].strip().lstrip("- ") in WORKFLOW_MATRIX_KEYS for _, text in block):
-            found |= matrix_linux_arches(block)
+        found |= matrix_linux_arches(block)
+        for name, items in matrix_values(block).items():
+            values[name] = None if items is None or values.get(name, []) is None else values.get(name, []) + items
+    for index, (indent, line) in enumerate(lines):
+        if index in in_matrix:
+            continue
+        if WORKFLOW_UNREAD_TOOL_RE.search(line):
+            raise ShippedArchesUnreadable(f"the line {line!r} builds with a tool whose config the gate does not read")
+        platforms = WORKFLOW_PLATFORMS_RE.match(line)
+        if platforms:
+            if workflow_step_action(lines, index) in WORKFLOW_EMULATOR_ACTIONS:
+                continue
+            value = platforms.group(1).strip()
+            if value in ("|", "|-", "|+", ">", ">-", ">+"):
+                value = workflow_block_text(lines, index)
+            found |= workflow_platform_arches(value, line)
+            continue
+        found |= workflow_goarch_arches(line)
+        for flag in WORKFLOW_PLATFORM_FLAG_RE.finditer(line):
+            found |= workflow_platform_arches(flag.group(1), line)
+        for flag in WORKFLOW_DEFAULT_PLATFORM_RE.finditer(line):
+            found |= workflow_platform_arches(flag.group(1), line)
+        workflow_matrix_references(line, values)
     return frozenset(found)
+
+
+def build_file_linux_arches(text):
+    found = set()
+    for indent, line in workflow_lines(text):
+        if WORKFLOW_UNREAD_TOOL_RE.search(line):
+            raise ShippedArchesUnreadable(f"the line {line!r} builds with a tool whose config the gate does not read")
+        make = MAKE_GOARCH_RE.match(line) if not indent else None
+        if make:
+            value = make.group(1).strip().strip("'\"").strip()
+            if value.lower() in GOARCH_SELF_REFERENCES:
+                continue
+            if not re.fullmatch(r"[a-z0-9]+", value):
+                raise ShippedArchesUnreadable(f"cannot read the GOARCH on the line {line!r}")
+            found.add(value)
+            continue
+        found |= workflow_goarch_arches(line, GOARCH_SELF_REFERENCES | GOARCH_DOCKER_TARGET_REFERENCES)
+        for flag in WORKFLOW_PLATFORM_FLAG_RE.finditer(line):
+            if flag.group(1).strip("'\"").lower() in DOCKER_BUILDER_PLATFORMS:
+                continue
+            found |= workflow_platform_arches(flag.group(1), line)
+    return found
+
+
+def shipped_linux_arch_source(path):
+    name = path.rsplit("/", 1)[-1]
+    if BUILD_TOOL_CONFIG_RE.fullmatch(name):
+        raise ShippedArchesUnreadable(f"{path} is a build config the gate does not read")
+    folder = path.rsplit("/", 1)[0] if "/" in path else ""
+    if folder == WORKFLOW_DIRECTORY and name.endswith((".yml", ".yaml")):
+        return workflow_linux_arches
+    if path.startswith(".github/actions/") and name in ("action.yml", "action.yaml"):
+        return workflow_linux_arches
+    if not folder and (name == "Makefile" or name.startswith("Dockerfile")):
+        return build_file_linux_arches
+    return None
 
 
 @functools.lru_cache(maxsize=16)
 def shipped_linux_arches(ref):
     listing = subprocess.run(
-        ["git", "ls-tree", "--name-only", f"{ref}:{WORKFLOW_DIRECTORY}"],
+        ["git", "ls-tree", "-r", "--name-only", ref],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -1727,12 +1886,14 @@ def shipped_linux_arches(ref):
     found = set(GO_SHIPPED_ARCHES)
     if listing.returncode != 0:
         return frozenset(found)
-    for name in listing.stdout.split("\n"):
-        if name.endswith((".yml", ".yaml")):
-            content = head_blob(ref, f"{WORKFLOW_DIRECTORY}/{name}")
-            if content is None:
-                raise ShippedArchesUnreadable(f"cannot read {WORKFLOW_DIRECTORY}/{name}")
-            found |= workflow_linux_arches(content)
+    for path in listing.stdout.split("\n"):
+        reader = shipped_linux_arch_source(path) if path else None
+        if reader is None:
+            continue
+        content = head_blob(ref, path)
+        if content is None:
+            raise ShippedArchesUnreadable(f"cannot read {path}")
+        found |= reader(content)
     return frozenset(found)
 
 
@@ -1802,7 +1963,7 @@ def moved_hunk_problem(ident, why, target, head, upstream_sha, hunks, carriers):
     try:
         arches = shipped_linux_arches(head)
     except ShippedArchesUnreadable as error:
-        return f"{label}, but the shipped linux arch set on {head} cannot be read from its workflows: {error}"
+        return f"{label}, but the shipped linux arch set on {head} cannot be read from its workflows and build files: {error}"
     if content is None or go_build_excluded(target, content, go_module_minor(head, target), arches):
         return f"{label}, but {target} is excluded from the build on {head}"
     return None
