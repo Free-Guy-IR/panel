@@ -18,7 +18,19 @@ jobs:
         runs-on: ubuntu-latest
         timeout-minutes: 60
         steps:
-            - uses: actions/checkout@v7
+            - name: Checkout
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+              with:
+                  fetch-depth: 0
+                  persist-credentials: false
+
+            - name: Fetch the upstream branches and tags by name
+              run: |
+                  set -euo pipefail
+                  git fetch --no-tags https://github.com/PasarGuard/panel.git "+refs/heads/*:refs/remotes/upstream/*"
+                  git fetch --no-tags https://github.com/PasarGuard/panel.git "+refs/tags/*:refs/upstream-tags/*"
+                  echo "upstream branches: $(git for-each-ref refs/remotes/upstream | wc -l), tags: $(git for-each-ref refs/upstream-tags | wc -l)"
+
             - uses: actions/setup-python@v7
               with:
                   python-version: "3.14"
@@ -58,7 +70,19 @@ jobs:
                     --health-timeout=5s
                     --health-retries=5
         steps:
-            - uses: actions/checkout@v7
+            - name: Checkout
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+              with:
+                  fetch-depth: 0
+                  persist-credentials: false
+
+            - name: Fetch the upstream branches and tags by name
+              run: |
+                  set -euo pipefail
+                  git fetch --no-tags https://github.com/PasarGuard/panel.git "+refs/heads/*:refs/remotes/upstream/*"
+                  git fetch --no-tags https://github.com/PasarGuard/panel.git "+refs/tags/*:refs/upstream-tags/*"
+                  echo "upstream branches: $(git for-each-ref refs/remotes/upstream | wc -l), tags: $(git for-each-ref refs/upstream-tags | wc -l)"
+
             - uses: actions/setup-python@v7
               with:
                   python-version: "3.14"
@@ -100,7 +124,19 @@ jobs:
                     --health-timeout=5s
                     --health-retries=5
         steps:
-            - uses: actions/checkout@v7
+            - name: Checkout
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+              with:
+                  fetch-depth: 0
+                  persist-credentials: false
+
+            - name: Fetch the upstream branches and tags by name
+              run: |
+                  set -euo pipefail
+                  git fetch --no-tags https://github.com/PasarGuard/panel.git "+refs/heads/*:refs/remotes/upstream/*"
+                  git fetch --no-tags https://github.com/PasarGuard/panel.git "+refs/tags/*:refs/upstream-tags/*"
+                  echo "upstream branches: $(git for-each-ref refs/remotes/upstream | wc -l), tags: $(git for-each-ref refs/upstream-tags | wc -l)"
+
             - uses: actions/setup-python@v7
               with:
                   python-version: "3.14"
@@ -178,7 +214,19 @@ jobs:
                     --health-timeout=5s
                     --health-retries=5
         steps:
-            - uses: actions/checkout@v7
+            - name: Checkout
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+              with:
+                  fetch-depth: 0
+                  persist-credentials: false
+
+            - name: Fetch the upstream branches and tags by name
+              run: |
+                  set -euo pipefail
+                  git fetch --no-tags https://github.com/PasarGuard/panel.git "+refs/heads/*:refs/remotes/upstream/*"
+                  git fetch --no-tags https://github.com/PasarGuard/panel.git "+refs/tags/*:refs/upstream-tags/*"
+                  echo "upstream branches: $(git for-each-ref refs/remotes/upstream | wc -l), tags: $(git for-each-ref refs/upstream-tags | wc -l)"
+
             - uses: actions/setup-python@v7
               with:
                   python-version: "3.14"
@@ -221,7 +269,19 @@ jobs:
                     --health-timeout=5s
                     --health-retries=5
         steps:
-            - uses: actions/checkout@v7
+            - name: Checkout
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+              with:
+                  fetch-depth: 0
+                  persist-credentials: false
+
+            - name: Fetch the upstream branches and tags by name
+              run: |
+                  set -euo pipefail
+                  git fetch --no-tags https://github.com/PasarGuard/panel.git "+refs/heads/*:refs/remotes/upstream/*"
+                  git fetch --no-tags https://github.com/PasarGuard/panel.git "+refs/tags/*:refs/upstream-tags/*"
+                  echo "upstream branches: $(git for-each-ref refs/remotes/upstream | wc -l), tags: $(git for-each-ref refs/upstream-tags | wc -l)"
+
             - uses: actions/setup-python@v7
               with:
                   python-version: "3.14"

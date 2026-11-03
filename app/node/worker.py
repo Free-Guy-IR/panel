@@ -12,6 +12,7 @@ from app.core.manager import core_manager
 from app.db import GetDB
 from app.db.crud.node import get_node_by_id, get_nodes
 from app.db.models import NodeStatus
+from app.fork.operation.node_messages import describe_error, scrub_credentials
 from app.models.node import NodeCoreUpdate, NodeGeoFilesUpdate, NodeListQuery
 from app.nats.proto_utils import deserialize_proto_message, deserialize_proto_messages
 from app.nats.rpc_service import BaseRpcService
@@ -109,8 +110,8 @@ class NodeWorkerService(BaseRpcService):
         async with self._command_semaphore:
             try:
                 await self._dispatch_command(action, data)
-            except Exception:
-                logger.exception(f"Node command failed: {action}")
+            except Exception as exc:
+                logger.error("Node command failed: %s: %s", action, describe_error(exc))
 
     async def _run_rpc(self, msg, action: str | None, data: dict):
         async with self._rpc_semaphore:
@@ -327,13 +328,13 @@ class NodeWorkerService(BaseRpcService):
                             # log_task completed successfully
                             item = log_task.result()
                             if isinstance(item, NodeAPIError):
-                                await self._nc.publish(log_subject, f"Error: {item}".encode())
+                                await self._nc.publish(log_subject, f"Error: {scrub_credentials(item)}".encode())
                                 break
                             await self._nc.publish(log_subject, str(item).encode())
             except asyncio.CancelledError:
                 pass
             except Exception as exc:
-                await self._nc.publish(log_subject, f"Error: {exc}".encode())
+                await self._nc.publish(log_subject, f"Error: {scrub_credentials(exc)}".encode())
             finally:
                 with contextlib.suppress(Exception):
                     await stop_sub.unsubscribe()

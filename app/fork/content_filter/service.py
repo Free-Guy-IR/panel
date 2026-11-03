@@ -38,6 +38,7 @@ from app.fork.content_filter.rules import (
 from app.fork.content_filter.schemas import CapabilityReport, InboundCapability, NodeCapability
 from app.fork.models.content_filter import ContentFilterAssignment, ContentFilterSniffingOverride
 from app.fork.models.node_additional_cores import node_additional_cores_association
+from app.fork.operation.node_messages import scrub_credentials
 from app.node import node_manager
 from app.utils.logger import get_logger
 
@@ -1156,7 +1157,7 @@ async def probe(node_id: int, inbound_tag: str, domain: str) -> str:
     except NodeAPIError as exc:
         if UNMATCHED_MARKER in (exc.detail or ""):
             return "unmatched"
-        return f"error:{exc.detail}"
+        return f"error:{scrub_credentials(exc.detail)}"
     return result.outbound_tag if result else "unmatched"
 
 
@@ -1222,7 +1223,7 @@ async def _rebuild_cores(
 
 async def _record(db: AsyncSession, assignment: ContentFilterAssignment, enforced: bool, problems: list[str]) -> None:
     assignment.enforced = enforced
-    assignment.last_error = "; ".join(problems)[:1024] if problems else None
+    assignment.last_error = scrub_credentials("; ".join(problems))[:1024] if problems else None
     assignment.last_checked_at = dt.now(UTC)
     await db.commit()
 

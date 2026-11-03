@@ -6,6 +6,7 @@ import click
 from uvicorn.config import LOGGING_CONFIG
 from uvicorn.logging import AccessFormatter, ColourizedFormatter, DefaultFormatter
 
+from app.fork.log_scrub import scrub_credentials_at_every_handler, scrub_credentials_in_config
 from config import database_settings, logging_settings
 
 
@@ -94,6 +95,9 @@ if logging_settings.save_to_file:
     LOGGING_CONFIG["loggers"]["uvicorn"]["handlers"].append("file")
     LOGGING_CONFIG["loggers"]["uvicorn.access"]["handlers"].append("file")
 
+scrub_credentials_in_config(LOGGING_CONFIG)
+scrub_credentials_at_every_handler()
+
 
 def get_logger(name: str = "uvicorn.error") -> logging.Logger:
     if not LOGGING_CONFIG["loggers"].get(name):
@@ -105,6 +109,7 @@ def get_logger(name: str = "uvicorn.error") -> logging.Logger:
             "level": LOGGING_CONFIG["loggers"]["uvicorn"]["level"],
         }
         logging.config.dictConfig(LOGGING_CONFIG)
+        scrub_credentials_at_every_handler()
 
     logger = logging.getLogger(name)
     return logger

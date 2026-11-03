@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import ErrorEvent
 from pydantic import ValidationError
 
+from app.fork.operation.node_messages import scrub_credentials
 from app.utils.helpers import format_validation_error
 
 router = Router(name="error_handler")
@@ -29,6 +30,7 @@ async def handle_exception(event: ErrorEvent, state: FSMContext = None):
     else:
         error += str(event.exception)
 
+    error = scrub_credentials(error)
     if update.message:
         msg = await update.message.answer(error)
         if state:

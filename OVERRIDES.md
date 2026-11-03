@@ -291,3 +291,13 @@ real boundary, and each one still needs its own justification or a revert.
 - `tests/api/test_bulk_entity_actions.py` — 1 line, reason not recorded
 - `tests/api/test_core.py` — 1 line, reason not recorded
 - `tests/test_record_usages.py` — the session fixture also patches GetDB in app/fork/jobs/usage_limits.py so the same-tick limit reads the test database, the two chart-writer tests are rewritten for the single-transaction cohort write, and the scheduler-defaults pin also asserts misfire_grace_time 30 (v5.34.26)
+
+## Credential redaction at the orphan sinks (r10/redaction-orphans)
+
+`app/fork/operation/node_messages.py` is a fork-only module, brought from 60bd391cc and 67d7961af. `scrub_credentials` masks URL userinfo, a BasicAuth repr, an address cut before its `@`, and a Telegram bot token in a `/bot<token>` path, in linear time. The upstream files below call it, or log upstream's own text, so no proxy password, webhook URL or bot token reaches a log, a reply or a served value:
+- `app/jobs/send_notifications.py`, `app/notification/client.py` — f6e23b33e: upstream eb30578050's log text (HTTP status, connection error or timeout, discarding malformed or unknown notification); no URL, body or exception text
+- `app/models/node.py` — `NodeResponse.message` is scrubbed when served, so an error stored before the scrub is never returned
+- `app/telegram/handlers/error_handler.py`, `app/telegram/handlers/admin/user.py` — error replies are scrubbed
+- `app/jobs/node_checker.py`, `app/node/worker.py` — node loop and node command errors log only scrubbed text, without the traceback; streamed log errors are scrubbed before they are published
+- `app/utils/logger.py` — `app/fork/log_scrub.py` chains the log record factory, so every record is scrubbed once where it is created, whatever handler prints it (a late handler, `basicConfig(force=True)`, `dictConfig`, a queue listener); `logging.Formatter.formatException` output is scrubbed for formatters that render a traceback themselves
+- Known limit: a bare bot token whose id has fewer than 6 digits is not masked. Telegram bot ids are 8 to 10 digits, and masking shorter ids would also mask ordinary `N:<long id>` text. A password after a colon that is one lowercase word (`password: required`) is kept, so an all-lowercase-letter password after a colon is not masked; `password=`, a quoted value and any value with a digit, capital or symbol are masked

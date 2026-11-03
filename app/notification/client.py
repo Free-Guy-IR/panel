@@ -3,6 +3,7 @@ from contextlib import suppress
 from typing import Any
 
 import aiohttp
+from pydantic import ValidationError
 
 from app import on_startup
 from app.models.settings import NotificationSettings
@@ -63,11 +64,14 @@ async def _send_discord_webhook_direct(json_data, webhook, max_retries: int) -> 
                     await asyncio.sleep(retry_after)
                     continue
             else:
-                response_text = await response.text()
-                logger.error(f"Discord webhook failed: {response.status} - {response_text}")
+                response.release()
+                logger.warning("Notification delivery failed with HTTP %s", response.status)
                 return False
+        except aiohttp.ClientError, TimeoutError:
+            logger.warning("Notification delivery failed due to a connection error or timeout")
+            return False
         except Exception as err:
-            logger.error(f"Discord webhook failed Exception: {err!s}")
+            logger.warning("Notification delivery failed: %s", type(err).__name__)
             return False
 
     logger.error(f"Discord webhook failed after {max_retries} retries")
@@ -124,11 +128,14 @@ async def _send_telegram_message_direct(
                     await asyncio.sleep(retry_after)
                     continue
             else:
-                response_text = await response.text()
-                logger.error(f"Telegram message failed: {response.status} - {response_text}")
+                response.release()
+                logger.warning("Notification delivery failed with HTTP %s", response.status)
                 return False
+        except aiohttp.ClientError, TimeoutError:
+            logger.warning("Notification delivery failed due to a connection error or timeout")
+            return False
         except Exception as err:
-            logger.error(f"Telegram message failed: {err!s}")
+            logger.warning("Notification delivery failed: %s", type(err).__name__)
             return False
 
     logger.error(f"Telegram message failed after {max_retries} retries")
@@ -191,9 +198,11 @@ async def process_notification(item: dict | None):
                 notification = TelegramNotification(**item)
                 await _process_telegram_notification(notification)
             case _:
-                logger.warning(f"Unknown notification type received: {item}")
+                logger.warning("Discarding unknown notification type")
+    except ValidationError:
+        logger.error("Discarding malformed notification")
     except Exception as err:
-        logger.error(f"Failed to process notification: {err}")
+        logger.error("Failed to process notification: %s", type(err).__name__)
 
 
 async def process_queued_notification(queue: NotificationQueue, item: dict) -> None:
