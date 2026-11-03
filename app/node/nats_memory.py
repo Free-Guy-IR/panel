@@ -838,7 +838,7 @@ class NatsNodeLifecycleCoordinator:
                 await cas_retry_backoff()
         logger.warning("Lifecycle release CAS exhausted for node_id=%s key=%s", lease.node_id, key)
 
-    async def heartbeat(self, lease: LifecycleLease) -> bool:
+    async def heartbeat(self, lease: LifecycleLease) -> bool | None:
         key = self._key(lease.node_id)
         for attempt in range(32):
             now = time.time()
@@ -855,7 +855,7 @@ class NatsNodeLifecycleCoordinator:
             if attempt < 31:
                 await cas_retry_backoff()
         logger.warning("Lifecycle heartbeat CAS exhausted for node_id=%s key=%s", lease.node_id, key)
-        return False
+        return None
 
     async def get_state(self, node_id: str) -> NodeLifecycleState | None:
         doc, _ = await kv_get_json(self._kv, self._key(node_id))

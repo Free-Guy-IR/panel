@@ -2,7 +2,7 @@ import PasarGuardNodeBridge
 from packaging.version import InvalidVersion, Version
 from PasarGuardNodeBridge import controller, grpclib, log_stream, storage
 
-MINIMUM_BRIDGE_VERSION = Version("0.9.2")
+MINIMUM_BRIDGE_VERSION = Version("0.9.2+singbox.2")
 REQUIRED_BRIDGE_API = (
     (controller.Controller, "_deliver_claimed_users"),
     (controller.Controller, "full_sync_fence"),
@@ -24,15 +24,15 @@ def require_reliable_bridge() -> None:
     if missing:
         raise RuntimeError(
             "The installed PasarGuardNodeBridge lacks the reliable user sync this panel needs "
-            f"(missing {', '.join(missing)}); install bridge {MINIMUM_BRIDGE_VERSION}+singbox or newer"
+            f"(missing {', '.join(missing)}); install bridge {MINIMUM_BRIDGE_VERSION} or newer"
         )
     reported = getattr(PasarGuardNodeBridge, "__version__", "")
     try:
         version = Version(reported)
     except InvalidVersion:
         version = None
-    if version is None or Version(version.public) < MINIMUM_BRIDGE_VERSION:
+    if version is None or version < MINIMUM_BRIDGE_VERSION:
         raise RuntimeError(
             f"The installed PasarGuardNodeBridge reports version {reported!r}; this panel needs "
-            f"{MINIMUM_BRIDGE_VERSION}+singbox or newer"
+            f"{MINIMUM_BRIDGE_VERSION} or newer"
         )
