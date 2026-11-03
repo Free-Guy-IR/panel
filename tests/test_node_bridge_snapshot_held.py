@@ -95,8 +95,8 @@ class World:
     async def snapshot_users(self):
         return [service.User(email=email, inbounds=[inbound]) for email, inbound in sorted(self.database.items())]
 
-    async def full_sync(self):
-        return await self.manager.sync_full(NODE_KEY, self.snapshot_users, flush_pending=True)
+    async def full_sync(self, flush_pending=True):
+        return await self.manager.sync_full(NODE_KEY, self.snapshot_users, flush_pending=flush_pending)
 
     async def reject_and_hold(self):
         for email, inbound in ACCEPTED.items():
@@ -158,9 +158,10 @@ async def snapshot_world(monkeypatch, store, retry_delays):
         await server.wait_closed()
 
 
+@pytest.mark.parametrize("flush_pending", [True, False])
 @pytest.mark.parametrize("make_store", [memory_store, nats_store])
-async def test_a_snapshot_taken_while_rejected_users_are_held_retires_their_retries_and_sends_nothing_stale(
-    monkeypatch, make_store
+async def test_a_snapshot_taken_while_rejected_users_are_held_retires_their_retries(
+    monkeypatch, make_store, flush_pending
 ):
     async with snapshot_world(monkeypatch, make_store(), (60.0, 60.0, 60.0)) as world:
         await world.reject_and_hold()
@@ -170,7 +171,7 @@ async def test_a_snapshot_taken_while_rejected_users_are_held_retires_their_retr
         for email in REJECTED:
             world.database[email] = f"{email}-ok"
 
-        assert await world.full_sync() is world.node
+        assert await world.full_sync(flush_pending) is world.node
 
         expected = {
             **{email: [inbound] for email, inbound in ACCEPTED.items()},
