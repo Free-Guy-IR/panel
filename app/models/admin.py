@@ -136,6 +136,7 @@ class AdminDetails(AdminContactInfo):
     # Id of the custom-permission API key the request authenticated with. `role.permissions` then holds that
     # key's permissions, not the admin's. Never serialized.
     _custom_api_key_id: int | None = PrivateAttr(default=None)
+    _api_key_id: int | None = PrivateAttr(default=None)
 
     @property
     def is_owner(self) -> bool:
@@ -144,6 +145,10 @@ class AdminDetails(AdminContactInfo):
     @property
     def custom_api_key_id(self) -> int | None:
         return self._custom_api_key_id
+
+    @property
+    def api_key_id(self) -> int | None:
+        return self._api_key_id
 
     @computed_field
     @property

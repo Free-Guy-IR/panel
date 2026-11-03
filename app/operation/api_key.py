@@ -184,7 +184,8 @@ class APIKeyOperation(BaseOperation):
         permissions_changed = (
             model.permissions is not None or model.inherit_permissions is not None or target_admin_id != db_key.admin_id
         )
-        check_custom_permissions = not final_inherit and permissions_changed
+        caller_is_sibling_key = admin.custom_api_key_id is not None and db_key.id != admin.custom_api_key_id
+        check_custom_permissions = not final_inherit and (permissions_changed or caller_is_sibling_key)
 
         if final_inherit and admin.custom_api_key_id is not None:
             await self.raise_error(message=_CUSTOM_KEY_INHERIT_DENIED, code=403, db=db)
