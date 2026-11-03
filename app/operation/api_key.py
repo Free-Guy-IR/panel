@@ -174,7 +174,7 @@ class APIKeyOperation(BaseOperation):
 
         target_admin_id = model.admin_id or db_key.admin_id
         if target_admin_id != db_key.admin_id and not admin.is_owner:
-            await self.raise_error(message="Only the owner can assign API keys to another admin", code=403)
+            await self.raise_error(message="Only the owner can assign API keys to another admin", code=403, db=db)
 
         # Validate the key's resulting state, not just the fields in this request: permissions sent
         # while the key inherits, or a later switch to custom permissions without new ones, must not
@@ -186,7 +186,7 @@ class APIKeyOperation(BaseOperation):
         check_custom_permissions = not final_inherit and permissions_changed
 
         if final_inherit and admin.custom_api_key_id is not None:
-            await self.raise_error(message=_CUSTOM_KEY_INHERIT_DENIED, code=403)
+            await self.raise_error(message=_CUSTOM_KEY_INHERIT_DENIED, code=403, db=db)
 
         target_admin = None
         if target_admin_id != db_key.admin_id or check_custom_permissions:
@@ -194,14 +194,14 @@ class APIKeyOperation(BaseOperation):
                 db, target_admin_id, load_users=False, load_usage_logs=False, load_role=True
             )
             if target_db_admin is None:
-                await self.raise_error(message="Target admin not found", code=404)
+                await self.raise_error(message="Target admin not found", code=404, db=db)
             target_admin = build_admin_details(target_db_admin)
 
         next_name = model.name if model.name is not None else db_key.name
         if next_name != db_key.name or target_admin_id != db_key.admin_id:
             duplicates, _ = await get_api_keys(db, admin_id=target_admin_id, offset=0, limit=1, name=next_name)
             if any(duplicate.id != db_key.id for duplicate in duplicates):
-                await self.raise_error(message="API key name already exists", code=409)
+                await self.raise_error(message="API key name already exists", code=409, db=db)
 
         if check_custom_permissions:
             final_permissions = (
@@ -213,7 +213,7 @@ class APIKeyOperation(BaseOperation):
                 _check_permissions_not_exceed_admin(admin, final_permissions)
                 _check_permissions_not_exceed_admin(target_admin, final_permissions)
             except ValueError as exc:
-                await self.raise_error(message=str(exc), code=403)
+                await self.raise_error(message=str(exc), code=403, db=db)
 
         update_data = model.model_dump(exclude_unset=True)
         if update_data.get("admin_id") is None:
@@ -236,7 +236,9 @@ class APIKeyOperation(BaseOperation):
 
         return api_key_resp
 
-    async def _ensure_rotation_within_custom_key(self, db: AsyncSession, admin: AdminDetails, db_key: APIKey) -> None:
+    async def _ensure_caller_may_rotate(self, db: AsyncSession, admin: AdminDetails, db_key: APIKey) -> None:
+        if not admin.is_owner and db_key.admin_id != admin.id:
+            await self.raise_error(message="Permission denied", code=403, db=db)
         if admin.custom_api_key_id is None or db_key.id == admin.custom_api_key_id:
             return
         if db_key.inherit_permissions:
@@ -251,15 +253,12 @@ class APIKeyOperation(BaseOperation):
         if db_key is None:
             await self.raise_error(message="API key not found", code=404, db=db)
 
-        if not admin.is_owner and db_key.admin_id != admin.id:
-            await self.raise_error(message="Permission denied", code=403, db=db)
-
         # Rotating returns the key's new secret, so a custom-permission key may only rotate itself or
         # keys that stay within its own permissions.
-        await self._ensure_rotation_within_custom_key(db, admin, db_key)
+        await self._ensure_caller_may_rotate(db, admin, db_key)
 
         raw_key, db_key = await revoke_api_key_crud(db, db_key)
-        await self._ensure_rotation_within_custom_key(db, admin, db_key)
+        await self._ensure_caller_may_rotate(db, admin, db_key)
         await db.commit()
 
         api_key_resp = APIKeyResponse.model_validate(db_key)

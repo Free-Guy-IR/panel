@@ -48,10 +48,12 @@ def scoped_admin(access_token):
     assert role.status_code == status.HTTP_201_CREATED, role.text
     role_id = role.json()["id"]
     admin = create_admin(access_token, role_id=role_id)
+    other = create_admin(access_token, role_id=role_id)
     try:
-        yield _login(admin["username"], admin["password"])
+        yield {"token": _login(admin["username"], admin["password"]), "other_id": other["id"]}
     finally:
         delete_admin(access_token, admin["username"])
+        delete_admin(access_token, other["username"])
         client.delete(f"/api/admin-role/{role_id}", headers=auth_headers(access_token))
 
 
@@ -78,12 +80,14 @@ def _authenticates(raw_key: str) -> bool:
 @pytest.mark.skipif(":memory:" in DATABASE_URL, reason="needs a database shared by several connections")
 @pytest.mark.parametrize(
     "change",
-    [{"permissions": {"users": {"read": SCOPE_ALL}}}, {"inherit_permissions": True}],
-    ids=["widened", "inheriting"],
+    [{"permissions": {"users": {"read": SCOPE_ALL}}}, {"inherit_permissions": True}, {"admin_id": None}],
+    ids=["widened", "inheriting", "moved"],
 )
 def test_a_custom_key_rotation_is_decided_on_the_row_it_rotates(access_token, scoped_admin, monkeypatch, change):
-    _, rotator_raw = _key(scoped_admin, ROTATOR)
-    target_id, target_raw = _key(scoped_admin, NARROW)
+    if "admin_id" in change:
+        change = {"admin_id": scoped_admin["other_id"]}
+    _, rotator_raw = _key(scoped_admin["token"], ROTATOR)
+    target_id, target_raw = _key(scoped_admin["token"], NARROW)
     operation = APIKeyOperation(operator_type=OperatorType.API)
     rotate = api_key_operation_module.revoke_api_key_crud
 
@@ -129,9 +133,9 @@ def test_a_custom_key_rotation_is_decided_on_the_row_it_rotates(access_token, sc
             revoked, _ = await asyncio.gather(_revoke(), _owner_change())
         finally:
             await engine.dispose()
-        return revoked, order
+        return revoked, order, rotator
 
-    revoked, order = asyncio.run(_scenario())
+    revoked, order, rotator = asyncio.run(_scenario())
 
     if order == ["change", "rotate"]:
         assert isinstance(revoked, HTTPException), revoked.permissions.model_dump(exclude_none=True)
@@ -142,6 +146,7 @@ def test_a_custom_key_rotation_is_decided_on_the_row_it_rotates(access_token, sc
         assert not isinstance(revoked, HTTPException), revoked.detail
         assert revoked.inherit_permissions is False
         assert revoked.permissions.model_dump(exclude_none=True) == NARROW
+        assert revoked.admin_id == rotator.id
         assert not _authenticates(target_raw)
     stored = client.get(f"/api/api_key/{target_id}", headers=auth_headers(access_token)).json()
     for field, value in change.items():
