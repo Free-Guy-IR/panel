@@ -12,7 +12,8 @@ from alembic import context
 from app.db.base import Base
 import app.db.models
 from app.db.compiles_types import SqliteCompatibleBigInteger, WebAuthnBinary, WebAuthnChallenge, WebAuthnCredentialId
-from app.fork.migration_guards import SqliteIdHighWater, migration_url
+from app.fork.db_rollback import ROLLBACK_FLAG
+from app.fork.migration_guards import SqliteIdHighWater, migration_url, repair_interrupted_mysql_steps
 from config import database_settings
 
 # this is the Alembic Config object, which provides
@@ -137,6 +138,12 @@ def do_run_migrations(connection: Connection) -> None:
     with context.begin_transaction():
         for guard in guards:
             guard.prime(connection)
+        repair_interrupted_mysql_steps(
+            connection,
+            context.script,
+            context.get_context().get_current_heads(),
+            rolling_back=bool(config.attributes.get(ROLLBACK_FLAG)),
+        )
         context.run_migrations()
 
 
