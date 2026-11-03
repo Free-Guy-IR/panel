@@ -12,6 +12,7 @@ from alembic import context
 from app.db.base import Base
 import app.db.models
 from app.db.compiles_types import SqliteCompatibleBigInteger, WebAuthnBinary, WebAuthnChallenge, WebAuthnCredentialId
+from app.fork.migration_guards import SqliteIdHighWater
 from config import database_settings
 
 # this is the Alembic Config object, which provides
@@ -121,6 +122,7 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
+    guards = [SqliteIdHighWater()] if connection.dialect.name == "sqlite" else []
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
@@ -129,9 +131,12 @@ def do_run_migrations(connection: Connection) -> None:
         include_name=_include_name,
         transaction_per_migration=True,
         transactional_ddl=True,
+        on_version_apply=guards,
     )
 
     with context.begin_transaction():
+        for guard in guards:
+            guard.prime(connection)
         context.run_migrations()
 
 

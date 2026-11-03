@@ -235,3 +235,97 @@ def test_a_migrated_sqlite_database_keeps_every_row_and_stops_reusing_ids(tmp_pa
         assert connection.execute("SELECT max(id) FROM users").fetchone()[0] == 10
     finally:
         connection.close()
+
+
+FORK_RELEASE = "e79833e2a0b2"
+
+
+def _id_guards(path) -> dict:
+    connection = sqlite3.connect(path)
+    try:
+        definitions = dict(
+            connection.execute(
+                "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name IN ('users', 'nodes')"
+            )
+        )
+        return {
+            "autoincrement": {name: "AUTOINCREMENT" in sql.upper() for name, sql in sorted(definitions.items())},
+            "sequence": dict(
+                connection.execute(
+                    "SELECT name, seq FROM sqlite_sequence WHERE name IN ('users', 'nodes') ORDER BY name"
+                )
+            ),
+        }
+    finally:
+        connection.close()
+
+
+def _forget_the_newest_rows(path) -> None:
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("DELETE FROM node_user_usages WHERE node_id = 7 OR user_id = 9")
+        connection.execute("DELETE FROM users_groups_association WHERE user_id = 9")
+        connection.execute("DELETE FROM next_plans WHERE user_id = 9")
+        connection.execute("DELETE FROM user_usage_logs WHERE user_id = 9")
+        connection.execute("DELETE FROM users WHERE id = 9")
+        connection.execute("DELETE FROM nodes WHERE id = 7")
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def _insert_next(path) -> tuple[int, int]:
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+    connection = sqlite3.connect(path)
+    try:
+        user_id = connection.execute(
+            "INSERT INTO users (username, status, used_traffic, data_limit_reset_strategy, created_at, proxy_settings) "
+            "VALUES ('reuse-after', 'active', 0, 'no_reset', ?, '{}')",
+            (now,),
+        ).lastrowid
+        node_id = connection.execute(
+            "INSERT INTO nodes (name, address, port, api_port, server_ca, api_key, status, created_at, "
+            "usage_coefficient, connection_type, keep_alive, uplink, downlink) "
+            "VALUES ('reuse-after', '10.0.0.1', 1, 2, 'ca', 'key', 'connected', ?, 1, 'grpc', 0, 0, 0)",
+            (now,),
+        ).lastrowid
+        connection.commit()
+        return user_id, node_id
+    finally:
+        connection.close()
+
+
+KEPT = {"autoincrement": {"nodes": True, "users": True}, "sequence": {"nodes": 7, "users": 9}}
+
+
+@pytest.mark.skipif(not base.database_settings.is_sqlite, reason="id reuse is a SQLite rowid behaviour")
+def test_upgrading_a_fork_release_database_keeps_the_id_high_water_marks(tmp_path):
+    path = tmp_path / "release.db"
+    config = _config(path)
+    _quietly(upgrade, config, FORK_RELEASE)
+    _seed(path)
+    _forget_the_newest_rows(path)
+    assert _id_guards(path) == KEPT
+
+    _quietly(upgrade, config, "head")
+
+    assert _id_guards(path) == KEPT
+    assert _insert_next(path) == (10, 8)
+
+
+@pytest.mark.skipif(not base.database_settings.is_sqlite, reason="id reuse is a SQLite rowid behaviour")
+def test_rolling_back_to_the_fork_release_keeps_the_id_high_water_marks(tmp_path):
+    path = tmp_path / "rollback.db"
+    config = _config(path)
+    _quietly(upgrade, config, FORK_RELEASE)
+    _seed(path)
+    _quietly(upgrade, config, "head")
+    _forget_the_newest_rows(path)
+    assert _id_guards(path) == KEPT
+
+    _quietly(lambda config, revision: rollback(config, revision, echo=lambda _line: None), config, FORK_RELEASE)
+
+    assert _id_guards(path) == KEPT
+    assert _insert_next(path) == (10, 8)
+    _quietly(upgrade, config, "head")
+    assert _id_guards(path) == {"autoincrement": KEPT["autoincrement"], "sequence": {"nodes": 8, "users": 10}}
