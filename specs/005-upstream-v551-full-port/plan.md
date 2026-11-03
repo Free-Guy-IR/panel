@@ -137,15 +137,17 @@ from the merge point is ambiguous and is not used.
 
 No. It only rewrites rows of the system `xray_subscription` client templates (the JSON the panel sends to client
 apps), changing their local SOCKS/HTTP `listen` from an exposed address to `127.0.0.1`. It does not touch
-`core_configs`, hosts or anything pushed to nodes, so no node restart or resync follows. The fork already applied the
-same rewrite with `bfd88026565b` on 2026-09-25, so on production it is a no-op; clients get the loopback template on
-their next subscription fetch, as they already do.
+`core_configs`, hosts or anything pushed to nodes, so no node restart or resync follows. The fork's own
+`bfd88026565b` (2026-09-25) runs the same rewrite, but production has not run it: on 2026-11-03 production was at
+`d8b2c4f60a17` on a build without `2e7fc450f`, and its system template id=2 still served SOCKS and HTTP on `0.0.0.0`
+(read-only check, verdicts/panel-spec005.md). The first of `bfd88026565b` / `a8c2d491e705` to run on production
+therefore rewrites template id=2 to `127.0.0.1`, a real data change that delivers the #879 security fix; the second
+is a no-op. Clients get the loopback template on their first subscription fetch after that deploy.
 
 Checked on 2026-11-03: both files use the same `EXPOSED_LISTENER` and `INBOUNDS_ARRAY` regexes, select only
 `template_type == "xray_subscription"` and `is_system`, skip rows whose content does not change, and have an empty
-downgrade. One edge: if an admin set a system template's listener back to `0.0.0.0` after 2026-09-25 on purpose,
-the upstream revision flips it to `127.0.0.1` again; the B-DB agent lists any such template on production (read-only)
-before the deploy.
+downgrade. Before the deploy the B-DB agent lists, read-only, every system `xray_subscription` template on production
+whose listeners the rewrite changes; on 2026-11-03 that was template id=2, both listeners on `0.0.0.0`.
 
 ## Security commits (38, `security: yes` in the ledger)
 

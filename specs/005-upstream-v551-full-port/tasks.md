@@ -107,7 +107,9 @@ Each batch task is done only when all of these hold, and each item is evidence i
 - [ ] T100 Test panel: deploy, run real traffic plus concurrent scenarios 24 h, browser check of the dashboard,
   owner «وصل شد» from a real subscription link.
 - [ ] T101 Production: backup, migrations with panel and workers stopped, `lock_wait_timeout` set, rollback rehearsed
-  (`alembic downgrade e79833e2a0b2` + previous image), post-deploy dashboard render and api bundle check.
+  (`alembic downgrade e79833e2a0b2` + previous image), post-deploy dashboard render and api bundle check. This deploy
+  is the first to run `bfd88026565b` on production, so the #879 loopback rewrite of system template id=2 goes in the
+  runbook and the user-visible change list as newly delivered, not as already live.
 
 ## Dependencies & Execution Order
 
