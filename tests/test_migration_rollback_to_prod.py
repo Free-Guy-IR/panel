@@ -28,9 +28,13 @@ RELEASE_ONLY_TABLES = {"pending_user_resyncs", "node_stat_acks", "proxy_secret_c
 RELEASE_HEAD = "2e045b99a67e"
 FORK_RELEASE_HEAD = "e79833e2a0b2"
 GUARDED_MERGE = "fd33c6013baa"
-V551_MERGE = "2e045b99a67e"
-V551_TIP = "c8d2e4f6a1b3"
-V551_STEPS = [
+UPSTREAM_MERGE = "2e045b99a67e"
+UPSTREAM_TIP = "1a2b3c4d5e6f"
+UPSTREAM_STEPS = [
+    "alembic downgrade 1a2b3c4d5e6f@-1",
+    "alembic downgrade f0420da90ff1@-1",
+    "alembic downgrade e5a7c3f9b214@-1",
+    "alembic downgrade b849540d85bb@-1",
     "alembic downgrade c8d2e4f6a1b3@-1",
     "alembic downgrade a8c2d491e705@-1",
     "alembic downgrade a4d8c7e91b32@-1",
@@ -164,7 +168,7 @@ def test_rollback_leaves_exactly_the_prod_revision_with_the_prod_schema_and_data
     assert not (PASSKEY_TABLES | RELEASE_ONLY_TABLES) & set(_schema(sync_url))
     assert [line for line in steps if line.startswith("alembic downgrade")] == [
         f"alembic downgrade {PROD_REVISION}",
-        *V551_STEPS,
+        *UPSTREAM_STEPS,
         "alembic downgrade b4c7e8f1a2d3@-1",
         "alembic downgrade 9a5c2e7f1b4d@-1",
     ]
@@ -183,7 +187,7 @@ def test_a_plain_downgrade_past_the_passkey_merge_is_refused_before_it_can_leave
 
     with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
         downgrade(config, PROD_REVISION)
-    assert _versions(sync_url) == [V551_MERGE]
+    assert _versions(sync_url) == [UPSTREAM_MERGE]
     assert ROLLBACK_FLAG not in config.attributes
 
     rollback(config, FORK_RELEASE_HEAD, echo=lambda _line: None)
@@ -217,13 +221,13 @@ def test_a_plain_downgrade_in_one_transaction_is_refused_and_changes_nothing(tmp
 
 def test_every_path_that_removes_the_passkey_merge_is_guarded(tmp_path):
     config, sync_url, _before = _at_release_head(tmp_path)
-    for target in (FORK_RELEASE_HEAD, V551_TIP, "b4c7e8f1a2d3", "base"):
+    for target in (FORK_RELEASE_HEAD, UPSTREAM_TIP, "b4c7e8f1a2d3", "base"):
         with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
             downgrade(config, target)
-        assert _versions(sync_url) == [V551_MERGE]
+        assert _versions(sync_url) == [UPSTREAM_MERGE]
     with pytest.raises(CommandError, match="Ambiguous walk"):
         downgrade(config, "-1")
-    assert _versions(sync_url) == [V551_MERGE]
+    assert _versions(sync_url) == [UPSTREAM_MERGE]
 
     rollback(config, FORK_RELEASE_HEAD, echo=lambda _line: None)
     downgrade(config, "0374ac83604b")
@@ -241,7 +245,7 @@ def test_every_path_that_removes_the_passkey_merge_is_guarded(tmp_path):
 def test_rollback_repairs_a_database_an_older_release_left_with_two_heads(tmp_path):
     config, sync_url, (schema_before, rows_before) = _at_release_head(tmp_path)
     _unguarded_plain_downgrade(config, PROD_REVISION)
-    assert _versions(sync_url) == [V551_TIP, PROD_REVISION]
+    assert _versions(sync_url) == [UPSTREAM_TIP, PROD_REVISION]
 
     rollback(config, PROD_REVISION, echo=lambda _line: None)
 
@@ -284,10 +288,10 @@ def test_the_dry_run_changes_nothing(tmp_path, capsys):
     assert _versions(sync_url) == heads_before
     printed = capsys.readouterr().out
     assert (
-        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 2e045b99a67e, 6698b9a695e3, 6d8eb8fba21b, 8158387867c9, "
-        "86f7c2a14d3e, 9a5c2e7f1b4d, a4d8c7e91b32, a8c2d491e705, b176d23e434c, b4c7e8f1a2d3, b7e2c4d91f60, "
-        "bfd88026565b, c8d2e4f6a1b3, d73f8a2c4e91, e79833e2a0b2, e9a7edd9de06, f7c63e209a37, fd192e9628a5, "
-        "fd33c6013baa\n"
+        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 1a2b3c4d5e6f, 2e045b99a67e, 6698b9a695e3, "
+        "6d8eb8fba21b, 8158387867c9, 86f7c2a14d3e, 9a5c2e7f1b4d, a4d8c7e91b32, a8c2d491e705, b176d23e434c, "
+        "b4c7e8f1a2d3, b7e2c4d91f60, b849540d85bb, bfd88026565b, c8d2e4f6a1b3, d73f8a2c4e91, e5a7c3f9b214, "
+        "e79833e2a0b2, e9a7edd9de06, f0420da90ff1, f7c63e209a37, fd192e9628a5, fd33c6013baa\n"
     ) in printed
 
 
@@ -351,10 +355,10 @@ def test_the_prod_image_starts_on_the_rolled_back_database_and_not_after_a_plain
     config, sync_url, _before = _at_release_head(tmp_path)
     url = config.get_main_option("sqlalchemy.url")
     _unguarded_plain_downgrade(config, PROD_REVISION)
-    assert _versions(sync_url) == [V551_TIP, PROD_REVISION]
+    assert _versions(sync_url) == [UPSTREAM_TIP, PROD_REVISION]
     refused = _prod_alembic(tree, url, "upgrade", "head")
     assert refused.returncode != 0
-    assert f"Can't locate revision identified by '{V551_TIP}'" in refused.stdout + refused.stderr
+    assert f"Can't locate revision identified by '{UPSTREAM_TIP}'" in refused.stdout + refused.stderr
 
     rollback(config, PROD_REVISION, echo=lambda _line: None)
     upgrade(config, "heads")
@@ -362,7 +366,7 @@ def test_the_prod_image_starts_on_the_rolled_back_database_and_not_after_a_plain
         downgrade(config, PROD_REVISION)
     refused = _prod_alembic(tree, url, "upgrade", "head")
     assert refused.returncode != 0
-    assert f"Can't locate revision identified by '{V551_MERGE}'" in refused.stdout + refused.stderr
+    assert f"Can't locate revision identified by '{UPSTREAM_MERGE}'" in refused.stdout + refused.stderr
 
     rollback(config, PROD_REVISION, echo=lambda _line: None)
     started = _prod_alembic(tree, config.get_main_option("sqlalchemy.url"), "upgrade", "head")
@@ -414,7 +418,7 @@ def test_the_official_rollback_leaves_exactly_the_production_revision_with_its_s
     assert not (PASSKEY_TABLES | RELEASE_ONLY_TABLES) & set(_schema(sync_url))
     assert [line for line in steps if line.startswith("alembic downgrade")] == [
         f"alembic downgrade {OFFICIAL_REVISION}",
-        *V551_STEPS,
+        *UPSTREAM_STEPS,
         "alembic downgrade b4c7e8f1a2d3@-1",
         "alembic downgrade 9a5c2e7f1b4d@-1",
     ]
@@ -428,10 +432,10 @@ def test_the_official_dry_run_lists_every_revision_the_rollback_removes(tmp_path
 
     assert _versions(sync_url) == heads_before
     assert (
-        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 2e045b99a67e, 6698b9a695e3, 6d8eb8fba21b, 8158387867c9, "
-        "86f7c2a14d3e, 9a5c2e7f1b4d, a4d8c7e91b32, a8c2d491e705, b176d23e434c, b4c7e8f1a2d3, b7e2c4d91f60, "
-        "bfd88026565b, c8d2e4f6a1b3, d73f8a2c4e91, e5a9c3f1b7d2, e79833e2a0b2, e9a7edd9de06, f7c63e209a37, "
-        "fd192e9628a5, fd33c6013baa\n"
+        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 1a2b3c4d5e6f, 2e045b99a67e, 6698b9a695e3, "
+        "6d8eb8fba21b, 8158387867c9, 86f7c2a14d3e, 9a5c2e7f1b4d, a4d8c7e91b32, a8c2d491e705, b176d23e434c, "
+        "b4c7e8f1a2d3, b7e2c4d91f60, b849540d85bb, bfd88026565b, c8d2e4f6a1b3, d73f8a2c4e91, e5a7c3f9b214, "
+        "e5a9c3f1b7d2, e79833e2a0b2, e9a7edd9de06, f0420da90ff1, f7c63e209a37, fd192e9628a5, fd33c6013baa\n"
     ) in capsys.readouterr().out
 
 
