@@ -27,6 +27,17 @@ describe('chart query ranges across a DST change', () => {
     expect(range.endDate).toBe('2026-04-05T23:59:59+02:00')
   })
 
+  for (const now of ['2026-03-29T12:00:00Z', '2026-10-25T12:00:00Z']) {
+    it(`the 24 hours preset spans exactly 24 hours across the DST change at ${now}`, () => {
+      setSystemTime(new Date(now))
+      const option = buildPeriodOptions(t).find(candidate => candidate.hours === 24)
+      expect(option).toBeDefined()
+      const { startDate, endDate } = getDateRangeForPeriodOption(option!)
+      expect(offsetOf(startDate)).toBe(offsetOf(endDate))
+      expect(Date.parse(endDate) - Date.parse(startDate)).toBe(24 * 60 * 60 * 1000)
+    })
+  }
+
   for (const now of ['2026-04-10T12:00:00Z', '2026-11-03T12:00:00Z', '2027-08-15T12:00:00Z']) {
     it(`every preset period sends start and end with the same UTC offset at ${now}`, () => {
       setSystemTime(new Date(now))
