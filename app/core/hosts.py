@@ -1,7 +1,6 @@
 import json
 from asyncio import Lock
 from copy import deepcopy
-from uuid import uuid4
 
 import nats
 from aiocache import cached
@@ -552,7 +551,6 @@ class HostManager:
         self._generation = 0
         self._stamp = 0
         self._host_stamps: dict[int, int] = {}
-        self._origin = uuid4().hex
         self._publish_lock = Lock()
         self._add_hosts_impl = (
             self._add_hosts_nats if (self._nats_enabled and self._multi_worker) else self._add_hosts_local
@@ -616,13 +614,12 @@ class HostManager:
 
     async def _handle_host_message(self, data: dict):
         """Handle incoming host messages from router."""
-        if data.get("origin") == self._origin:
-            return
         action = data.get("action")
         if action == "remove":
             host_id = data.get("host_id")
             if host_id:
-                await self._remove_host_local(host_id)
+                await self._add_prepared_hosts_local([], removed_ids=[host_id])
+                await self._persist_state()
             else:
                 await self._reload_from_cache()
         elif action == "add":
@@ -636,7 +633,7 @@ class HostManager:
 
     async def _publish(self, message: dict):
         """Publish host update message via global router."""
-        await router.publish(MessageTopic.HOST, {**message, "origin": self._origin})
+        await router.publish(MessageTopic.HOST, message)
 
     async def setup(self, db: AsyncSession):
         # Register handler with global router
