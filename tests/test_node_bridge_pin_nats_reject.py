@@ -130,9 +130,9 @@ async def test_concurrent_writes_while_a_user_is_rejected_on_the_nats_store_end_
         await asyncio.gather(*(concurrent_writer(seed) for seed in range(3)))
         newest = world.database["user-b"]
         await world.until(lambda: world.receiver.applied.get("user-b") == [newest])
-        await world.until(lambda: world.receiver.applied.get("user-c") in (None, []))
+        await world.until(lambda: world.receiver.applied.get("user-c") == [])
         await world.drained()
         assert world.receiver.applied.get("user-b") == [newest]
-        assert world.receiver.applied.get("user-c") in (None, [])
+        assert world.receiver.applied.get("user-c") == []
         assert world.receiver.applied["user-a"] == ["a1"]
         assert "user-c" not in world.database

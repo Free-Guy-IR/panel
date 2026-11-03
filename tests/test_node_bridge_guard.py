@@ -40,11 +40,25 @@ def test_the_guard_requires_the_maintenance_timeouts_the_panel_relies_on():
     assert (bridge_controller, "MAINTENANCE_TIMEOUTS") in node_bridge_guard.REQUIRED_BRIDGE_API
 
 
-@pytest.mark.parametrize("version", ["0.8.1", "0.9.1+singbox", "garbage", ""])
+@pytest.mark.parametrize("version", ["0.8.1", "0.9.1+singbox", "0.9.2", "0.9.2+singbox", "garbage", ""])
 def test_a_bridge_reporting_an_older_version_refuses_to_start(monkeypatch, version):
     monkeypatch.setattr("PasarGuardNodeBridge.__version__", version)
-    with pytest.raises(RuntimeError, match="0.9.2"):
+    with pytest.raises(RuntimeError, match=r"needs 0\.9\.2\+singbox\.2 or newer"):
         node_bridge_guard.require_reliable_bridge()
+
+
+@pytest.mark.parametrize("version", ["0.9.2+singbox.2", "0.9.2+singbox.3", "0.9.4+singbox", "0.9.4+singbox.1"])
+def test_a_bridge_reporting_the_pinned_build_or_newer_starts(monkeypatch, version):
+    monkeypatch.setattr("PasarGuardNodeBridge.__version__", version)
+    node_bridge_guard.require_reliable_bridge()
+
+
+def test_a_refusal_for_a_missing_api_names_the_first_bridge_build_this_panel_accepts(monkeypatch):
+    monkeypatch.delattr(bridge_controller, "MAINTENANCE_TIMEOUTS")
+    with pytest.raises(RuntimeError) as refused:
+        node_bridge_guard.require_reliable_bridge()
+    assert "install bridge 0.9.2+singbox.2 or newer" in str(refused.value)
+    assert "0.9.2+singbox or newer" not in str(refused.value)
 
 
 def test_the_node_manager_checks_the_bridge_when_it_is_imported():
