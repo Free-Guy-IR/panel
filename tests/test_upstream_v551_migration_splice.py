@@ -244,6 +244,9 @@ def test_a_database_stamped_at_an_earlier_tip_gets_every_missing_revision(tmp_pa
 
 
 def _filler(column) -> object:
+    enums = getattr(column["type"], "enums", None)
+    if enums:
+        return enums[0]
     kind = str(column["type"]).upper()
     if "INT" in kind:
         return 1
