@@ -2,6 +2,15 @@ from app.models.admin import AdminDetails
 from app.operation.permissions import PermissionDenied, enforce_permission, get_scope_admin_id
 from app.utils.system import readable_duration, readable_size
 
+BULK_EXPIRE_AMOUNT_BOUND = 10**10
+BULK_DATA_LIMIT_AMOUNT_BOUND = 2**62
+
+
+async def reject_unbounded_bulk_amount(op, db, field: str, amount: int) -> None:
+    bound = BULK_EXPIRE_AMOUNT_BOUND if field == "expire" else BULK_DATA_LIMIT_AMOUNT_BOUND
+    if not -bound <= amount <= bound:
+        await op.raise_error(message=f"Bulk {field} amount must be between {-bound} and {bound}", code=422, db=db)
+
 
 async def reject_negative_next_plan(op, db, next_plan) -> None:
     if next_plan.data_limit is not None and next_plan.data_limit < 0:

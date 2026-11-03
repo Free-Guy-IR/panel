@@ -75,6 +75,7 @@ from app.fork.operation.user_guards import (
     enforce_next_plan_limits,
     ensure_owner_target_allowed,
     reject_negative_next_plan,
+    reject_unbounded_bulk_amount,
 )
 from app.fork.proxy_secrets import ProxySecretUniquenessError, supplied_secret_fields
 from app.fork.proxy_secrets.locks import (
@@ -2108,6 +2109,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         if not _has_permission(admin, "users", "update") or not is_scope_all(admin, "users", "update"):
             await self.raise_error(message="All-user update permission is required", code=403, db=db)
         await self._enforce_manual_user_write_access(admin, db)
+        await reject_unbounded_bulk_amount(self, db, field, bulk_model.amount)
         if admin.is_owner:
             return {}
 
