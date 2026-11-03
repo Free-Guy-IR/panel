@@ -122,6 +122,7 @@ SCOPED_COVER_RE = re.compile(
     r"(?<![0-9a-f])([0-9a-f]{40})(?![0-9a-f])\s+touching\s+only\s+([^\s,;]+(?:(?:\s*,\s*|\s+and\s+)[^\s,;]+)*)",
     re.IGNORECASE,
 )
+MISSING_LINE_RE = re.compile(r"\bmissing\s+`?([^`\s]+:[+-]\d+)`?\s+because\b([^;]*)", re.IGNORECASE)
 SCOPED_PATH_SPLIT_RE = re.compile(r"\s*,\s*|\s+and\s+", re.IGNORECASE)
 SECURITY_NO_REASON_RE = re.compile(r"\bsecurity:\s*no\s*,\s*[^\W_]", re.IGNORECASE)
 SYNC_LEDGER_FILE = "UPSTREAM_SYNC.md"
@@ -874,7 +875,18 @@ def commit_hunks(sha):
             new = None if line[4:] == "/dev/null" else line[4:].removeprefix("b/")
             continue
         if HUNK_HEADER_RE.match(line):
-            current = {"old": old, "new": new, "pre": [], "post": [], "added": 0, "removed": 0}
+            numbers = HUNK_RANGE_RE.match(line)
+            old_at, new_at = int(numbers.group(1)), int(numbers.group(2))
+            current = {
+                "old": old,
+                "new": new,
+                "pre": [],
+                "post": [],
+                "added": 0,
+                "removed": 0,
+                "first_added": None,
+                "first_removed": None,
+            }
             hunks.append(current)
             continue
         if current is None or not line or line.startswith("\\"):
@@ -883,13 +895,26 @@ def commit_hunks(sha):
         if kind == " ":
             current["pre"].append((text, False))
             current["post"].append((text, False))
+            old_at += 1
+            new_at += 1
         elif kind == "-":
             current["pre"].append((text, True))
             current["removed"] += 1
+            current["first_removed"] = current["first_removed"] or old_at
+            old_at += 1
         elif kind == "+":
             current["post"].append((text, True))
             current["added"] += 1
+            current["first_added"] = current["first_added"] or new_at
+            new_at += 1
     return hunks
+
+
+def hunk_ident(hunk):
+    path = hunk["new"] or hunk["old"]
+    if hunk["first_added"]:
+        return f"{path}:+{hunk['first_added']}"
+    return f"{path}:-{hunk['first_removed']}"
 
 
 def normalise_line(path, line):
@@ -1109,31 +1134,35 @@ def fork_line_changes(fork_sha, path):
     return normalised_positions(parent, path, removed), normalised_positions(fork_sha, path, added)
 
 
+def hunk_brought(fork_sha, hunk):
+    path = hunk["new"] or hunk["old"]
+    removed, added = fork_line_changes(fork_sha, path)
+    post = hunk_side(path, hunk["post"])
+    pre = hunk_side(path, hunk["pre"])
+    if hunk["new"] is not None and post is not None:
+        offsets = changed_offsets(path, hunk["post"])
+        positions = block_positions(normalised_file(fork_sha, path), post)
+        if any(i + offset in added for i in positions for offset in offsets):
+            return True
+    if pre is not None and pre != post and not block_in_place(normalised_file(fork_sha, path), pre):
+        offsets = changed_offsets(path, hunk["pre"])
+        positions = block_positions(normalised_file(f"{fork_sha}^", path), pre)
+        if any(i + offset in removed for i in positions for offset in offsets):
+            return True
+    return False
+
+
 def paths_bringing_upstream_change(upstream_sha, fork_sha, paths):
     brought = set()
     for hunk in commit_hunks(upstream_sha):
         path = hunk["new"] or hunk["old"]
-        if path not in paths or path in brought:
-            continue
-        removed, added = fork_line_changes(fork_sha, path)
-        post = hunk_side(path, hunk["post"])
-        pre = hunk_side(path, hunk["pre"])
-        if hunk["new"] is not None and post is not None:
-            offsets = changed_offsets(path, hunk["post"])
-            positions = block_positions(normalised_file(fork_sha, path), post)
-            if any(i + offset in added for i in positions for offset in offsets):
-                brought.add(path)
-                continue
-        if pre is not None and pre != post and not block_in_place(normalised_file(fork_sha, path), pre):
-            offsets = changed_offsets(path, hunk["pre"])
-            positions = block_positions(normalised_file(f"{fork_sha}^", path), pre)
-            if any(i + offset in removed for i in positions for offset in offsets):
-                brought.add(path)
+        if path in paths and path not in brought and hunk_brought(fork_sha, hunk):
+            brought.add(path)
     return brought
 
 
-def design_fork_commit(reason, head, upstream_sha, in_range, merged):
-    upstream_paths = set(commit_paths(upstream_sha))
+def named_commits(reason, head, upstream_sha):
+    found = []
     for token in FORK_COMMIT_RE.findall(SECURITY_FLAG_RE.sub("", reason)):
         result = subprocess.run(
             ["git", "rev-parse", "--verify", "--quiet", f"{token}^{{commit}}"],
@@ -1141,22 +1170,85 @@ def design_fork_commit(reason, head, upstream_sha, in_range, merged):
             text=True,
             check=False,
         )
-        fork_sha = result.stdout.strip()
-        if result.returncode != 0 or not is_ancestor(fork_sha, head):
-            continue
-        if fork_sha in in_range and fork_sha not in merged:
+        sha = result.stdout.strip()
+        if result.returncode == 0 and sha != upstream_sha and sha not in found and is_ancestor(sha, head):
+            found.append(sha)
+    return found
+
+
+def design_fork_commit(reason, head, upstream_sha, in_range):
+    upstream_paths = set(commit_paths(upstream_sha))
+    for fork_sha in named_commits(reason, head, upstream_sha):
+        if fork_sha in in_range:
             continue
         touched = {path for path in git("show", "--format=", "--name-only", "-M", fork_sha).split("\n") if path}
         brought = paths_bringing_upstream_change(upstream_sha, fork_sha, touched & upstream_paths)
         if not brought and not picks_upstream(fork_sha, upstream_sha):
             continue
-        if fork_sha in in_range:
-            return fork_sha
         named = {path for path in touched if re.search(rf"(?<![\w./-]){re.escape(path)}(?![\w/-])", reason)}
         expected, missing = missing_pick_lines(fork_sha, fork_sha, head, named | brought if named else touched)
         if expected and not missing:
             return fork_sha
     return None
+
+
+def own_line_exceptions(reason):
+    named = {}
+    problems = []
+    for ident, why in MISSING_LINE_RE.findall(reason):
+        if not REASON_WORD_RE.search(why):
+            problems.append(f"names missing `{ident}` without a reason after because")
+        named[ident] = why.strip()
+    return named, problems
+
+
+def security_design_problems(reason, head, upstream_sha):
+    hunks = commit_hunks(upstream_sha)
+    carriers = [
+        sha
+        for sha in named_commits(reason, head, upstream_sha)
+        if any(hunk_brought(sha, hunk) for hunk in hunks) or picks_upstream(sha, upstream_sha)
+    ]
+    if not carriers:
+        return None
+    named, problems = own_line_exceptions(reason)
+    seen = set()
+    expected = 0
+    gaps = []
+    for hunk in hunks:
+        path = hunk["new"] or hunk["old"]
+        post = hunk_side(path, hunk["post"])
+        pre = hunk_side(path, hunk["pre"])
+        own = normalised_file(upstream_sha, path)
+        check_post = hunk["new"] is not None and post is not None and block_in_place(own, post)
+        check_pre = pre is not None and pre != post and not block_in_place(own, pre)
+        if not (check_post or check_pre):
+            continue
+        expected += 1
+        ident = hunk_ident(hunk)
+        seen.add(ident)
+        here = normalised_file(head, path)
+        absent = (check_post and not block_in_place(here, post)) or (check_pre and block_in_place(here, pre))
+        brought = not absent and any(hunk_brought(sha, hunk) for sha in carriers)
+        if ident in named:
+            if brought:
+                problems.append(f"names missing `{ident}`, but that hunk is carried to {head}; remove the exception")
+            continue
+        if absent:
+            line = post[1][0] if check_post else f"-{pre[1][0]}"
+            gaps.append(f"`{ident}` is not on {head} ({line[:60]!r})")
+        elif not brought:
+            gaps.append(f"`{ident}` is on {head}, but no fork commit its reason names brings it")
+    for ident in sorted(set(named) - seen):
+        problems.append(f"names missing `{ident}`, but no hunk of it starts there")
+    if gaps:
+        problems.insert(
+            0,
+            f"{len(gaps)} of {expected} hunk(s) of its own change are not carried to {head} by the commits its "
+            f"reason names ({', '.join(sha[:12] for sha in carriers)}): {'; '.join(gaps)}; port each, or name it "
+            "as missing `<path>:<line>` because <reason>",
+        )
+    return problems
 
 
 def security_marker(*texts):
@@ -1628,6 +1720,7 @@ def parity_gate(
     upstream=None,
     held_release_patterns=DEFAULT_HELD_RELEASE_REFS,
     grandfathered_bases=(),
+    strict_security_design=False,
 ):
     requested_base = base
     base = checked_base(base, grandfathered_bases)
@@ -1851,13 +1944,23 @@ def parity_gate(
             )
             continue
         if entry["kind"] == "ported-by-design" and entry["security"]:
-            if not design_fork_commit(entry["reason"], head, sha, in_range, merged):
+            if strict_security_design:
+                problems = security_design_problems(entry["reason"], head, sha)
+            else:
+                problems = [] if design_fork_commit(entry["reason"], head, sha, in_range) else None
+            if problems is None:
                 del coverage[sha]
                 ledger_errors.append(
                     f"{entry['where']}: `{sha[:12]}` is ported by design as a security fix, but its reason names no "
                     f"fork commit on {head} that carries part of the upstream change or names it in a cherry-pick or "
                     "Upstream: line, with its change still there; name that fork commit, or record a Waived entry "
                     "under an owner decision"
+                )
+            elif problems:
+                del coverage[sha]
+                ledger_errors.extend(
+                    f"{entry['where']}: `{sha[:12]}` is ported by design as a security fix, but {problem}"
+                    for problem in problems
                 )
             continue
         if entry["kind"] not in ("waived", "ported-by-design") or entry["security"]:

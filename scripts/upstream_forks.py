@@ -174,6 +174,7 @@ def check_ledger_repo(entry, root, workdir, today, write_snapshot):
             require_shared_history=False,
             release_patterns=tuple(entry.get("release_refs") or upstream_inventory.DEFAULT_RELEASE_REFS),
             grandfathered_bases=(base,),
+            strict_security_design=True,
         )
     finally:
         os.chdir(previous)

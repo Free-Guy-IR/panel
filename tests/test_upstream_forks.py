@@ -481,12 +481,18 @@ RESTORE_SAFE = (
     + FILLER
     + 'restore() {\n    extract "$1"\n    safety_copy || return 1\n    load_db\n    report\n}\n'
 )
+RESTORE_PARTIAL = (
+    'extract() {\n    check_size "$1"\n    tar -xf "$1"\n}\n\n'
+    + FILLER
+    + 'restore() {\n    extract "$1"\n    safety_copy || return 1\n    load_db\n    report\n}\n'
+)
 DOC = "# Restore\n\nA restore loads the backup.\n"
 DOC_FIRST = "# Restore\n\nA restore refuses link members.\n"
 DOC_WORDED = "# Restore\n\nA restore refuses symbolic and hard link members.\n"
+DOC_EXCEPTION = " missing `doc.md:+3` because the branch tip reworded it before the squash;"
 
 
-def squash_world(tmp_path, carried, cite):
+def squash_world(tmp_path, carried, cite, exception=DOC_EXCEPTION):
     upstream = new_repo(tmp_path / "upstream")
     base = commit(upstream, "base", {"restore.sh": RESTORE, "doc.md": DOC, "other.txt": "one\n"})
     git(upstream, "checkout", "-q", "-b", "fix/restore-safety")
@@ -501,7 +507,7 @@ def squash_world(tmp_path, carried, cite):
     squash = commit(
         upstream,
         "fix(restore): restore safety followups (#35)",
-        {"restore.sh": RESTORE_SAFE, "doc.md": DOC_WORDED},
+        {"restore.sh": RESTORE_PARTIAL if carried == "partial" else RESTORE_SAFE, "doc.md": DOC_WORDED},
     )
     git(upstream, "tag", "v1.1.0")
     fork = tmp_path / "fork"
@@ -511,7 +517,7 @@ def squash_world(tmp_path, carried, cite):
     if carried == "absent":
         git(fork, "reset", "-q", "--hard", unrelated)
     if carried == "undone":
-        commit(fork, "fork: drop the link check", {"restore.sh": RESTORE})
+        commit(fork, "fork: drop the link check", {"restore.sh": RESTORE_PARTIAL})
     commit(fork, "fork feature", {"f.txt": "fork\n"})
     carrier = {"squash": squash, "unrelated": unrelated}[cite]
     panel = new_repo(tmp_path / "panel")
@@ -533,28 +539,136 @@ reason = "no tracker of its own"
     (forks / "kit.md").write_text(
         "## Ported by design\n\n"
         f"- `{original}` ALREADY-IN-FORK: pre-squash commit of the deleted branch fix/restore-safety, carried by "
-        f"upstream squash {carrier}, an ancestor of fork main security: yes, it rejects link members\n"
+        f"upstream squash {carrier}, an ancestor of fork main;{exception} security: yes, it rejects link members\n"
         f"- `{tip}` ALREADY-IN-FORK: tip of the branch, whose tree is the tree of the squash security: no, wording\n"
     )
     return forks / "forks.toml", original
 
 
+NO_CARRIER = "is ported by design as a security fix, but its reason names no fork commit"
+NOT_CARRIED = "is ported by design as a security fix, but"
+
+
 @pytest.mark.parametrize(
-    ("carried", "cite", "code"),
+    ("carried", "cite", "code", "flagged"),
     [
-        ("merged", "squash", 0),
-        ("absent", "squash", 1),
-        ("undone", "squash", 1),
-        ("merged", "unrelated", 1),
+        ("merged", "squash", 0, None),
+        ("absent", "squash", 1, NO_CARRIER),
+        ("undone", "squash", 1, "`restore.sh:+3`"),
+        ("merged", "unrelated", 1, NO_CARRIER),
+        ("partial", "squash", 1, "`restore.sh:+3`"),
     ],
 )
-def test_an_upstream_squash_on_fork_main_carries_its_pre_squash_security_commit(tmp_path, carried, cite, code):
+def test_an_upstream_squash_on_fork_main_carries_its_pre_squash_security_commit(tmp_path, carried, cite, code, flagged):
     config, original = squash_world(tmp_path, carried, cite)
     result = run(config, "--today", "2026-10-27")
     assert result.returncode == code, result.stdout + result.stderr
-    refusal = f"`{original[:12]}` is ported by design as a security fix, but its reason names no fork commit"
     if code == 0:
         assert "Upstream parity gate OK" in result.stdout
-        assert refusal not in result.stdout
+        assert NOT_CARRIED not in result.stdout
+        return
+    assert f"`{original[:12]}` {NOT_CARRIED}" in result.stdout
+    assert flagged in result.stdout
+    if carried in ("partial", "undone"):
+        assert "reject_link_members" not in (tmp_path / "fork" / "restore.sh").read_text()
+
+
+def test_a_squash_that_drops_the_security_line_carries_only_what_it_keeps(tmp_path):
+    config, original = squash_world(tmp_path, "partial", "squash")
+    result = run(config, "--today", "2026-10-27")
+    assert "safety_copy" in (tmp_path / "fork" / "restore.sh").read_text()
+    assert result.returncode == 1, result.stdout
+    assert "Upstream parity gate OK" not in result.stdout
+    assert f"`{original[:12]}` {NOT_CARRIED} 1 of 3 hunk(s) of its own change" in result.stdout
+    assert "`restore.sh:+3` is not on refs/remotes/fork/main" in result.stdout
+    assert "`restore.sh:+41`" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("exception", "message"),
+    [
+        ("", "`doc.md:+3` is not on refs/remotes/fork/main"),
+        (" missing `doc.md:+3` because ;", "names missing `doc.md:+3` without a reason"),
+        (
+            DOC_EXCEPTION + " missing `restore.sh:+41` because it was rewritten;",
+            "names missing `restore.sh:+41`, but that hunk is carried to refs/remotes/fork/main",
+        ),
+        (DOC_EXCEPTION + " missing `restore.sh:+7` because it moved;", "names missing `restore.sh:+7`, but no hunk"),
+    ],
+)
+def test_every_own_line_a_security_carrier_leaves_out_is_named_with_a_reason(tmp_path, exception, message):
+    config, _ = squash_world(tmp_path, "merged", "squash", exception)
+    result = run(config, "--today", "2026-10-27")
+    assert result.returncode == 1, result.stdout
+    assert message in result.stdout
+
+
+def chain_world(tmp_path, steps, cited, exception=""):
+    upstream = new_repo(tmp_path / "upstream")
+    base = commit(upstream, "base", {"a.py": "one\ntwo\n", "b.py": "three\nfour\n"})
+    fix = commit(
+        upstream,
+        "fix: check the token and its scope",
+        {"a.py": "one\nCHECK_TOKEN\ntwo\n", "b.py": "three\nCHECK_SCOPE\nfour\n"},
+    )
+    git(upstream, "tag", "v1.1.0")
+    fork = tmp_path / "fork"
+    git(tmp_path, "clone", "-q", str(upstream), str(fork))
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(fork, "config", key, value)
+    git(fork, "reset", "-q", "--hard", base)
+    made = {}
+    for step in steps:
+        if step == "token":
+            made[step] = commit(fork, "port the token check", {"a.py": "one\nCHECK_TOKEN\ntwo\n"})
+        elif step == "scope":
+            made[step] = commit(fork, "port the scope check", {"b.py": "three\nCHECK_SCOPE\nfour\n"})
+        elif step == "drop-scope":
+            made[step] = commit(fork, "fork: drop the scope check", {"b.py": "three\nfour\n"})
+        else:
+            made[step] = commit(fork, "fork feature", {"f.py": "fork\n"})
+    names = " and ".join(made[step] for step in cited)
+    panel = new_repo(tmp_path / "panel")
+    forks = panel / "upstream-forks"
+    forks.mkdir()
+    (forks / "forks.toml").write_text(f"""
+[[repo]]
+name = "kit"
+mode = "ledger"
+fork = "Owner/kit"
+upstream = "Up/kit"
+fork_url = "{fork}"
+upstream_url = "{upstream}"
+ported_ref = "main"
+grandfathered_base = "{base}"
+ledger = "upstream-forks/kit.md"
+reason = "no tracker of its own"
+""")
+    (forks / "kit.md").write_text(
+        f"## Ported by design\n\n- `{fix}` ported in fork commits {names};{exception} security: yes, it checks tokens\n"
+    )
+    return forks / "forks.toml", fix
+
+
+@pytest.mark.parametrize(
+    ("steps", "cited", "exception", "code", "message"),
+    [
+        (["token", "scope", "feature"], ["token", "scope"], "", 0, None),
+        (["token", "scope", "feature"], ["token"], "", 1, "`b.py:+2` is on refs/remotes/fork/main, but no fork commit"),
+        (["token", "feature"], ["token"], "", 1, "`b.py:+2` is not on refs/remotes/fork/main"),
+        (["token", "feature"], ["token"], " missing `b.py:+2` because the fork checks scopes in its gateway;", 0, None),
+        (["token", "scope", "drop-scope"], ["token", "scope"], "", 1, "`b.py:+2` is not on refs/remotes/fork/main"),
+        (["feature"], ["feature"], "", 1, NO_CARRIER),
+    ],
+)
+def test_a_security_design_port_is_carried_by_a_chain_of_named_fork_commits(
+    tmp_path, steps, cited, exception, code, message
+):
+    config, fix = chain_world(tmp_path, steps, cited, exception)
+    result = run(config, "--today", "2026-10-27")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code == 0:
+        assert NOT_CARRIED not in result.stdout
     else:
-        assert refusal in result.stdout
+        assert f"`{fix[:12]}` {NOT_CARRIED}" in result.stdout
+        assert message in result.stdout
