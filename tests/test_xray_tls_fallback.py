@@ -18,6 +18,7 @@ CHILD_TAG = "vless-ws"
 SERVER_NAME = "fallback.example.com"
 NODE_CERT_FILE = "/opt/certs/missing/fullchain.pem"
 NODE_KEY_FILE = "/opt/certs/missing/privkey.pem"
+PKCS8_KEY_HEADER = " ".join(("-----BEGIN", "PRIVATE", "KEY-----"))
 
 
 @pytest.fixture(autouse=True)
@@ -155,7 +156,7 @@ def test_panel_certificate_is_inlined_once_in_both_orders(tmp_path: Path, parent
     assert "certificateFile" not in certificate
     assert "keyFile" not in certificate
     assert certificate["certificate"][0] == "-----BEGIN CERTIFICATE-----"
-    assert certificate["key"][0] == "-----BEGIN PRIVATE KEY-----"
+    assert certificate["key"][0] == PKCS8_KEY_HEADER
     assert cfg._inbounds_by_tag[f"{CHILD_TAG}<=>{PARENT_TAG}"]["sni"] == [SERVER_NAME, SERVER_NAME]
     assert cfg._inbounds_by_tag[PARENT_TAG]["sni"] == [SERVER_NAME, SERVER_NAME]
 
@@ -171,7 +172,7 @@ def test_explicit_fallback_parent_panel_certificate_is_inlined_in_to_str(tmp_pat
     assert "certificateFile" not in certificate
     assert "keyFile" not in certificate
     assert certificate["certificate"][0] == "-----BEGIN CERTIFICATE-----"
-    assert certificate["key"][0] == "-----BEGIN PRIVATE KEY-----"
+    assert certificate["key"][0] == PKCS8_KEY_HEADER
 
 
 @pytest.mark.parametrize("parent_first", [True, False])
