@@ -126,6 +126,8 @@ COMMENT_MARKERS = {
     **dict.fromkeys((".go", ".js", ".jsx", ".ts", ".tsx", ".rs", ".c", ".h", ".java", ".proto"), ("//",)),
     **dict.fromkeys((".py", ".sh", ".bash", ".yml", ".yaml", ".toml"), ("#",)),
 }
+MOVED_TO_RE = re.compile(r"\bmoved\s+(?:it\s+)?(?:to|into)\s+`?([^`\s;,]*[^`\s;,.])`?", re.IGNORECASE)
+FORK_CITE_RE = re.compile(r"\bfork\s+commits?\s+(?:[0-9a-f]{9,40}\s*(?:,|and)\s*)*$", re.IGNORECASE)
 MISSING_LINE_RE = re.compile(r"\bmissing\s+`?([^`\s]+:[+-]\d+)`?\s+because\b([^;]*)", re.IGNORECASE)
 SCOPED_PATH_SPLIT_RE = re.compile(r"\s*,\s*|\s+and\s+", re.IGNORECASE)
 SECURITY_NO_REASON_RE = re.compile(r"\bsecurity:\s*no\s*,\s*[^\W_]", re.IGNORECASE)
@@ -1232,7 +1234,60 @@ def first_parent_changes(sha, path):
     return bool(git("show", "--format=", "--name-only", "--no-renames", sha, "--", path).strip())
 
 
-def own_line_exceptions(reason, head, upstream_sha, decision_covers):
+def fork_only_commit(token, head, upstream_sha, carriers=()):
+    sha = resolve_commit(token)
+    if sha and sha in carriers:
+        return sha
+    if sha and sha != upstream_sha and is_ancestor(sha, head) and not on_upstream_ref(sha):
+        return sha
+    return None
+
+
+def moved_hunk_problem(ident, why, target, head, upstream_sha, hunks, carriers):
+    tokens = FORK_COMMIT_RE.findall(why)
+    label = f"names missing `{ident}` as moved to `{target}` by {', '.join(tokens) or 'no commit'}"
+    hunk = next((hunk for hunk in hunks if hunk_ident(hunk) == ident), None)
+    if hunk is None:
+        return None
+    if not tokens:
+        return f"{label}, but its reason names no fork commit"
+    for token in tokens:
+        sha = fork_only_commit(token, head, upstream_sha, carriers)
+        if sha is None:
+            return f"{label}, but that commit is not a fork-only commit on {head}"
+        if not first_parent_changes(sha, target):
+            return f"{label}, but that commit did not change {target}"
+    post = hunk_side(target, hunk["post"]) if hunk["new"] is not None else None
+    if post is None or not block_in_place(normalised_file(head, target), ((), post[1], ())):
+        return f"{label}, but its non-comment lines are not in place in {target} on {head}"
+    return None
+
+
+def cited_history_problems(entry, head):
+    text = SECURITY_FLAG_RE.sub("", entry["reason"])
+    problems = []
+    seen = set()
+    for match in FORK_COMMIT_RE.finditer(text):
+        token = match.group(0)
+        sha = resolve_commit(token)
+        if sha is None:
+            if token not in seen and FORK_CITE_RE.search(text[: match.start()]):
+                seen.add(token)
+                problems.append(
+                    f"{entry['where']}: `{entry['token']}` cites fork commit {token}, which is not in the history "
+                    f"of {head}"
+                )
+            continue
+        if sha in seen or is_ancestor(sha, head) or on_upstream_ref(sha):
+            continue
+        seen.add(sha)
+        problems.append(
+            f"{entry['where']}: `{entry['token']}` cites fork commit {token}, which is not in the history of {head}"
+        )
+    return problems
+
+
+def own_line_exceptions(reason, head, upstream_sha, decision_covers, hunks=(), carriers=()):
     named = {}
     problems = []
     for ident, why in MISSING_LINE_RE.findall(reason):
@@ -1247,11 +1302,17 @@ def own_line_exceptions(reason, head, upstream_sha, decision_covers):
             if upstream_sha not in decision_covers.get(decided, frozenset()):
                 problems.append(f"names missing `{ident}`, which is not covered by owner decision {decided}")
             continue
+        moved = MOVED_TO_RE.search(why)
+        if moved:
+            problem = moved_hunk_problem(ident, why, moved.group(1), head, upstream_sha, hunks, carriers)
+            if problem:
+                problems.append(problem)
+            continue
         path = ident.rsplit(":", 1)[0]
         explained = False
         for token in FORK_COMMIT_RE.findall(why):
-            sha = resolve_commit(token)
-            if sha and sha != upstream_sha and is_ancestor(sha, head) and first_parent_changes(sha, path):
+            sha = fork_only_commit(token, head, upstream_sha, carriers)
+            if sha and first_parent_changes(sha, path):
                 explained = True
                 break
         if not explained:
@@ -1302,7 +1363,7 @@ def security_design_problems(reason, head, upstream_sha, decision_covers):
     ]
     if not carriers:
         return None
-    named, problems = own_line_exceptions(reason, head, upstream_sha, decision_covers)
+    named, problems = own_line_exceptions(reason, head, upstream_sha, decision_covers, hunks, frozenset(carriers))
     problems.extend(named_token_problems(reason, head, upstream_sha, hunks))
     carried = 0
     seen = set()
@@ -1884,6 +1945,8 @@ def parity_gate(
     entries, ledger_errors = parse_sync_ledger(ledger_path, today)
     resolved, resolve_errors, stale, duplicates = resolve_sync_entries(entries, in_range)
     ledger_errors += resolve_errors
+    for entry in entries:
+        ledger_errors += cited_history_problems(entry, head)
     for sha, entry in sorted(resolved.items()):
         if entry["decision"] and sha not in entry["covers"]:
             del resolved[sha]

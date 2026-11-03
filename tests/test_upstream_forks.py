@@ -632,8 +632,23 @@ def chain_world(tmp_path, steps, cited, exception="", token_length=40, covered=N
             made[step] = commit(fork, "fork: drop the scope check", {"b.py": "three\nfour\n"})
         elif step == "drop-token":
             made[step] = commit(fork, "fork: drop the token check", {"a.py": "one\ntwo\n"})
+        elif step == "move-scope":
+            made[step] = commit(
+                fork, "fork: move the scope check", {"b.py": "three\nfour\n", "c.py": "x\nCHECK_SCOPE\ny\n"}
+            )
+        elif step == "move-scope-lost":
+            made[step] = commit(fork, "fork: move the scope file", {"b.py": "three\nfour\n", "c.py": "x\nOTHER\ny\n"})
+        elif step == "add-c":
+            made[step] = commit(fork, "fork: add the scope check file", {"c.py": "x\nCHECK_SCOPE\ny\n"})
         elif step == "trailer":
             made[step] = commit(fork, f"fork: adopt the token fix\n\nUpstream: {fix}", {"f.py": "adopted\n"})
+        elif step == "orphan-move":
+            git(fork, "checkout", "-q", "-b", "move-side")
+            made[step] = commit(
+                fork, "side: move never merged", {"b.py": "three\nfour\n", "c.py": "x\nCHECK_SCOPE\ny\n"}
+            )
+            git(fork, "checkout", "-q", "main")
+            commit(fork, "fork: same move on main", {"b.py": "three\nfour\n", "c.py": "x\nCHECK_SCOPE\ny\n"})
         elif step == "orphan":
             git(fork, "checkout", "-q", "-b", "orphan-side")
             made[step] = commit(
@@ -643,7 +658,7 @@ def chain_world(tmp_path, steps, cited, exception="", token_length=40, covered=N
         else:
             made[step] = commit(fork, "fork feature", {"f.py": "fork\n"})
     names = " and ".join(made[step] for step in cited)
-    for step, sha in made.items():
+    for step, sha in {**made, "base": base}.items():
         exception = exception.replace(f"<{step}>", sha)
     panel = new_repo(tmp_path / "panel")
     forks = panel / "upstream-forks"
@@ -917,3 +932,94 @@ def test_an_owner_decision_for_another_commit_never_excuses_a_security_hunk(tmp_
     assert result.returncode == 1, result.stdout + result.stderr
     assert fix[:12] in result.stdout
     assert "is not covered by owner decision 2026-10-20-scope-gateway" in result.stdout, result.stdout
+
+
+MOVED = "names missing `b.py:+2` as moved to `c.py` by "
+
+
+@pytest.mark.parametrize(
+    ("steps", "exception", "code", "message"),
+    [
+        (["token", "scope", "move-scope"], " missing `b.py:+2` because <move-scope> moved it to `c.py`;", 0, None),
+        (
+            ["token", "scope", "drop-scope", "add-c"],
+            " missing `b.py:+2` because <drop-scope> moved it to `c.py`;",
+            1,
+            MOVED + "<drop-scope>, but that commit did not change c.py",
+        ),
+        (
+            ["token", "scope", "move-scope-lost"],
+            " missing `b.py:+2` because <move-scope-lost> moved it to `c.py`;",
+            1,
+            MOVED + "<move-scope-lost>, but its non-comment lines are not in place in c.py on refs/remotes/fork/main",
+        ),
+        (
+            ["token", "scope", "orphan-move"],
+            " missing `b.py:+2` because <orphan-move> moved it to `c.py`;",
+            1,
+            MOVED + "<orphan-move>, but that commit is not a fork-only commit on refs/remotes/fork/main",
+        ),
+        (
+            ["token", "scope", "move-scope"],
+            " missing `b.py:+2` because <base> moved it to `c.py`;",
+            1,
+            MOVED + "<base>, but that commit is not a fork-only commit on refs/remotes/fork/main",
+        ),
+    ],
+    ids=["valid-move", "commit-off-new-path", "missing-line", "off-fork-main", "upstream-commit"],
+)
+def test_a_hunk_moved_to_another_path_is_excused_only_when_the_move_carries_it(
+    tmp_path, steps, exception, code, message
+):
+    config, _ = chain_world(tmp_path, steps, ["token", "scope"], exception)
+    result = run(config, "--today", "2026-10-27")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code == 0:
+        assert "Upstream parity gate OK" in result.stdout
+        return
+    made = dict(
+        line.split(" ", 1)[::-1] for line in git(tmp_path / "fork", "log", "--all", "--format=%H %s").splitlines()
+    )
+    for key, subject in (
+        ("drop-scope", "fork: drop the scope check"),
+        ("move-scope-lost", "fork: move the scope file"),
+        ("orphan-move", "side: move never merged"),
+        ("base", "base"),
+    ):
+        if subject in made:
+            message = message.replace(f"<{key}>", made[subject])
+    assert message in result.stdout, result.stdout
+
+
+def test_an_upstream_commit_on_fork_main_never_excuses_a_missing_hunk(tmp_path):
+    exception = " missing `b.py:+2` because <base> moved the scope check;"
+    config, _ = chain_world(tmp_path, ["token", "feature"], ["token"], exception)
+    result = run(config, "--today", "2026-10-27")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "names missing `b.py:+2` because" in result.stdout
+    assert "names no fork commit on refs/remotes/fork/main that changed b.py" in result.stdout, result.stdout
+
+
+@pytest.mark.parametrize("cited", ["main", "side", "unknown"])
+def test_a_fork_commit_cited_in_the_sync_ledger_must_be_in_fork_history(world, cited):
+    shas = world["shas"]
+    fork = world["fork"]
+    on_main = git(fork, "rev-parse", "HEAD").strip()
+    git(fork, "checkout", "-q", "-b", "side")
+    side = commit(fork, "side: never merged", {"s.txt": "s\n"})
+    git(fork, "checkout", "-q", "main")
+    sha = {"main": on_main, "side": side, "unknown": "0123456789abcdef0123"}[cited]
+    ledger = (
+        "## Waived\n\n"
+        f"- `{shas['bumped']}` the fork versions itself in fork commit {sha} security: no\n"
+        f"- `{shas['feature']}` pending: tracked feature branch security: no until: 2026-10-25\n"
+    )
+    config = write_map(world, ledger_map(world), ledger)
+    result = run(config, "--today", "2026-10-01")
+    if cited == "main":
+        assert result.returncode == 0, result.stdout + result.stderr
+        return
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"cites fork commit {sha}, which is not in the history of refs/remotes/fork/main" in result.stdout, (
+        result.stdout
+    )
