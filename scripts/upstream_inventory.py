@@ -1192,26 +1192,100 @@ def design_fork_commit(reason, head, upstream_sha, in_range):
     return None
 
 
-def own_line_exceptions(reason):
+@functools.lru_cache(maxsize=4096)
+def resolve_commit(token):
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{token}^{{commit}}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+@functools.lru_cache(maxsize=4096)
+def on_upstream_ref(sha):
+    patterns = [namespace.rstrip("/") for namespace in UPSTREAM_NAMESPACES]
+    return bool(git("for-each-ref", "--count=1", "--format=%(refname)", f"--contains={sha}", *patterns).strip())
+
+
+@functools.lru_cache(maxsize=4096)
+def first_parent_changes(sha, path):
+    if commit_exists(f"{sha}^"):
+        return bool(git("diff", "--name-only", "--no-renames", f"{sha}^", sha, "--", path).strip())
+    return bool(git("show", "--format=", "--name-only", "--no-renames", sha, "--", path).strip())
+
+
+def own_line_exceptions(reason, head, upstream_sha):
     named = {}
     problems = []
     for ident, why in MISSING_LINE_RE.findall(reason):
+        why = why.strip()
+        named[ident] = why
         if not REASON_WORD_RE.search(why):
             problems.append(f"names missing `{ident}` without a reason after because")
-        named[ident] = why.strip()
+            continue
+        decision = OWNER_DECISION_RE.search(why)
+        if decision and DECISION_ID_RE.match(decision.group(1).rstrip(".,")):
+            continue
+        path = ident.rsplit(":", 1)[0]
+        explained = False
+        for token in FORK_COMMIT_RE.findall(why):
+            sha = resolve_commit(token)
+            if sha and sha != upstream_sha and is_ancestor(sha, head) and first_parent_changes(sha, path):
+                explained = True
+                break
+        if not explained:
+            problems.append(
+                f"names missing `{ident}` because {why}, but its reason names no fork commit on {head} that changed "
+                f"{path}, and no owner-decision"
+            )
     return named, problems
+
+
+def named_token_problems(reason, head, upstream_sha, hunks):
+    text = SECURITY_FLAG_RE.sub("", reason)
+    excused = [match.span(2) for match in MISSING_LINE_RE.finditer(text)]
+    problems = []
+    seen = set()
+    for match in FORK_COMMIT_RE.finditer(text):
+        token = match.group(0)
+        sha = resolve_commit(token)
+        if sha is None:
+            if token not in seen:
+                seen.add(token)
+                problems.append(f"names `{token}`, which is not a commit in the fork or upstream history")
+            continue
+        if sha in seen or sha == upstream_sha:
+            continue
+        upstream = on_upstream_ref(sha)
+        if not upstream and not is_ancestor(sha, head):
+            seen.add(sha)
+            problems.append(f"names {sha}, which is not on {head} or on any upstream ref")
+            continue
+        if upstream or any(start <= match.start() < end for start, end in excused):
+            continue
+        if not any(hunk_brought(sha, hunk) for hunk in hunks):
+            seen.add(sha)
+            problems.append(
+                f"names fork commit {sha}, which brings none of its hunks; name it only in the exception it "
+                "explains, or drop it"
+            )
+    return problems
 
 
 def security_design_problems(reason, head, upstream_sha):
     hunks = commit_hunks(upstream_sha)
     carriers = [
         sha
-        for sha in named_commits(reason, head, upstream_sha)
-        if any(hunk_brought(sha, hunk) for hunk in hunks) or picks_upstream(sha, upstream_sha)
+        for sha in named_commits(MISSING_LINE_RE.sub("", reason), head, upstream_sha)
+        if any(hunk_brought(sha, hunk) for hunk in hunks)
     ]
     if not carriers:
         return None
-    named, problems = own_line_exceptions(reason)
+    named, problems = own_line_exceptions(reason, head, upstream_sha)
+    problems.extend(named_token_problems(reason, head, upstream_sha, hunks))
+    carried = 0
     seen = set()
     expected = 0
     gaps = []
@@ -1230,6 +1304,7 @@ def security_design_problems(reason, head, upstream_sha):
         here = normalised_file(head, path)
         absent = (check_post and not block_in_place(here, post)) or (check_pre and block_in_place(here, pre))
         brought = not absent and any(hunk_brought(sha, hunk) for sha in carriers)
+        carried += brought
         if ident in named:
             if brought:
                 problems.append(f"names missing `{ident}`, but that hunk is carried to {head}; remove the exception")
@@ -1241,6 +1316,8 @@ def security_design_problems(reason, head, upstream_sha):
             gaps.append(f"`{ident}` is on {head}, but no fork commit its reason names brings it")
     for ident in sorted(set(named) - seen):
         problems.append(f"names missing `{ident}`, but no hunk of it starts there")
+    if expected and not carried and not gaps:
+        problems.insert(0, f"excuses all {expected} hunk(s) of its own change; at least one must be carried to {head}")
     if gaps:
         problems.insert(
             0,
@@ -1311,6 +1388,26 @@ def owner_decision_record(item_text, today, where):
         named = {path.rstrip(".") for path in SCOPED_PATH_SPLIT_RE.split(paths) if path.rstrip(".")}
         scopes[sha] = scopes.get(sha, frozenset()) | frozenset(named)
     return None, {"id": ident, "date": decided, "until": until, "where": where, "covers": covers, "scopes": scopes}
+
+
+def exception_decision_problems(entry, records, today):
+    if entry["kind"] != "ported-by-design":
+        return []
+    problems = []
+    for ident, why in MISSING_LINE_RE.findall(entry["reason"]):
+        for decision in OWNER_DECISION_RE.findall(why):
+            problem = decision_problem(
+                f"`{entry['token']}` missing `{ident}`",
+                decision.rstrip(".,"),
+                records,
+                today,
+                None,
+                "is excused",
+                entry["token"] if COVERED_SHA_RE.fullmatch(entry["token"]) else None,
+            )
+            if problem:
+                problems.append(problem)
+    return problems
 
 
 def decision_problem(label, ident, records, today, until, verb, item):
@@ -1528,7 +1625,7 @@ def parse_sync_ledger(path, today=None):
                 continue
         security = None
         decision = None
-        named = OWNER_DECISION_RE.findall(reason)
+        named = OWNER_DECISION_RE.findall(MISSING_LINE_RE.sub("", reason) if section == "ported-by-design" else reason)
         if section == "waived":
             flags = SECURITY_FLAG_RE.findall(reason)
             if len(flags) != 1:
@@ -1622,6 +1719,10 @@ def parse_sync_ledger(path, today=None):
         problem = entry["decision"] and delegated_problem(entry, records, today)
         if problem:
             errors.append(f"{entry['where']}: {problem}")
+            continue
+        exception_problems = exception_decision_problems(entry, records, today)
+        if exception_problems:
+            errors.extend(f"{entry['where']}: {problem}" for problem in exception_problems)
             continue
         ends = [day for day in (entry["deadline"],) if day is not None]
         entry["covers"] = records[entry["decision"]]["covers"] if entry["decision"] else frozenset()

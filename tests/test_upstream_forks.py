@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -489,7 +490,7 @@ RESTORE_PARTIAL = (
 DOC = "# Restore\n\nA restore loads the backup.\n"
 DOC_FIRST = "# Restore\n\nA restore refuses link members.\n"
 DOC_WORDED = "# Restore\n\nA restore refuses symbolic and hard link members.\n"
-DOC_EXCEPTION = " missing `doc.md:+3` because the branch tip reworded it before the squash;"
+DOC_EXCEPTION = " missing `doc.md:+3` because the branch tip reworded it before squash <squash>;"
 
 
 def squash_world(tmp_path, carried, cite, exception=DOC_EXCEPTION):
@@ -520,6 +521,7 @@ def squash_world(tmp_path, carried, cite, exception=DOC_EXCEPTION):
         commit(fork, "fork: drop the link check", {"restore.sh": RESTORE_PARTIAL})
     commit(fork, "fork feature", {"f.txt": "fork\n"})
     carrier = {"squash": squash, "unrelated": unrelated}[cite]
+    exception = exception.replace("<squash>", squash).replace("<unrelated>", unrelated)
     panel = new_repo(tmp_path / "panel")
     forks = panel / "upstream-forks"
     forks.mkdir()
@@ -590,10 +592,13 @@ def test_a_squash_that_drops_the_security_line_carries_only_what_it_keeps(tmp_pa
         ("", "`doc.md:+3` is not on refs/remotes/fork/main"),
         (" missing `doc.md:+3` because ;", "names missing `doc.md:+3` without a reason"),
         (
-            DOC_EXCEPTION + " missing `restore.sh:+41` because it was rewritten;",
+            DOC_EXCEPTION + " missing `restore.sh:+41` because squash <squash> rewrote it;",
             "names missing `restore.sh:+41`, but that hunk is carried to refs/remotes/fork/main",
         ),
-        (DOC_EXCEPTION + " missing `restore.sh:+7` because it moved;", "names missing `restore.sh:+7`, but no hunk"),
+        (
+            DOC_EXCEPTION + " missing `restore.sh:+7` because squash <squash> moved it;",
+            "names missing `restore.sh:+7`, but no hunk",
+        ),
     ],
 )
 def test_every_own_line_a_security_carrier_leaves_out_is_named_with_a_reason(tmp_path, exception, message):
@@ -625,9 +630,21 @@ def chain_world(tmp_path, steps, cited, exception=""):
             made[step] = commit(fork, "port the scope check", {"b.py": "three\nCHECK_SCOPE\nfour\n"})
         elif step == "drop-scope":
             made[step] = commit(fork, "fork: drop the scope check", {"b.py": "three\nfour\n"})
+        elif step == "drop-token":
+            made[step] = commit(fork, "fork: drop the token check", {"a.py": "one\ntwo\n"})
+        elif step == "trailer":
+            made[step] = commit(fork, f"fork: adopt the token fix\n\nUpstream: {fix}", {"f.py": "adopted\n"})
+        elif step == "orphan":
+            git(fork, "checkout", "-q", "-b", "orphan-side")
+            made[step] = commit(
+                fork, "side: scope check never merged", {"b.py": "three\nCHECK_SCOPE\nfour\n", "o.py": "side\n"}
+            )
+            git(fork, "checkout", "-q", "main")
         else:
             made[step] = commit(fork, "fork feature", {"f.py": "fork\n"})
     names = " and ".join(made[step] for step in cited)
+    for step, sha in made.items():
+        exception = exception.replace(f"<{step}>", sha)
     panel = new_repo(tmp_path / "panel")
     forks = panel / "upstream-forks"
     forks.mkdir()
@@ -644,10 +661,19 @@ grandfathered_base = "{base}"
 ledger = "upstream-forks/kit.md"
 reason = "no tracker of its own"
 """)
+    decisions = "".join(
+        f"- `{ident}` the owner accepts the fork's own form of {fix} until: 2026-11-10\n"
+        for ident in sorted(set(re.findall(r"owner-decision: (2026-10-20-[a-z-]+gateway)", exception)))
+    )
+    owner = f"\n## Owner decisions\n\n{decisions}" if decisions else ""
     (forks / "kit.md").write_text(
         f"## Ported by design\n\n- `{fix}` ported in fork commits {names};{exception} security: yes, it checks tokens\n"
+        + owner
     )
     return forks / "forks.toml", fix
+
+
+SCOPE_DECISION = " missing `b.py:+2` because owner-decision: 2026-10-20-scope-gateway, the fork checks scopes there;"
 
 
 @pytest.mark.parametrize(
@@ -656,7 +682,7 @@ reason = "no tracker of its own"
         (["token", "scope", "feature"], ["token", "scope"], "", 0, None),
         (["token", "scope", "feature"], ["token"], "", 1, "`b.py:+2` is on refs/remotes/fork/main, but no fork commit"),
         (["token", "feature"], ["token"], "", 1, "`b.py:+2` is not on refs/remotes/fork/main"),
-        (["token", "feature"], ["token"], " missing `b.py:+2` because the fork checks scopes in its gateway;", 0, None),
+        (["token", "feature"], ["token"], SCOPE_DECISION, 0, None),
         (["token", "scope", "drop-scope"], ["token", "scope"], "", 1, "`b.py:+2` is not on refs/remotes/fork/main"),
         (["feature"], ["feature"], "", 1, NO_CARRIER),
     ],
@@ -672,3 +698,155 @@ def test_a_security_design_port_is_carried_by_a_chain_of_named_fork_commits(
     else:
         assert f"`{fix[:12]}` {NOT_CARRIED}" in result.stdout
         assert message in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("decision", "message"),
+    [
+        ("2026-10-20-unrecorded", "names owner decision 2026-10-20-unrecorded, which is not recorded"),
+        ("2026-10-20-scope-gateway", None),
+    ],
+    ids=["unrecorded", "recorded"],
+)
+def test_an_owner_decision_excuses_a_hunk_only_when_it_is_recorded_for_that_commit(tmp_path, decision, message):
+    exception = f" missing `b.py:+2` because owner-decision: {decision}, the fork checks scopes there;"
+    config, fix = chain_world(tmp_path, ["token", "feature"], ["token"], exception)
+    result = run(config, "--today", "2026-10-27")
+    if message is None:
+        assert result.returncode == 0, result.stdout + result.stderr
+        return
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{fix}` missing `b.py:+2` {message}" in result.stdout, result.stdout
+
+
+@pytest.mark.parametrize(
+    ("steps", "cited", "exception", "code", "message"),
+    [
+        (
+            ["token", "scope", "orphan"],
+            ["token", "scope", "orphan"],
+            "",
+            1,
+            "<orphan>, which is not on refs/remotes/fork/main or on any upstream ref",
+        ),
+        (
+            ["token", "scope", "feature"],
+            ["token", "scope", "feature"],
+            "",
+            1,
+            "names fork commit <feature>, which brings none of its hunks",
+        ),
+        (
+            ["token", "scope", "feature"],
+            ["token", "scope"],
+            " see also 0123456789abcdef0123;",
+            1,
+            "names `0123456789abcdef0123`, which is not a commit in the fork or upstream history",
+        ),
+        (
+            ["token", "drop-token", "feature"],
+            ["token"],
+            " missing `a.py:+2` because <drop-token> moved the token check;" + SCOPE_DECISION,
+            1,
+            "excuses all 2 hunk(s) of its own change; at least one must be carried to refs/remotes/fork/main",
+        ),
+        (
+            ["token", "feature"],
+            ["token"],
+            " missing `b.py:+2` because the gateway checks scopes;",
+            1,
+            (
+                "names missing `b.py:+2` because the gateway checks scopes, but its reason names no fork commit on "
+                "refs/remotes/fork/main that changed b.py, and no owner-decision"
+            ),
+        ),
+        (
+            ["token", "feature"],
+            ["token"],
+            " missing `b.py:+2` because <feature> moved it;",
+            1,
+            (
+                "names missing `b.py:+2` because <feature> moved it, but its reason names no fork commit on "
+                "refs/remotes/fork/main that changed b.py, and no owner-decision"
+            ),
+        ),
+        (
+            ["trailer"],
+            ["trailer"],
+            " missing `a.py:+2` because owner-decision: 2026-10-20-token-gateway;" + SCOPE_DECISION,
+            1,
+            NO_CARRIER,
+        ),
+        (
+            ["token", "scope", "drop-scope"],
+            ["token", "scope"],
+            " missing `b.py:+2` because <drop-scope> moved the scope check to the gateway;",
+            0,
+            None,
+        ),
+        (["token", "feature"], ["token"], SCOPE_DECISION, 0, None),
+    ],
+    ids=[
+        "h1-off-main",
+        "h2-brings-nothing",
+        "not-a-commit",
+        "h4-all-excused",
+        "no-sha",
+        "sha-off-path",
+        "trailer-only",
+        "breaking-commit",
+        "owner-decision",
+    ],
+)
+def test_every_commit_and_exception_of_a_security_design_port_is_accounted_for(
+    tmp_path, steps, cited, exception, code, message
+):
+    config, fix = chain_world(tmp_path, steps, cited, exception)
+    result = run(config, "--today", "2026-10-27")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code == 0:
+        assert "Upstream parity gate OK" in result.stdout
+        assert NOT_CARRIED not in result.stdout
+        return
+    made = dict(
+        line.split(" ", 1)[::-1] for line in git(tmp_path / "fork", "log", "--all", "--format=%H %s").splitlines()
+    )
+    shas = {
+        "orphan": made["side: scope check never merged"] if "orphan" in steps else None,
+        "feature": made.get("fork feature"),
+        "drop-token": made.get("fork: drop the token check"),
+    }
+    for key, sha in shas.items():
+        if sha:
+            message = message.replace(f"<{key}>", sha)
+    assert f"`{fix[:12]}` {NOT_CARRIED}" in result.stdout
+    assert message in result.stdout, result.stdout
+
+
+@pytest.mark.parametrize(
+    ("exception", "code", "message"),
+    [
+        (DOC_EXCEPTION + " missing `restore.sh:+3` because x;", 1, "names missing `restore.sh:+3` because x, but"),
+        (
+            DOC_EXCEPTION + " missing `restore.sh:+3` because <unrelated> reworked it;",
+            1,
+            (
+                "names missing `restore.sh:+3` because <unrelated> reworked it, but its reason names no fork commit "
+                "on refs/remotes/fork/main that changed restore.sh, and no owner-decision"
+            ),
+        ),
+        (DOC_EXCEPTION + " missing `restore.sh:+3` because squash <squash> dropped it;", 0, None),
+    ],
+    ids=["h5-one-letter", "h5-sha-off-path", "h5-names-the-squash"],
+)
+def test_a_squash_that_drops_the_security_line_needs_the_commit_that_dropped_it(tmp_path, exception, code, message):
+    config, original = squash_world(tmp_path, "partial", "squash", exception)
+    result = run(config, "--today", "2026-10-27")
+    assert "reject_link_members" not in (tmp_path / "fork" / "restore.sh").read_text()
+    assert result.returncode == code, result.stdout + result.stderr
+    if code == 0:
+        assert "Upstream parity gate OK" in result.stdout
+        return
+    unrelated = git(tmp_path / "upstream", "log", "-1", "--format=%H", "--grep", "chore: tidy", "main")
+    assert f"`{original[:12]}` {NOT_CARRIED}" in result.stdout
+    assert message.replace("<unrelated>", unrelated) in result.stdout, result.stdout
