@@ -88,12 +88,12 @@ name = "mtg"
 mode = "ledger"
 fork = "Free-Guy-IR/mtg"
 upstream = "9seconds/mtg"
-ported_ref = "master"
+ported_ref = "main"
 grandfathered_base = "d095108334deb1512f4b7aece588f6e00f5ec428"
 ledger = "upstream-forks/mtg.md"
 snapshot = "upstream-forks/mtg.refs"
 release_refs = ["refs/remotes/upstream/master", "refs/upstream-tags/*"]
-reason = "every 9seconds/mtg branch and tag is tracked here commit by commit against fork master, the commit the node go.mod pins; upstream releases from master"
+reason = "every 9seconds/mtg branch and tag is tracked here commit by commit against fork main, the fork default branch, which carries fork master (the commit the node go.mod pins) and the merge of upstream v2.3.0; upstream releases from master"
 
 [[repo]]
 name = "sing-box"

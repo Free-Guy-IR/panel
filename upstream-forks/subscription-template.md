@@ -67,6 +67,6 @@ The upstream commits behind these features are decided above, because the React 
 main 6d69186252c9 and the fork serves its own server-rendered index.html. These features of upstream's page are not
 on the fork page, so they are recorded here as gaps, not as owed code. Checked on 2026-11-03 against fork main
 index.html: no Chinese (zh) locale (upstream main has en, fa, ru and zh locales in src/locales; the fork page has fa, en and ru), no
-support URL, and no usage chart. Reported by TRACKERS-SUBTPL on 2026-11-03 and not re-checked in this pass: the
-announcement text (the fork page shows only the announcement link), copying the subscription as Base64, and client
+separate support URL (the fork page labels its announce_url action link "Support", index.html:404-409 with data-i18n="support", so the one link it has is the announcement link under that label), and no usage chart. Reported by TRACKERS-SUBTPL on 2026-11-03 and not re-checked in this pass: the
+announcement text (the fork page shows only the announcement link, labelled Support), copying the subscription as Base64, and client
 OS detection for the app list. No lane owns them; main decides whether any of them is ported to the fork page.
