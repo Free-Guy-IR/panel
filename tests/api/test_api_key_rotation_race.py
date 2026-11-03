@@ -152,3 +152,68 @@ def test_a_custom_key_rotation_is_decided_on_the_row_it_rotates(access_token, sc
     for field, value in change.items():
         assert _without_nulls(stored[field]) == value
     assert _authenticates(rotator_raw)
+
+
+@pytest.mark.skipif(":memory:" in DATABASE_URL, reason="needs a database shared by several connections")
+@pytest.mark.parametrize("action", ["revoke", "modify"])
+def test_a_key_deleted_by_the_owner_mid_change_answers_404(access_token, scoped_admin, monkeypatch, action):
+    target_id, _ = _key(scoped_admin["token"], NARROW)
+    operation = APIKeyOperation(operator_type=OperatorType.API)
+    hook = "revoke_api_key_crud" if action == "revoke" else "update_api_key"
+    write = getattr(api_key_operation_module, hook)
+
+    async def _scenario():
+        engine, sessions = _sessions()
+        checked = asyncio.Event()
+        deleted = asyncio.Event()
+        order: list[str] = []
+
+        async def _write_after_owner_delete(*args):
+            checked.set()
+            try:
+                await asyncio.wait_for(deleted.wait(), timeout=PAUSE_SECONDS)
+            except TimeoutError:
+                pass
+            order.append(action)
+            return await write(*args)
+
+        monkeypatch.setattr(api_key_operation_module, hook, _write_after_owner_delete)
+
+        async with sessions() as db:
+            owner = await get_admin(db, access_token)
+            await db.rollback()
+
+        async def _change():
+            async with sessions() as db:
+                try:
+                    if action == "revoke":
+                        return await operation.revoke_api_key(db, admin=owner, key_id=target_id)
+                    return await operation.modify_api_key(
+                        db, admin=owner, key_id=target_id, model=APIKeyUpdate.model_validate({"note": "renamed"})
+                    )
+                except HTTPException as exc:
+                    return exc
+
+        async def _owner_delete():
+            await checked.wait()
+            async with sessions() as db:
+                await operation.delete_api_key(db, admin=owner, key_id=target_id)
+            order.append("delete")
+            deleted.set()
+
+        try:
+            changed, _ = await asyncio.gather(_change(), _owner_delete())
+        finally:
+            await engine.dispose()
+        return changed, order
+
+    changed, order = asyncio.run(_scenario())
+
+    if order == ["delete", action]:
+        assert isinstance(changed, HTTPException), changed
+        assert changed.status_code == status.HTTP_404_NOT_FOUND, changed.detail
+    else:
+        assert order == [action, "delete"]
+        assert not isinstance(changed, HTTPException), changed.detail
+    response = client.get(f"/api/api_key/{target_id}", headers=auth_headers(access_token))
+    assert response.status_code == status.HTTP_404_NOT_FOUND, response.text

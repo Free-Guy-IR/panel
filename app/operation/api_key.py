@@ -1,6 +1,7 @@
 from datetime import UTC, datetime as dt
 
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.db import AsyncSession
 from app.db.crud.admin import build_admin_details, get_admin_by_id
@@ -227,7 +228,10 @@ class APIKeyOperation(BaseOperation):
             # An inheriting key never keeps a stored snapshot (see the validation note above).
             update_data["permissions"] = {}
 
-        db_key = await update_api_key(db, db_key, update_data)
+        try:
+            db_key = await update_api_key(db, db_key, update_data)
+        except StaleDataError:
+            await self.raise_error(message="API key not found", code=404, db=db)
         await db.commit()
 
         api_key_resp = APIKeyResponse.model_validate(db_key)
@@ -257,7 +261,10 @@ class APIKeyOperation(BaseOperation):
         # keys that stay within its own permissions.
         await self._ensure_caller_may_rotate(db, admin, db_key)
 
-        raw_key, db_key = await revoke_api_key_crud(db, db_key)
+        try:
+            raw_key, db_key = await revoke_api_key_crud(db, db_key)
+        except StaleDataError:
+            await self.raise_error(message="API key not found", code=404, db=db)
         await self._ensure_caller_may_rotate(db, admin, db_key)
         await db.commit()
 
