@@ -117,6 +117,17 @@ def _maintenance_rpc_timeout() -> float:
     return max(_MAINTENANCE_RPC_TIMEOUT, nats_settings.node_rpc_timeout)
 
 
+_BRIDGE_TIMEOUT_CODE = -1
+
+
+def _maintenance_error_status(bridge_code: int) -> int:
+    if bridge_code == _BRIDGE_TIMEOUT_CODE:
+        return 504
+    if bridge_code <= 0:
+        return 503
+    return bridge_code
+
+
 class NodeOperation(NodeExtraCoresMixin, BaseOperation):
     # Local Start RPCs in progress on this process. Health checks must not fire a
     # second Start just because pg-node still returns "core is not started yet".
@@ -1459,7 +1470,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         try:
             response = await node.update_node()
         except NodeAPIError as e:
-            await self.raise_error(message=e.detail, code=e.code)
+            await self.raise_error(message=e.detail, code=_maintenance_error_status(e.code))
         return response.json()
 
     async def _maintenance_request(self, action: str, payload: dict) -> dict:
@@ -1484,7 +1495,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         try:
             response = await node.update_core(node_core_update.model_dump(mode="json"))
         except NodeAPIError as e:
-            await self.raise_error(message=e.detail, code=e.code)
+            await self.raise_error(message=e.detail, code=_maintenance_error_status(e.code))
         return response.json()
 
     async def _update_core_remote(self, node_id: int, node_core_update: NodeCoreUpdate) -> dict:
@@ -1499,7 +1510,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         try:
             response = await node.update_geofiles(node_geofiles_update.model_dump(mode="json"))
         except NodeAPIError as e:
-            await self.raise_error(message=e.detail, code=e.code)
+            await self.raise_error(message=e.detail, code=_maintenance_error_status(e.code))
         return response.json()
 
     async def _update_geofiles_remote(self, node_id: int, node_geofiles_update: NodeGeoFilesUpdate) -> dict:
