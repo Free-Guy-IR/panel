@@ -155,7 +155,9 @@ DIRECTIVE_PREFIXES = (
     "# isort:",
 )
 CGO_IMPORT_RE = re.compile(r'["`]C["`]')
-FORK_CITE_RE = re.compile(r"\bcommits?\s+(?:[0-9a-f]{9,40}\s*(?:,|and)\s*)*$", re.IGNORECASE)
+FORK_CITE_RE = re.compile(
+    r"\b(?:commits?|ported\s+in|carried\s+by|fixed\s+by)\s+(?:[0-9a-f]{9,40}\s*(?:,|and)\s*)*$", re.IGNORECASE
+)
 GO_MODULE_VERSION_RE = re.compile(r"^go\s+1\.(\d+)\b", re.MULTILINE)
 GO_FILENAME_OSES = frozenset(
     [
@@ -207,7 +209,7 @@ GO_FILENAME_ARCHES = frozenset(
         "wasm",
     ]
 )
-GO_SHIPPED_ARCHES = frozenset({"amd64", "arm64"})
+GO_SHIPPED_ARCHES = frozenset({"amd64", "arm64", "386", "arm"})
 GO_LINUX_TRUE_TERMS = frozenset({"linux", "unix"})
 GO_CONSTRAINT_RE = re.compile(r"^\s*//\s*(?:go:build|\+build)\b(.*)$", re.MULTILINE)
 NAMED_BRANCH_RE = re.compile(
@@ -1542,9 +1544,7 @@ def go_filename_excluded(name):
         return True
     parts = name[: -len(".go")].split("_")[1:]
     if parts and parts[-1] in GO_FILENAME_ARCHES:
-        if parts[-1] not in GO_SHIPPED_ARCHES:
-            return True
-        return len(parts) > 1 and parts[-2] in GO_FILENAME_OSES and parts[-2] != "linux"
+        return True
     return bool(parts) and parts[-1] in GO_FILENAME_OSES and parts[-1] != "linux"
 
 

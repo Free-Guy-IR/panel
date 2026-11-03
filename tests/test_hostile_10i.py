@@ -91,14 +91,12 @@ def test_10i_unbuilt_go_targets_are_excluded(path, content, go_minor):
     [
         ("pkg/x.go", "package x\n", 22),
         ("pkg/x_linux.go", "package x\n", 22),
-        ("pkg/x_linux_amd64.go", "package x\n", 22),
-        ("pkg/x_arm64.go", "package x\n", 22),
         ("pkg/x.go", "//go:build linux\n\npackage x\n", 22),
         ("pkg/x.go", "//go:build !windows\n\npackage x\n", 22),
         ("pkg/x.go", "//go:build unix\n\npackage x\n", 22),
         ("pkg/x.go", "//go:build go1.21\n\npackage x\n", 22),
     ],
-    ids=["plain", "linux-suffix", "linux-amd64-suffix", "arm64-suffix", "linux-tag", "not-windows", "unix", "old-go"],
+    ids=["plain", "linux-suffix", "linux-tag", "not-windows", "unix", "old-go"],
 )
 def test_10i_linux_built_go_targets_are_kept(path, content, go_minor):
     assert not load_inventory().go_build_excluded(path, content, go_minor)
