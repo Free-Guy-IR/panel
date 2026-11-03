@@ -77,6 +77,10 @@ class HysteriaSettings(BaseModel):
     auth: str = Field(default_factory=random_password, min_length=1)
 
 
+class MasqueSettings(BaseModel):
+    password: str = Field(default_factory=random_password, min_length=1)
+
+
 class Hysteria2Settings(BaseModel):
     password: str = Field(default_factory=random_password, min_length=1)
 
@@ -237,6 +241,7 @@ class ProxyTable(BaseModel):
     shadowsocks: ShadowsocksSettings = Field(default_factory=ShadowsocksSettings)
     wireguard: WireGuardSettings = Field(default_factory=WireGuardSettings)
     hysteria: HysteriaSettings = Field(default_factory=HysteriaSettings)
+    masque: MasqueSettings = Field(default_factory=MasqueSettings)
     hysteria2: Hysteria2Settings = Field(default_factory=Hysteria2Settings)
     openvpn: OpenVPNSettings = Field(default_factory=OpenVPNSettings)
     mtproto: MTProtoSettings = Field(default_factory=MTProtoSettings)
