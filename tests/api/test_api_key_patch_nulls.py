@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 from fastapi import status
-from sqlalchemy import select, update
+from sqlalchemy import literal_column, select, update
 
 from app.db.models import APIKey
 from tests.api import TestSession, client
@@ -63,7 +63,9 @@ def _create_custom_key(headers: dict[str, str]) -> dict:
 def _store_json_null_permissions(key_id: int) -> None:
     async def _write() -> None:
         async with TestSession() as session:
-            await session.execute(update(APIKey).where(APIKey.id == key_id).values(permissions=None))
+            await session.execute(
+                update(APIKey).where(APIKey.id == key_id).values(permissions=literal_column("'null'"))
+            )
             await session.commit()
 
     asyncio.run(_write())
