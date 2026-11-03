@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
@@ -20,6 +21,25 @@ from tests.test_recorder_harness import (  # noqa: F401
 )
 
 FROZEN_BUCKET = datetime(2026, 9, 23, 10, 20, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True, params=["direct", "coalesced"])
+async def history_mode(request, monkeypatch: pytest.MonkeyPatch, recorder_db) -> str:
+    monkeypatch.setattr(record_usages, "_pending_user_usage_history", defaultdict(int))
+    monkeypatch.setattr(record_usages, "_user_usage_history_last_flush", 0.0)
+    monkeypatch.setattr(record_usages, "_monotonic_now", lambda: 1.0)
+    monkeypatch.setattr(record_usages.usage_settings, "user_usage_history_flush_interval", 3600)
+    if request.param == "coalesced":
+        monkeypatch.setattr(record_usages, "_history_is_coalesced", lambda dialect: True)
+    elif record_usages._history_is_coalesced(await record_usages.get_dialect()):
+        pytest.skip("PostgreSQL always coalesces node user usage history")
+    return request.param
+
+
+async def _record_tick() -> None:
+    await record_usages._record_user_usages_impl()
+    async with record_usages._user_usage_history_lock:
+        await record_usages._flush_pending_user_usage_history_locked()
 
 
 async def _reset(session_factory, user_id: int, clean_chart_data: bool = False) -> None:
@@ -61,7 +81,7 @@ async def test_chart_rows_follow_the_fence_when_a_user_is_reset_mid_tick(
     fired = _reset_during(monkeypatch, recorder_db, stage, reset_user_id, clean_chart_data)
     billed_before, charted_before = await usage_snapshot(recorder_db, user_ids)
 
-    await record_usages._record_user_usages_impl()
+    await _record_tick()
 
     assert fired["done"]
     billed_after, charted_after = await usage_snapshot(recorder_db, user_ids)
@@ -82,13 +102,13 @@ async def test_withdrawing_fenced_chart_bytes_keeps_the_bucket_traffic_already_b
     node = CountingNode(node_ids[0], {user_id: 100})
     monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=[(node.node_id, node)]))
 
-    await record_usages._record_user_usages_impl()
+    await _record_tick()
     billed, charted = await usage_snapshot(recorder_db, user_ids)
     assert billed[user_id] == charted[user_id] == 100
 
     node.add(user_id, 900)
     _reset_during(monkeypatch, recorder_db, "after_chart_write", user_id, clean_chart_data=False)
-    await record_usages._record_user_usages_impl()
+    await _record_tick()
 
     billed, charted = await usage_snapshot(recorder_db, user_ids)
     assert billed[user_id] == 0
@@ -103,7 +123,7 @@ async def test_a_fenced_user_leaves_no_empty_chart_row(monkeypatch: pytest.Monke
     monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=[(node.node_id, node)]))
     _reset_during(monkeypatch, recorder_db, "after_chart_write", user_id, clean_chart_data=False)
 
-    await record_usages._record_user_usages_impl()
+    await _record_tick()
 
     async with recorder_db() as session:
         rows = (await session.execute(select(NodeUserUsage.id).where(NodeUserUsage.user_id == user_id))).all()
@@ -116,7 +136,7 @@ class _Deadlock(Exception):
 
 @pytest.mark.asyncio
 async def test_a_retried_cohort_transaction_writes_the_chart_exactly_once(
-    monkeypatch: pytest.MonkeyPatch, recorder_db, statement_faults
+    monkeypatch: pytest.MonkeyPatch, recorder_db, statement_faults, history_mode
 ):
     _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=2, node_count=1)
     reset_user_id, kept_user_id = user_ids
@@ -126,9 +146,12 @@ async def test_a_retried_cohort_transaction_writes_the_chart_exactly_once(
     faults = statement_faults(is_billing_write, OperationalError("stmt", {}, _Deadlock()), {1})
     billed_before, charted_before = await usage_snapshot(recorder_db, user_ids)
 
-    await record_usages._record_user_usages_impl()
+    await _record_tick()
 
-    assert faults.log == ["chart", "billing", "failed", "chart", "billing"]
+    if history_mode == "coalesced":
+        assert faults.log == ["billing", "failed", "billing", "chart"]
+    else:
+        assert faults.log == ["chart", "billing", "failed", "chart", "billing"]
     billed_after, charted_after = await usage_snapshot(recorder_db, user_ids)
     assert _delta(charted_after, charted_before) == {reset_user_id: 0, kept_user_id: 45}
     assert _delta(billed_after, billed_before)[kept_user_id] == 45
@@ -161,13 +184,13 @@ async def test_withdrawal_leaves_the_fenced_users_other_chart_rows_untouched(
         AsyncMock(return_value=[(home.node_id, home), (other.node_id, other)]),
     )
 
-    await record_usages._record_user_usages_impl()
+    await _record_tick()
     rows_before = await _chart_rows(recorder_db, user_id)
     assert sorted(rows_before.values()) == [40, 55, 100]
 
     home.add(user_id, 900)
     _reset_during(monkeypatch, recorder_db, "after_chart_write", user_id, clean_chart_data=False)
-    await record_usages._record_user_usages_impl()
+    await _record_tick()
 
     assert await _chart_rows(recorder_db, user_id) == rows_before
 
