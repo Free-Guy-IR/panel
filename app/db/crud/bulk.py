@@ -21,6 +21,7 @@ from app.fork.crud.admin_scope import locked_targets
 from app.fork.crud.bulk_result_bounds import (
     BulkUserResultOutOfRange,
     bulk_result_guard,
+    expire_as_bulk_reads_it,
     out_of_range_detail,
     out_of_range_result_exists,
 )
@@ -321,7 +322,7 @@ async def get_bulk_user_limit_targets(
     *,
     lock: bool = True,
 ) -> list[tuple]:
-    column = User.expire if field == "expire" else User.data_limit
+    column = expire_as_bulk_reads_it(db) if field == "expire" else User.data_limit
     stmt = (
         select(User.id, column).where(_bulk_user_target_filter(bulk_model, field, allowed_group_ids)).order_by(User.id)
     )

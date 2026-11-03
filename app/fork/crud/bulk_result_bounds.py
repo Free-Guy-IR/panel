@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from sqlalchemy import Boolean, Integer, cast, false, func, select, true
+from sqlalchemy import Boolean, DateTime, Integer, cast, false, func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import User
@@ -10,6 +10,7 @@ STORABLE_EXPIRE_MIN = datetime(1000, 1, 1, tzinfo=UTC)
 STORABLE_EXPIRE_MAX = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=UTC)
 STORABLE_DATA_LIMIT_MAX = 2**63 - 1
 STORABLE_EXPIRE_MIN_EPOCH = int(STORABLE_EXPIRE_MIN.timestamp())
+STORABLE_EXPIRE_MAX_EPOCH = int(STORABLE_EXPIRE_MAX.replace(microsecond=0).timestamp())
 
 
 class BulkUserResultOutOfRange(ValueError):
@@ -27,16 +28,27 @@ def out_of_range_detail(field: Literal["expire", "data_limit"]) -> str:
     )
 
 
+def sqlite_expire_seconds(column):
+    return cast(func.strftime("%s", column), Integer)
+
+
+def expire_as_bulk_reads_it(db: AsyncSession):
+    if _dialect(db) == "sqlite":
+        return func.datetime(sqlite_expire_seconds(User.expire), "unixepoch", type_=DateTime)
+    return User.expire
+
+
 def bulk_result_out_of_range(field: Literal["expire", "data_limit"], amount: int, dialect: str | None = None):
     if field == "expire":
+        if amount == 0:
+            return false()
+        if dialect == "sqlite":
+            moved = sqlite_expire_seconds(User.expire) + amount
+            beyond = moved < STORABLE_EXPIRE_MIN_EPOCH if amount < 0 else moved > STORABLE_EXPIRE_MAX_EPOCH
+            return func.coalesce(beyond, true(), type_=Boolean)
         if amount > 0:
             return User.expire > STORABLE_EXPIRE_MAX - timedelta(seconds=amount)
-        if amount < 0:
-            if dialect == "sqlite":
-                whole_seconds = cast(func.strftime("%s", User.expire), Integer)
-                return func.coalesce(whole_seconds + amount < STORABLE_EXPIRE_MIN_EPOCH, true(), type_=Boolean)
-            return User.expire < STORABLE_EXPIRE_MIN - timedelta(seconds=amount)
-        return false()
+        return User.expire < STORABLE_EXPIRE_MIN - timedelta(seconds=amount)
     if amount > 0:
         return User.data_limit > STORABLE_DATA_LIMIT_MAX - amount
     return false()
