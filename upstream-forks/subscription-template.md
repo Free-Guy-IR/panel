@@ -60,3 +60,13 @@ carries in its own form, or why nothing of it applies.
 - `8d216024dea9b0e5add4870cb32fa00829bcac1e` security: no, apart from README text it only changes the React app that fork 683b4b43080a0b3ad9f4b666b833689fa0495f72 deleted when the server-rendered page of fork 8d19ac6975c098f00f9cbc80f04e4bcb51dea1aa replaced it: a fallback-language line in .env.example for the Vite build (its README hunk is on the fork head); the fork has no build, and its page starts in fa. Copied as fork 551ae22695b0cf76ab2ec6bdda59c3d832741376.
 - `ba2d7865d61839718e85ddd4dc42010736416901` security: no, it only changes the React app that fork 683b4b43080a0b3ad9f4b666b833689fa0495f72 deleted when the server-rendered page of fork 8d19ac6975c098f00f9cbc80f04e4bcb51dea1aa replaced it: the version field of package.json, which the fork no longer has; the fork names its releases by its own tags. Copied as fork f49286aa2a2dc71f5df06ee7b130c3016f0ad8e8.
 - `fd9d3572807543dac43806b87bd83a0c86c29d25` security: no, it changes the bun version of the release build, and fork 7f226c1e7c26bc82c9250b459f8e5b52f7fadaca rewrote .github/workflows/release.yml to publish index.html as it is, with no bun build at all. Copied as fork 77a68125524c1dd1dd43f06fa07566bfe17f9368.
+
+## Feature gaps of the fork page (not read by the gate)
+
+The upstream commits behind these features are decided above, because the React app they change is deleted on fork
+main 6d69186252c9 and the fork serves its own server-rendered index.html. These features of upstream's page are not
+on the fork page, so they are recorded here as gaps, not as owed code. Checked on 2026-11-03 against fork main
+index.html: no Chinese (zh) locale (upstream main has en, fa, ru and zh locales in src/locales; the fork page has fa, en and ru), no
+support URL, and no usage chart. Reported by TRACKERS-SUBTPL on 2026-11-03 and not re-checked in this pass: the
+announcement text (the fork page shows only the announcement link), copying the subscription as Base64, and client
+OS detection for the app list. No lane owns them; main decides whether any of them is ported to the fork page.

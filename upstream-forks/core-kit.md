@@ -20,4 +20,4 @@ ls-remote of both repos the same day). The fork carries upstream 0.2.10, 0.2.11 
 
 ## Port queue
 
-- `a6d8d62257ace5d945daf4907bce9a41682085bd` security: no, upstream core-kit 0.3.0 only moves @pasarguard/xray-config-kit from 0.4.1 to 0.4.2, whose upstream commits eb3cc64 and 26a21e4 add Xray v26.10.31 parity data and drop pre-release versions from that data; fork main still pins 0.4.1. Unowned, proposed owner PUSH-GATE, the lane main assigned on 2026-10-25 to port core-kit 0.2.10 to 0.2.12 (upstream-npm-waivers.toml), with PANEL-LEAD as fallback. until: 2026-11-17
+- `a6d8d62257ace5d945daf4907bce9a41682085bd` security: no, upstream core-kit 0.3.0 only moves @pasarguard/xray-config-kit from 0.4.1 to 0.4.2, whose upstream commits eb3cc64 and 26a21e4 add Xray v26.10.31 parity data and drop pre-release versions from that data; fork main still pins 0.4.1. Owner PORT-B-DASH, which holds the dashboard's npm kit waiver, due 2026-11-20 (the dashboard pins @pasarguard/xray-config-kit ^0.3.8). until: 2026-11-20

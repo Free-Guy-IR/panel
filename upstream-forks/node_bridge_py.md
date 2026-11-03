@@ -10,7 +10,9 @@ main f892a5ccb6cff597ec233854dea7abc46981d1bb (= tag v0.9.4, PyPI 0.9.4), tag v0
 and upstream branch shared-storage c82f1d5aa3e04c47ef9bb70cae4fc43c2dbc3f4f; `git ls-remote` that day showed no other upstream
 branch (the masque branch is deleted, its head 0320265e3215 stays tracked through the refs snapshot) and no dev branch.
 The bridge lane's own record is upstream-parity.toml on fork branch ci/upstream-parity-20261102 (head 1150f0d, not yet on fork
-main); every fork commit named below is an ancestor of fork main f213a5036b99.
+main); every fork commit named below as a fork main carrier is an ancestor of fork main f213a5036b99, and the two
+fork commits 560dc50e288f and e3ac749ae075 named for the shared-storage entries are on fork branch shared-storage only,
+not on fork main.
 
 ## Ported by design
 
@@ -46,8 +48,11 @@ main); every fork commit named below is an ancestor of fork main f213a5036b99.
 ## Held for an upstream release
 
 Owner rule of 2026-10-14: only final upstream releases are ported. On 2026-11-03 every upstream commit past the base is in a
-final release (upstream main f892a5ccb6cf is tag v0.9.4 and PyPI 0.9.4) except the deleted masque branch's 0320265e3215,
-which is waived above as UNMERGED-WIP, so no upstream node_bridge_py commit is held.
+final release (upstream main f892a5ccb6cf is tag v0.9.4 and PyPI 0.9.4) except three: the deleted masque branch's
+0320265e3215, which is waived above as UNMERGED-WIP, and the two commits of upstream branch shared-storage,
+3f4ca0a52fee and c82f1d5aa3e0, which are in no upstream tag and are recorded above under Ported by design as
+ALREADY-IN-FORK (patch-identical to 560dc50e288f and e3ac749ae075 on fork branch shared-storage). So no upstream
+node_bridge_py commit is held.
 
 ## Port queue
 

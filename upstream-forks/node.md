@@ -15,6 +15,16 @@ own need no line. The node repository's own drift tracker (`.github/upstream-wai
 fork main 9c7f7e8) records the same decisions; it is cited below as the node tracker. Port queue entries are owed ports:
 the gate reports them as owed and covers each one only until its deadline, unless it lands on fork main first.
 
+Re-checked later on 2026-11-03 against fork main 28db4435d7cfc5b2a5b94935e3be4a2e024a3556, two commits past 9c7f7e8:
+d189e94 pins the sing-box fork's main at v1.13.21 (Dockerfile, Makefile, run-tests.yml, docs) and 28db443 waives mtg
+v2.3.0 (tag commit 5899a2f5b3bd) as pending until 2026-11-10 in the node tracker. They touch only build, CI and
+tracker files. Every fork commit named below is still an ancestor of 28db443, and every node tracker waiver cited
+below is still in `.github/upstream-waivers.txt` there. The 24 waivers the move removed name sing-box and sing-quic
+commits up to v1.13.21 and v0.6.5, none of them a PasarGuard/node commit, so no line below changes. The node tracker's
+#114 row (docs/upstream-parity.md:50 on 28db443) still says the placeholder sits in ToBytes until #58 is merged; on
+28db443 it is in wireClientsLocked (backend/xray/config.go:466-469), moved by 797adcf, as the 946ab6a entry below
+says, so that row is stale and NODE-LEAD owns its correction.
+
 Earlier checks: 2026-10-17 (dev f58fce8fc835, fork main 0071e2c), 2026-10-12 (dev a3d2d2fe2d8f), 2026-10-11 (dev
 e03754dec4fc), 2026-10-10 (dev f72ac0efacdb) and 2026-10-06 (fork main 2d8e11f, dev 7be885ff5410, main and v0.5.4
 e9a9ba286413, masque b7442879ef0f).
@@ -93,13 +103,24 @@ deadlines from the node tracker (`.github/upstream-waivers.txt` on fork main 9c7
 - `bd745b540bd52e0300718bb294fd9f06b55f96e1` fix(xray) does not fail SyncUser over an empty WireGuard message (#118), released in v0.5.5. The rejection it removes ("wireguard public_key is required" in backend/xray/api/wireguard_account.go) comes with #64 (e03754dec4fc) and is not on fork main 9c7f7e8, so it belongs with the #64 port. Owner NODE-SYNC-055 under NODE-LEAD (node tracker waiver bd745b5, pending) until: 2026-11-08 security: no, it fixes code fork main does not have
 - `d359a8f7c478044c0fb80afcda207c6d122affd5` fix(controller) restarts an unhealthy backend on a same-config Start (#117), released in v0.5.5. It edits StartOrAttach in controller/controller.go, which the fork rejected (e6dad6e3aa5c); the fork's Start always restarts, so its decision is likely a waiver like e6dad6e3aa5c, to be recorded by its owner. Owner NODE-SYNC-055 under NODE-LEAD (node tracker waiver d359a8f, pending) until: 2026-11-08 security: no, a restart decision for a code path the fork does not carry
 - `47857d43fe777f30f9ecc5f2ffe4ca0b037507cb` chore: bump version to v0.5.5 (controller NodeVersion), released as v0.5.5; the fork keeps its own node version line. Owner NODE-SYNC-055 under NODE-LEAD (node tracker waiver 47857d4, pending) until: 2026-11-08 security: no, a version constant
-- `25a8d740514256a1e109b10360fbc53cb80e9148` feat: apply routing and outbound changes without restarting xray (#105), released in v0.5.5. Decision owed: the node tracker declines it for now as a feature, because the fork's Start always rebuilds the core and converges users, and a live apply would need tracking of live routing-RPC edits and a rule for degraded starts; it is revisited with the xray pin move F-XRAY-PIN-V261021. The node tracker names no owner; proposed owner NODE-LEAD (node tracker waiver 25a8d74, pending) until: 2026-11-20 security: no, a feature that avoids restarts
+- `25a8d740514256a1e109b10360fbc53cb80e9148` feat: apply routing and outbound changes without restarting xray (#105), released in v0.5.5. Decision owed: the node tracker declines it for now as a feature, because the fork's Start always rebuilds the core and converges users, and a live apply would need tracking of live routing-RPC edits and a rule for degraded starts; it is revisited with the xray pin move F-XRAY-PIN-V261021. The node tracker names no owner; owner NODE-LEAD, assigned by main on 2026-11-03 (node tracker waiver 25a8d74, pending) until: 2026-11-20 security: no, a feature that avoids restarts
 - `4b0bc4f6940cfb8c6ac3bf339f52f98b661df381` chore(deps) bump docker/login-action 4.6.0 to 4.7.0 (#119), released in v0.5.6; the fork's release.yml and image.yml use docker/login-action@v4.6.0, which has no published advisory (node tracker, checked 2026-10-26). Owner NODE-SYNC-055 under NODE-LEAD (node tracker waiver 4b0bc4f, pending) until: 2026-11-20 security: no, a CI action bump
 - `88d5e75db62190d8566caf826536c801465c1482` feat(xray) add Masque proxy support (#96), released in v0.5.6, the squash of the deleted upstream branch masque. It builds on Xray's native MASQUE accounts (v26.9.30 and later), so its port goes with the xray pin move; upstream's Proxy field masque = 7 collides with fork main's `Hysteria2 hysteria2 = 7` in common/service.proto (fields 8 to 11 are OpenVPN, MTProto, TUIC and L2TP), so the node tracker plans masque = 12 as a reasoned divergence. Owner NODE-SYNC-055 under NODE-LEAD (node tracker waiver 88d5e75, pending) until: 2026-11-20 security: no, a new proxy type that fork main does not have; its squashed "skip Masque users with empty passwords" fix is part of that feature and a port must keep it
 - `675bdaa24a3a67847f2094e518f1ae4d8460aa01` chore: bump version to v0.5.6, released as v0.5.6; the fork keeps its own node version line. Owner NODE-SYNC-055 under NODE-LEAD (node tracker waiver 675bdaa, pending) until: 2026-11-20 security: no, a version constant
 - `243b818307790393d21b41154c99b0d052e89a59` pre-squash commit "feat: add Masque proxy support" of the deleted upstream branch masque (last head b7442879ef0f, kept in node.refs); upstream squash-merged the branch as 88d5e75db621 (#96, its message lists this commit), released in v0.5.6. Its content is owed with the #96 port; after that port it is recorded as already in the fork. Owner NODE-SYNC-055 under NODE-LEAD until: 2026-11-20 security: no, a new proxy type
 - `f0877ce629e84aae6099e9bf5c6f47837dff78a8` pre-squash commit of the deleted upstream branch masque that moves to the xray-core v26.9.30 pre-release for native MASQUE accounts; squash-merged as 88d5e75db621 (#96), released in v0.5.6. Fork main pins xray v26.3.27 (Dockerfile XRAY_COMMIT=d2758a023cd7), so its content is owed with the #96 port at the xray pin move. Owner NODE-SYNC-055 under NODE-LEAD until: 2026-11-20 security: no, a dependency move for a new proxy type
 - `b7442879ef0f67b692474e0e668d65f29df8de49` merge commit "Merge dev into masque", the last head of the deleted upstream branch masque; its conflict resolution keeps masque's go.mod and go.sum versions over dev's (`git show --remerge-diff`: 35 deletions in go.mod and go.sum); the branch was squash-merged as 88d5e75db621 (#96), released in v0.5.6, and is decided with that port. Owner NODE-SYNC-055 under NODE-LEAD until: 2026-11-20 security: no, dependency versions of a new proxy type
+
+## Owed node fixes with no upstream commit (not read by the gate)
+
+- Middle-proxy accept loop, owner NODE-LEAD, due 2026-11-06. On node main 28db4435d7cf, backend/mtproto/mtproto.go
+  runs `_ = pi.mp.Serve(listener)` for the middle-proxy path, and `Instance.Serve` in
+  backend/mtproto/middleproxy/instance.go:64-75 returns on the first Accept error outside Shutdown. That inbound then
+  stops for good, the same remotely triggerable denial of service that mtg v2.3.0 fixes for the direct path with
+  e660dc1c22ed and 7931f8146886 (owed by the MTG lane in the mtg ledger). Merging mtg v2.3.0 does not fix this node
+  code. The fix needs the same transient-accept retry in `Instance.Serve`, or a supervisor that serves again, with a
+  test that injects EMFILE and a Linux accept errno. Found by TRACKERS-VERIFY on 2026-11-03 (finding F4). security:
+  yes.
 
 ## Fork overrides of upstream changes in the grandfathered base (not read by the gate)
 
