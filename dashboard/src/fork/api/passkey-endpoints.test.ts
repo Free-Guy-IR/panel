@@ -71,6 +71,13 @@ describe('passkey API client', () => {
     })
   })
 
+  it('resolves to the response body the passkey screens read', async () => {
+    globalThis.fetch = (async () => new Response('[{"id":1,"name":"laptop"}]', { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch
+    expect(await (api as Record<string, (...a: unknown[]) => Promise<unknown>>).listAdminPasskeys(7)).toEqual([{ id: 1, name: 'laptop' }])
+    globalThis.fetch = (async () => new Response('{"access_token":"tok","token_type":"bearer"}', { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch
+    expect(await (api as Record<string, (...a: unknown[]) => Promise<unknown>>).passkeyLoginVerify({ credential: {} })).toEqual({ access_token: 'tok', token_type: 'bearer' })
+  })
+
   it('every name the dashboard imports from the API client is exported', () => {
     const files = ['src/components/layout/nav-user.tsx', 'src/features/admins/dialogs/admin-modal.tsx', 'src/pages/login.tsx']
     const missing: string[] = []
