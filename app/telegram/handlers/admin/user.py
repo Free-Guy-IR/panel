@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.crud.user import get_existing_usernames
 from app.db.models import UserStatus
 from app.fork.operation.group_scope import user_within_allowed_groups
+from app.fork.operation.node_messages import scrub_credentials
 from app.models.admin import AdminDetails
 from app.models.group import GroupListQuery
 from app.models.settings import ConfigFormat
@@ -260,7 +261,7 @@ async def process_done(event: CallbackQuery, db: AsyncSession, admin: AdminDetai
     try:
         user = await user_operations.create_user(db, new_user, admin)
     except ValueError as exc:
-        return await event.answer(f"❌ {exc}"[:MAX_CALLBACK_ALERT_LENGTH], show_alert=True)
+        return await event.answer(scrub_credentials(f"❌ {exc}")[:MAX_CALLBACK_ALERT_LENGTH], show_alert=True)
     groups = await user_operations.validate_all_groups(db, user)
     await event.answer(Texts.user_created)
     return await event.message.edit_text(
@@ -617,10 +618,12 @@ async def create_user_from_template_choose(
         )
     except ValueError as exc:
         if isinstance(event, Message):
-            msg = await event.reply(f"❌ {exc}", reply_markup=RandomUsername(with_template=True).as_markup())
+            msg = await event.reply(
+                scrub_credentials(f"❌ {exc}"), reply_markup=RandomUsername(with_template=True).as_markup()
+            )
             await add_to_messages_to_delete(state, msg)
         else:
-            await event.answer(f"❌ {exc}"[:MAX_CALLBACK_ALERT_LENGTH])
+            await event.answer(scrub_credentials(f"❌ {exc}")[:MAX_CALLBACK_ALERT_LENGTH])
         return
 
     await state.clear()
@@ -689,7 +692,7 @@ async def get_v2ray_links(
         user_with_inbounds = await subscription_operations.validated_user(db_user)
         links, _ = await subscription_operations.fetch_config(user_with_inbounds, ConfigFormat.links)
     except ValueError as exc:
-        error = str(exc)
+        error = scrub_credentials(str(exc))
         if len(error) > MAX_CALLBACK_ALERT_LENGTH:
             error = f"{error[: MAX_CALLBACK_ALERT_LENGTH - 3]}..."
         return await event.answer(error, show_alert=True)

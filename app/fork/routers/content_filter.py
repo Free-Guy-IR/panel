@@ -30,6 +30,7 @@ from app.fork.content_filter.schemas import (
 )
 from app.fork.content_filter.service import EnforcementError, ReloadRequired
 from app.fork.models.content_filter import ContentFilterAssignment, ContentFilterProfile
+from app.fork.operation.node_messages import scrub_credentials
 from app.models.admin import AdminDetails
 from app.routers.authentication import require_permission
 from app.utils.logger import get_logger
@@ -61,7 +62,7 @@ BAD_PROFILE = "this filter profile holds a value that cannot be turned into a ru
 
 
 def _fail(exc: EnforcementError):
-    raise HTTPException(status_code=exc.code, detail=exc.detail)
+    raise HTTPException(status_code=exc.code, detail=scrub_credentials(exc.detail))
 
 
 def _reload_prompt(exc: ReloadRequired) -> ReloadPrompt:
@@ -166,7 +167,7 @@ async def _withdraw_rules(
             await service.push_live(db, node_id)
         except (EnforcementError, RuleValueError) as exc:
             problems.append(f"node {node_id}: {getattr(exc, 'detail', exc)}")
-    reported = "; ".join(problems) if problems else None
+    reported = scrub_credentials("; ".join(problems)) if problems else None
     assignment.enforced = False
     assignment.last_error = reported[:1024] if reported else None
     assignment.last_checked_at = dt.now(UTC)
