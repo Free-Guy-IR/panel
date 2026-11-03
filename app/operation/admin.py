@@ -30,7 +30,7 @@ from app.fork.operation.admin_scope import (
     close_visible_restrictions,
     visible_users_query,
 )
-from app.fork.operation.admin_self_edit import self_edit_refusal
+from app.fork.operation.admin_self_edit import self_edit_refusal, self_enable_refusal, self_reset_refusal
 from app.fork.operation.admin_transition import admin_transition_lock, status_blocks_user_sync
 from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import (
@@ -385,6 +385,8 @@ class AdminOperation(BaseOperation):
 
     async def _reset_admin_usage(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails) -> AdminDetails:
         """Reset an admin's traffic usage and log the action."""
+        if (refusal := self_reset_refusal([db_admin.id], admin)) is not None:
+            await self.raise_error(message=refusal, code=403)
         db_admin = await self._reset_admin_usage_and_sync(db, db_admin)
 
         logger.info(f'Admin "{db_admin.username}" usage has been reset by admin "{admin.username}"')
@@ -526,6 +528,8 @@ class AdminOperation(BaseOperation):
         for db_admin in db_admins:
             if is_disabled and db_admin.username == current_admin.username:
                 await self.raise_error(message="You're not allowed to disable your own account.", code=403)
+        if not is_disabled and (refusal := self_enable_refusal(db_admins, current_admin)) is not None:
+            await self.raise_error(message=refusal, code=403)
 
         admins_to_update = [a for a in db_admins if a.status != target_status]
         old_sync_blocked = {a.id: await admin_users_sync_blocked(a) for a in admins_to_update}
@@ -548,6 +552,8 @@ class AdminOperation(BaseOperation):
     ) -> BulkAdminsActionResponse:
         """Reset usage for selected admins by ID."""
         db_admins = await self._get_validated_bulk_admins(db, bulk_admins.ids, admin)
+        if (refusal := self_reset_refusal([db_admin.id for db_admin in db_admins], admin)) is not None:
+            await self.raise_error(message=refusal, code=403)
         for db_admin in db_admins:
             db_admin = await self._reset_admin_usage_and_sync(db, db_admin)
             reseted_admin = await admin_details_for(db, db_admin, admin)

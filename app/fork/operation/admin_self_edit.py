@@ -1,4 +1,6 @@
-from app.db.models import Admin
+from collections.abc import Iterable
+
+from app.db.models import Admin, AdminStatus
 from app.models.admin import AdminDetails, AdminModify
 from app.models.admin_role import RoleLimits
 
@@ -38,4 +40,22 @@ def self_edit_refusal(db_admin: Admin, modified_admin: AdminModify, current_admi
         return "You're not allowed to change your own limits."
     if modified_admin.data_limit is not None and (modified_admin.data_limit or 0) != (db_admin.data_limit or 0):
         return "You're not allowed to change your own data limit."
+    return None
+
+
+def _is_refusable_self(current_admin: AdminDetails) -> bool:
+    return not current_admin.is_owner and current_admin.id is not None
+
+
+def self_reset_refusal(target_ids: Iterable[int], current_admin: AdminDetails) -> str | None:
+    if _is_refusable_self(current_admin) and current_admin.id in set(target_ids):
+        return "You're not allowed to reset your own usage."
+    return None
+
+
+def self_enable_refusal(db_admins: Iterable[Admin], current_admin: AdminDetails) -> str | None:
+    if not _is_refusable_self(current_admin):
+        return None
+    if any(db_admin.id == current_admin.id and db_admin.status != AdminStatus.active for db_admin in db_admins):
+        return "You're not allowed to enable your own account."
     return None
