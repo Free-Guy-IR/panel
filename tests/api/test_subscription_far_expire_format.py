@@ -68,8 +68,11 @@ def test_a_far_expire_never_turns_the_subscription_into_a_500(access_token, expi
         delete_core(access_token, core["id"])
 
 
-@pytest.mark.parametrize("expire", ["9999-12-30T00:00:00Z", None])
-def test_an_expire_past_the_jalali_range_renders_like_no_expire(access_token, expire):
+@pytest.mark.parametrize(
+    "expire,rendered",
+    [("9999-12-30T00:00:00Z", "fexj-∞-end"), (None, "fexj-∞-end"), ("0026-01-01T00:00:00Z", "fexj---end")],
+)
+def test_an_expire_past_the_jalali_range_renders_like_no_expire(access_token, expire, rendered):
     headers = auth_headers(access_token)
     tag = unique_name("fexj_in")
     core = create_core(access_token, config=_core_config(tag))
@@ -92,7 +95,7 @@ def test_an_expire_past_the_jalali_range_renders_like_no_expire(access_token, ex
 
         response = client.get(f"{user['subscription_url']}/links")
         assert response.status_code == 200, response.text
-        assert "fexj-∞-end" in unquote(response.text), response.text
+        assert rendered in unquote(response.text), response.text
     finally:
         if host_id is not None:
             client.delete(f"/api/host/{host_id}", headers=headers)
