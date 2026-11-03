@@ -82,6 +82,8 @@ describe('name prompts rendered through <Trans>', () => {
     expect(appEscapeValue).toBe(true)
     expect(appKeepBasicHtmlNodeMentions).toBe(1)
     expect(appKeepBasicHtmlNodesFor).toEqual(['br', 'strong', 'i', 'p', 'b'])
+    expect(appI18nCode.match(/transKeepBasicHtmlNodesFor:\s*(\[[^\]]*\])\s*,?\s*\n/)?.[1].replace(/\s/g, '')).toBe("['br','strong','i','p','b']")
+    expect(appI18nCode).not.toMatch(/\btransSupportBasicHtmlNodes\b/)
   })
 
   it('the scan finds the node and host delete prompts', () => {
