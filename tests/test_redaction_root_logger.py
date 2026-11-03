@@ -116,7 +116,7 @@ def test_the_root_filter_scrubs_a_megabyte_of_adversarial_text_in_linear_time():
         from app.fork.log_scrub import CredentialScrubFilter
 
         text = sys.stdin.read()
-        record = logging.LogRecord("x", logging.WARNING, __file__, 1, "%s", (text,), None)
+        record = logging.LogRecord("x", logging.WARNING, "probe.py", 1, "%s", (text,), None)
         started = time.perf_counter()
         CredentialScrubFilter().filter(record)
         elapsed = time.perf_counter() - started

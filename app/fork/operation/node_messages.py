@@ -2,7 +2,12 @@ import re
 
 _TOKEN_WITH_AT = re.compile(r"(?<!\S)[^\s@]*@\S*")
 _BARE_USER_PREFIX = re.compile(r"(?:^|(?<=['\"(\[<=,;]))[^\s:/@'\"=,;()\[\]<>]+:(?!//)")
-_TELEGRAM_BOT_TOKEN = re.compile(r"(?<=/bot)\d+:[A-Za-z0-9_-]+")
+_TELEGRAM_BOT_TOKEN = re.compile(r"(?<=/[Bb][Oo][Tt])\d+(?::|%3[Aa])[A-Za-z0-9_-]+")
+_BARE_BOT_TOKEN = re.compile(r"(?<![A-Za-z0-9_])((?:[Bb][Oo][Tt])?)\d{6,}(?::|%3[Aa])[A-Za-z0-9_-]{30,}")
+_ENCODED_TOKEN = re.compile(r"(?<!\S)\S*%40\S*")
+_ENCODED_SCHEME_SEPARATOR = "%3a%2f%2f"
+_ENCODED_AT = "%40"
+_PASSWORD_PAIR = re.compile(r"(?<![A-Za-z0-9_])((?:[Pp][Aa][Ss][Ss][Ww](?:[Oo][Rr])?[Dd]|[Pp][Ww][Dd])=)[^\s&;,'\"]+")
 _SCHEME_SEPARATOR = "://"
 _MASK = "***@"
 _AUTHORITY = re.compile(r"(?<=://)[^\s/?#@]+")
@@ -23,6 +28,17 @@ def _scrub_token(match: re.Match) -> str:
     if prefix is not None and last_at > prefix.end():
         token = token[: prefix.start()] + _MASK + token[last_at + 1 :]
     return token
+
+
+def _scrub_encoded_token(match: re.Match) -> str:
+    token = match.group()
+    lowered = token.lower()
+    separator = lowered.find(_ENCODED_SCHEME_SEPARATOR)
+    last_at = lowered.rfind(_ENCODED_AT)
+    kept = separator + len(_ENCODED_SCHEME_SEPARATOR)
+    if separator < 0 or last_at <= kept:
+        return token
+    return token[:kept] + "***" + token[last_at:]
 
 
 def _scrub_authority(match: re.Match) -> str:
@@ -61,7 +77,9 @@ def _mask_basic_auth(text: str) -> str:
 
 def scrub_credentials(text: object) -> str:
     scrubbed = _TOKEN_WITH_AT.sub(_scrub_token, _mask_basic_auth(str(text)))
-    return _TELEGRAM_BOT_TOKEN.sub("***", _AUTHORITY.sub(_scrub_authority, scrubbed))
+    scrubbed = _ENCODED_TOKEN.sub(_scrub_encoded_token, _AUTHORITY.sub(_scrub_authority, scrubbed))
+    scrubbed = _BARE_BOT_TOKEN.sub(r"\1***", _TELEGRAM_BOT_TOKEN.sub("***", scrubbed))
+    return _PASSWORD_PAIR.sub(r"\1***", scrubbed)
 
 
 def scrub_and_truncate(text: object, limit: int, suffix: str = "") -> str:
