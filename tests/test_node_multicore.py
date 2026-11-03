@@ -229,6 +229,7 @@ async def test_a_connected_node_with_failed_extras_still_raises_an_error_notific
     nodes = [
         SimpleNamespace(id=1, status=NodeStatus.connecting, core_config_id=1, additional_core_config_ids=None, name="n1")
     ]
+    monkeypatch.setattr(node_op_module, "get_node_by_id", AsyncMock(side_effect=lambda db, node_id, **kwargs: nodes[0]))
     await op._connect_nodes_bulk_local(MagicMock(), nodes)
     await asyncio.sleep(0)
     await asyncio.sleep(0)
@@ -269,6 +270,7 @@ async def test_a_cleanly_connected_node_raises_no_error_notification(monkeypatch
     nodes = [
         SimpleNamespace(id=1, status=NodeStatus.connecting, core_config_id=1, additional_core_config_ids=None, name="n1")
     ]
+    monkeypatch.setattr(node_op_module, "get_node_by_id", AsyncMock(side_effect=lambda db, node_id, **kwargs: nodes[0]))
     await op._connect_nodes_bulk_local(MagicMock(), nodes)
     await asyncio.sleep(0)
     await asyncio.sleep(0)
