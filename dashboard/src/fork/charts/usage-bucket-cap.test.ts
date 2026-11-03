@@ -53,7 +53,7 @@ describe('the dashboard cap cannot drift from the backend', () => {
   it('USAGE_MAX_BUCKETS equals the backend constant', () => {
     const match = backend.match(/^USAGE_MAX_BUCKETS\s*=\s*([\d_]+)\s*$/m)
     expect(match).not.toBeNull()
-    expect(USAGE_MAX_BUCKETS).toBe(Number(match![1].replaceAll('_', '')))
+    expect(USAGE_MAX_BUCKETS).toBe(Number(match![1].replace(/_/g, '')))
   })
 
   it('every period length equals the backend PERIOD_LENGTHS entry', () => {
