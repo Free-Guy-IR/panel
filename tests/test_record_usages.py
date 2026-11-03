@@ -80,16 +80,12 @@ def test_mysql_user_traffic_update_uses_one_case_statement():
     assert "UPDATE users" in sql
     assert "CASE users.id WHEN" in sql
     assert params is None
-    # Repeated users are summed: a CASE only uses the first matching WHEN
     assert list(compiled.params.values()) == [1, 40, 2, 20, 1, 2]
 
 
 def _get_test_database_url(tmp_path) -> str:
     test_from = os.getenv("TEST_FROM", "local").lower()
     if test_from == "local":
-        # A file database, not :memory: with one shared StaticPool connection: the usage
-        # jobs write from concurrent tasks, and on a shared connection one task's
-        # ROLLBACK or COMMIT ends the other tasks' transactions
         return f"sqlite+aiosqlite:///{tmp_path / 'record_usages.db'}"
     return database_settings.url
 
