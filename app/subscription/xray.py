@@ -4,7 +4,11 @@ from random import choice
 
 from pydantic import BaseModel
 
-from app.fork.finalmask import dump_fork_final_mask_for_xray
+from app.fork.finalmask import (
+    dump_fork_final_mask_for_xray,
+    restore_doh_tls_configs,
+    restore_nested_doh_tls_configs,
+)
 from app.models.host import FinalMask, prune_blank_values
 from app.models.subscription import (
     GRPCTransportConfig,
@@ -23,6 +27,10 @@ from .base import dumps_compact
 
 
 class XrayConfiguration(BaseSubscription):
+    @staticmethod
+    def _normalize_and_remove_none_values(data: dict) -> dict:
+        return restore_nested_doh_tls_configs(BaseSubscription._normalize_and_remove_none_values(data))
+
     def __init__(
         self,
         xray_template_content: str | None = None,
@@ -703,7 +711,7 @@ class XrayConfiguration(BaseSubscription):
                 finalmask = dump_fork_final_mask_for_xray(finalmask)
             # Blank optional fields must be dropped rather than emitted: Xray
             # reads a present-but-empty value as 0 and rejects the whole config.
-            finalmask = prune_blank_values(finalmask)
+            finalmask = restore_doh_tls_configs(prune_blank_values(finalmask))
             if finalmask:
                 stream_settings["finalmask"] = finalmask
 

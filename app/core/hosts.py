@@ -14,7 +14,7 @@ from app.core.manager import DB_RELOAD_ATTEMPTS, core_manager
 from app.db import GetDB
 from app.db.crud.host import get_hosts, upsert_inbounds
 from app.db.models import ProxyHost, ProxyHostSecurity
-from app.fork.finalmask import dump_fork_final_mask_for_xray
+from app.fork.finalmask import dump_fork_final_mask_for_xray, restore_doh_tls_configs
 from app.models.host import (
     BaseHost,
     FinalMask,
@@ -72,7 +72,7 @@ def _normalize_finalmask_link(final_mask_settings: FinalMask | dict | str | None
             fms = dump_fork_final_mask_for_xray(fms)
 
     if isinstance(fms, dict):
-        fms = normalize_and_remove_none_values(fms)
+        fms = restore_doh_tls_configs(normalize_and_remove_none_values(fms))
 
     if fms:
         return json.dumps(fms, separators=(",", ":"))
@@ -100,6 +100,9 @@ async def _prepare_subscription_inbound_data(
     path = host.path or inbound_config.get("path", "")
 
     final_mask_settings = host.final_mask_settings if host.final_mask_settings else inbound_config.get("finalmask")
+    if isinstance(final_mask_settings, FinalMask):
+        # Dump with aliases once, so builders and the NATS KV copy see Xray field names
+        final_mask_settings = final_mask_settings.model_dump(by_alias=True, exclude_none=True, mode="json")
     finalmask_link = _normalize_finalmask_link(final_mask_settings)
 
     if protocol == "wireguard":
