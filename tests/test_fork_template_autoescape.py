@@ -7,8 +7,8 @@ from app.templates import env, render_template
 
 HOSTILE = "a'b\"c<script>alert(1)</script>&d"
 HOSTILE_ESCAPED = "a&#39;b&#34;c&lt;script&gt;alert(1)&lt;/script&gt;&amp;d"
-NORMAL_LINK = "vless://id@host.example:443?type=ws&path=%2Fws#Tom & Jerry"
-NORMAL_LINK_ESCAPED = "vless://id@host.example:443?type=ws&amp;path=%2Fws#Tom &amp; Jerry"
+NORMAL_LINK = "vless://id@host.example.com:443?type=ws&path=%2Fws#Tom & Jerry"
+NORMAL_LINK_ESCAPED = "vless://id@host.example.com:443?type=ws&amp;path=%2Fws#Tom &amp; Jerry"
 DOUBLE_ESCAPES = ("&amp;amp;", "&amp;lt;", "&amp;gt;", "&amp;#39;", "&amp;#34;", "&amp;quot;")
 
 
