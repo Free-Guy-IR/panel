@@ -6,14 +6,16 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy import delete, update
 
-from app.db.crud.node import get_node_by_id
+from app.db.crud.node import create_node as db_create_node, get_node_by_id, remove_node as db_remove_node
 from app.db.models import CoreConfig, Node, NodeStatus
+from app.fork.operation.node_extras import connect_snapshot, with_connect_snapshot
+from app.models.node import NodeCreate
 from app.node import node_manager
 from app.operation import OperatorType
 from app.operation.node import NodeOperation
 from tests.api import TestSession
 from tests.api.helpers import create_core, unique_name
-from tests.api.test_bulk_delete_entities import delete_core_if_present, delete_db_node
+from tests.api.test_bulk_delete_entities import delete_core_if_present, delete_db_node, node_create_payload
 from tests.api.test_core_delete_restarts_its_nodes import make_node
 
 
@@ -338,6 +340,59 @@ def test_a_newer_start_that_was_sent_but_failed_still_drops_a_stale_connect_that
 
         assert [push.caller for push in gated_connects.pushes if push.caller == "C2"] == ["C2"]
         assert_node_ends_on_current_core(gated_connects.pushes, node["id"], old_core["id"], new_core["id"])
+    finally:
+        delete_db_node(node["id"])
+        delete_core_if_present(access_token, old_core["id"])
+        delete_core_if_present(access_token, new_core["id"])
+
+
+async def remove_node_like_the_api(operation: NodeOperation, node_id: int) -> None:
+    await operation._remove_node_impl(node_id)
+    async with TestSession() as session:
+        await db_remove_node(session, await session.get(Node, node_id))
+
+
+async def create_node_reusing_id(node_id: int, core_id: int) -> None:
+    async with TestSession() as session:
+        db_node = await db_create_node(session, NodeCreate(**node_create_payload(unique_name("reused_id"), core_id)))
+        await session.execute(update(Node).where(Node.id == db_node.id).values(id=node_id, status=NodeStatus.error))
+        await session.commit()
+
+
+def test_a_removed_node_never_drops_the_first_connect_of_a_new_node_that_reuses_its_id(access_token, gated_connects):
+    old_core = create_core(access_token, name=unique_name("reused_old"))
+    new_core = create_core(access_token, name=unique_name("reused_new"))
+    node = make_node(old_core["id"], node_status=NodeStatus.error)
+    sessions: dict[int, str] = {}
+    gated_connects.monkeypatch.setattr(
+        "app.operation.node.get_node_by_id", gated_connects.tagging_loader(lambda db: sessions[id(db)])
+    )
+
+    async def scenario():
+        operation = NodeOperation(operator_type=OperatorType.API)
+        drawn_before_the_old_push = connect_snapshot()
+        async with TestSession() as db1:
+            sessions[id(db1)] = "C1"
+            await operation._connect_single_node_local(db1, node["id"], force_start=True)
+
+        await remove_node_like_the_api(operation, node["id"])
+        await create_node_reusing_id(node["id"], new_core["id"])
+
+        async with TestSession() as db2:
+            reused = await get_node_by_id(db2, node["id"], load_usage_logs=False)
+            gated_connects.current_caller[id(reused)] = "C2"
+            core = SimpleNamespace(type="xray", inbounds=[], protocols=[], core_id=new_core["id"])
+            await with_connect_snapshot(
+                drawn_before_the_old_push, NodeOperation.connect_node(reused, core, [], None, force_start=True)
+            )
+
+    try:
+        asyncio.run(scenario())
+
+        assert [(push.caller, push.core_id) for push in gated_connects.pushes] == [
+            ("C1", old_core["id"]),
+            ("C2", new_core["id"]),
+        ]
     finally:
         delete_db_node(node["id"])
         delete_core_if_present(access_token, old_core["id"])
