@@ -924,9 +924,9 @@ async def test_usage_writes_are_ordered_by_user_id(monkeypatch: pytest.MonkeyPat
 
         async def execute(self, statement, params=None):
             table_name = getattr(getattr(statement, "table", None), "name", "")
-            if table_name == "users" and params is not None:
+            if table_name == "users" and isinstance(params, list):
                 captured["users"].extend(item["uid"] for item in params)
-            elif table_name == "admins" and params is not None:
+            elif table_name == "admins" and isinstance(params, list):
                 captured["admins"].extend(item["admin_id"] for item in params)
             if params is None:
                 result = await self._conn.execute(statement)
