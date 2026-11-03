@@ -2,11 +2,13 @@ import asyncio
 
 import pytest
 from sqlalchemy import select, text, update
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.db.crud import bulk as bulk_crud
 from app.db.models import User
+from app.fork.proxy_secrets.locks import is_deadlock, is_row_lock_conflict
 from app.models.user import BulkUser
 from tests.test_connection_limiter_mysql_locks import MYSQL_URL, _fresh_schema
 
@@ -61,16 +63,25 @@ async def test_the_late_rescan_does_not_wait_on_an_id_below_the_ids_the_bulk_hol
         monkeypatch.setattr(bulk_crud, "_committed_matching_ids", ascending_locker_takes_low_then_waits_for_high)
 
         async with factory() as db:
+            with pytest.raises(DBAPIError) as raised:
+                await asyncio.wait_for(
+                    bulk_crud.get_bulk_user_limit_targets(db, BulkUser(amount=1), "data_limit"), timeout=20
+                )
+            assert is_row_lock_conflict(raised.value, db.get_bind().dialect)
+            assert not is_deadlock(raised.value)
+            await db.rollback()
+
+        await asyncio.wait_for(locker_waits_for_high, timeout=20)
+        await locker.commit()
+        assert reads == [{high}, {low, high}]
+
+        monkeypatch.setattr(bulk_crud, "_committed_matching_ids", real)
+        async with factory() as db:
             targets = await asyncio.wait_for(
                 bulk_crud.get_bulk_user_limit_targets(db, BulkUser(amount=1), "data_limit"), timeout=20
             )
             await db.commit()
-
-        await asyncio.wait_for(locker_waits_for_high, timeout=20)
-        await locker.commit()
-
-        assert reads == [{high}, {low, high}]
-        assert [row[0] for row in targets] == [high]
+        assert sorted(row[0] for row in targets) == [low, high]
     finally:
         if locker_waits_for_high is not None and not locker_waits_for_high.done():
             locker_waits_for_high.cancel()

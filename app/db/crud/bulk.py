@@ -420,11 +420,16 @@ def _id_chunks(user_ids: list[int]) -> list[list[int]]:
     return [user_ids[i : i + BULK_STATUS_CHUNK_SIZE] for i in range(0, len(user_ids), BULK_STATUS_CHUNK_SIZE)]
 
 
-async def _lock_rows_by_id(db: AsyncSession, condition, columns: tuple, user_ids) -> dict[int, tuple]:
+async def _lock_rows_by_id(
+    db: AsyncSession, condition, columns: tuple, user_ids, *, nowait: bool = False
+) -> dict[int, tuple]:
     locked: dict[int, tuple] = {}
     for chunk in _id_chunks(sorted(user_ids)):
         rows = await db.execute(
-            on_primary_key(select(*columns)).where(condition, User.id.in_(chunk)).order_by(User.id).with_for_update()
+            on_primary_key(select(*columns))
+            .where(condition, User.id.in_(chunk))
+            .order_by(User.id)
+            .with_for_update(nowait=nowait)
         )
         locked.update({row[0]: tuple(row) for row in rows.all()})
     return locked
@@ -435,9 +440,16 @@ async def _committed_matching_ids(db: AsyncSession, condition) -> set[int]:
 
 
 async def _lock_matching_rows(db: AsyncSession, condition, columns: tuple) -> dict[int, tuple]:
-    locked = await _lock_rows_by_id(db, condition, columns, await _committed_matching_ids(db, condition))
+    candidates = await _committed_matching_ids(db, condition)
+    locked = await _lock_rows_by_id(db, condition, columns, candidates)
     late = await _committed_matching_ids(db, condition) - locked.keys()
-    locked.update(await _lock_rows_by_id(db, condition, columns, late))
+    if not holds_row_locks(db):
+        locked.update(await _lock_rows_by_id(db, condition, columns, late))
+        return locked
+    frontier = max(candidates, default=0)
+    below_frontier = {user_id for user_id in late if user_id < frontier}
+    locked.update(await _lock_rows_by_id(db, condition, columns, below_frontier, nowait=True))
+    locked.update(await _lock_rows_by_id(db, condition, columns, late - below_frontier))
     return locked
 
 

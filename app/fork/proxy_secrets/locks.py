@@ -20,12 +20,17 @@ HELD_LOCKS_KEY = "fork_named_locks"
 SEEN_LOCK_ROWS_KEY = "fork_named_lock_rows_seen"
 MYSQL_LOCK_WAIT_TIMEOUT = 1205
 MYSQL_DEADLOCK = 1213
+MYSQL_LOCK_NOWAIT = 3572
 POSTGRES_LOCK_NOT_AVAILABLE = "55P03"
 POSTGRES_DEADLOCK = "40P01"
 SQLITE_LOCKED = "database is locked"
 SEED_ATTEMPTS = 2
 LOCK_UNAVAILABLE_DETAIL = (
     "another request is writing proxy secrets and this one could not take the lock in time; "
+    "nothing was stored, retry shortly"
+)
+BULK_LOCK_UNAVAILABLE_DETAIL = (
+    "another request held some of the selected users and this bulk update could not lock them in time; "
     "nothing was stored, retry shortly"
 )
 TEMPLATE_RESET_KEPT_DETAIL = (
@@ -187,3 +192,13 @@ def is_lock_wait_timeout(exc: BaseException) -> bool:
     if driver_code(exc) == MYSQL_LOCK_WAIT_TIMEOUT or POSTGRES_LOCK_NOT_AVAILABLE in _driver_sqlstate(exc):
         return True
     return SQLITE_LOCKED in str(exc.orig)
+
+
+def is_row_lock_conflict(exc: BaseException, dialect) -> bool:
+    if not isinstance(exc, DBAPIError) or dialect.name == "sqlite":
+        return False
+    if is_deadlock(exc) or driver_code(exc) == MYSQL_LOCK_NOWAIT:
+        return True
+    if POSTGRES_LOCK_NOT_AVAILABLE in _driver_sqlstate(exc):
+        return True
+    return bool(getattr(dialect, "is_mariadb", False)) and driver_code(exc) == MYSQL_LOCK_WAIT_TIMEOUT
