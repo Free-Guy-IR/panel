@@ -17,7 +17,7 @@ from app.notification.queue_manager import (
     shutdown_webhook_queue,
 )
 from app.settings import webhook_settings
-from app.utils.http_client import create_outbound_http_session
+from app.utils.http_client import INVALID_PROXY_MESSAGE, create_outbound_http_session
 from app.utils.logger import get_logger
 from config import job_settings, runtime_settings
 
@@ -68,6 +68,12 @@ async def send_notifications():
 
     logger.debug("Processing notifications batch")
 
+    try:
+        session = create_outbound_http_session(proxy=settings.proxy_url if settings.proxy_url else None)
+    except Exception:
+        logger.error(INVALID_PROXY_MESSAGE)
+        return
+
     processed = 0
     failed_to_requeue: list[tuple[dict, WebhookNotification]] = []
     ready_notifications: list[tuple[dict, WebhookNotification]] = []
@@ -77,7 +83,7 @@ async def send_notifications():
     cancelled = False
 
     try:
-        async with create_outbound_http_session(proxy=settings.proxy_url if settings.proxy_url else None) as client:
+        async with session as client:
             while True:
                 try:
                     item = await webhook_queue.dequeue(timeout=1)

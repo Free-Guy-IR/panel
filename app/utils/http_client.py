@@ -1,4 +1,7 @@
+from urllib.parse import urlsplit
+
 import aiohttp
+import yarl
 
 from app.models.validators import ProxyValidator
 from app.utils.ssl_context import create_outbound_ssl_context
@@ -10,13 +13,21 @@ class InvalidProxyURL(ValueError):
     pass
 
 
+def _proxy_url_parses(proxy: str) -> bool:
+    try:
+        ProxyValidator.validate_proxy_url(proxy)
+        parts = urlsplit(proxy)
+        url = yarl.URL(proxy)
+        return bool(parts.hostname) and bool(url.host) and 1 <= (parts.port or 0) <= 65535 and parts.port == url.port
+    except Exception:
+        return False
+
+
 def checked_proxy_url(proxy: str | None) -> str | None:
     if not proxy:
         return None
-    try:
-        ProxyValidator.validate_proxy_url(proxy)
-    except Exception:
-        raise InvalidProxyURL(INVALID_PROXY_MESSAGE) from None
+    if not _proxy_url_parses(proxy):
+        raise InvalidProxyURL(INVALID_PROXY_MESSAGE)
     return proxy
 
 

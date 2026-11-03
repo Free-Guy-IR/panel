@@ -11,6 +11,7 @@ from app.fork.node_push_audit import record_user_push
 from app.node.bridge import create_node
 from app.node.nats_memory import ensure_bridge_memory, get_bridge_memory
 from app.node.user import core_users
+from app.utils.http_client import checked_proxy_url
 from app.utils.logger import get_logger
 from config import nats_settings
 
@@ -58,7 +59,7 @@ class NodeManager:
             "logger": self.logger,
             "default_timeout": node.default_timeout,
             "internal_timeout": node.internal_timeout,
-            "proxy": node.proxy_url,
+            "proxy": checked_proxy_url(node.proxy_url),
             "extra": {"id": node.id, "usage_coefficient": node.usage_coefficient},
             "node_id": str(node.id),
             # A delivery claim must outlive the slowest single RPC so an expired
@@ -107,10 +108,11 @@ class NodeManager:
                 (await existing.get_extra())["usage_coefficient"] = node.usage_coefficient
                 return existing
 
+            node_kwargs = self._create_node_kwargs(node)
             async with self._lock.writer_lock:
                 old_node: PasarGuardNode | None = self._nodes.pop(node.id, None)
 
-                new_node = create_node(**self._create_node_kwargs(node))
+                new_node = create_node(**node_kwargs)
 
                 self._nodes[node.id] = new_node
                 self._node_signatures[node.id] = signature

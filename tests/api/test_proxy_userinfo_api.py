@@ -9,13 +9,17 @@ SECRET = "pw" + "Leak" + "Marker" + str(7)
 USER = "u" + "x"
 HOST = "proxy.example"
 BREAKING = ["[", "]", "\\", "/", "?", "#"]
+CONFUSABLES = ["\uff03", "\uff0f", "\uff1f", "\uff20", "\uff1a", "\uff3b", "\uff3d", "\uff3c"]
 
 
 def _bad_urls() -> list[str]:
     urls = []
-    for char in BREAKING:
+    for char in BREAKING + CONFUSABLES:
         urls.append(f"http://{USER}:{SECRET}{char}@{HOST}:8080")
         urls.append(f"socks5://{USER}{char}:{SECRET}@{HOST}:1080")
+    for port in ("0", "65536", "99999"):
+        urls.append(f"http://{USER}:{SECRET}@{HOST}:{port}")
+    urls.append(f"http://{USER}:{SECRET}@{HOST}:8080\n")
     return urls
 
 

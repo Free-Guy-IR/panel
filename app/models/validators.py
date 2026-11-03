@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from datetime import UTC, datetime, datetime as dt, timedelta
 from decimal import Decimal
 from typing import Annotated, Any
@@ -246,16 +247,27 @@ class ProxyValidator:
         if not value:
             return None
         pattern = (
-            r"^(?P<scheme>http|https|socks4|socks5)://"
+            r"(?P<scheme>http|https|socks4|socks5)://"
             r"((?P<user>[^\s:@\[\]\\/?#]+):(?P<pass>[^\s:@\[\]\\/?#]+)@)?"
             r"(?P<host>[a-zA-Z0-9\.-]+)"
-            r":(?P<port>\d{1,5})$"
+            r":(?P<port>[0-9]{1,5})"
         )
-        if not re.match(pattern, value):
+        match = re.fullmatch(pattern, value)
+        if (
+            not match
+            or not 1 <= int(match.group("port")) <= 65535
+            or ProxyValidator._userinfo_breaks_netloc(f"{match.group('user') or ''}{match.group('pass') or ''}")
+        ):
             raise ValueError(
                 "proxy_url must be a valid proxy address (e.g., http://host:port, socks5://user:pass@host:port)"
             )
         return value
+
+    @staticmethod
+    def _userinfo_breaks_netloc(userinfo: str) -> bool:
+        return any(
+            delimiter in unicodedata.normalize("NFKC", char) for char in userinfo for delimiter in "/?#@:[]\\"
+        ) or any(delimiter in unicodedata.normalize("NFKC", userinfo) for delimiter in "/?#@:[]\\")
 
 
 class DiscordValidator:
