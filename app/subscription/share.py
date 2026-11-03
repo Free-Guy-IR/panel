@@ -22,7 +22,7 @@ from app.subscription.config_cache import (
     make_sub_config_key,
     put_sub_config,
 )
-from app.utils.helpers import has_oversized_format_spec
+from app.utils.helpers import has_markup_unsafe_chars, has_oversized_format_spec
 from app.utils.system import readable_size
 
 from . import (
@@ -39,6 +39,9 @@ from . import (
 
 SERVER_IP = "127.0.0.1"
 SERVER_IPV6 = "[::1]"
+
+# Transports only the Xray JSON format can express.
+XRAY_ONLY_NETWORKS = frozenset({"xdrive"})
 
 
 def _build_subscription_config(
@@ -232,9 +235,12 @@ def setup_format_variables(user: UsersResponseWithInbounds, custom_variables: li
             seconds_left = (expire - now).total_seconds()
             expire_date_obj = expire.date()
             expire_date = expire_date_obj.strftime("%Y-%m-%d")
-            jalali_expire_date = jd.fromgregorian(
-                year=expire_date_obj.year, month=expire_date_obj.month, day=expire_date_obj.day
-            ).strftime("%Y-%m-%d")
+            try:
+                jalali_expire_date = jd.fromgregorian(
+                    year=expire_date_obj.year, month=expire_date_obj.month, day=expire_date_obj.day
+                ).strftime("%Y-%m-%d")
+            except ValueError:
+                jalali_expire_date = "∞" if now < expire else "-"
             if now < expire:
                 days_left = (expire - now).days + 1
                 time_left = format_time_left(seconds_left)
@@ -436,6 +442,25 @@ async def _prepare_download_settings(
     return download_copy
 
 
+def _uses_xray_only_network(
+    host_data: SubscriptionInboundData | dict | None, nested_download_legs: bool = True
+) -> bool:
+    if isinstance(host_data, dict):
+        stream_settings = host_data.get("streamSettings")
+        network = host_data.get("network")
+        if network is None and isinstance(stream_settings, dict):
+            network = stream_settings.get("network")
+        return isinstance(network, str) and network in XRAY_ONLY_NETWORKS
+    if not isinstance(host_data, SubscriptionInboundData):
+        return False
+    if host_data.network in XRAY_ONLY_NETWORKS:
+        return True
+    download_leg = getattr(host_data.transport_config, "download_settings", None)
+    if not nested_download_legs and isinstance(download_leg, SubscriptionInboundData):
+        return download_leg.network in XRAY_ONLY_NETWORKS
+    return _uses_xray_only_network(download_leg, nested_download_legs)
+
+
 async def process_inbounds_and_tags(
     user: UsersResponseWithInbounds,
     format_variables: dict,
@@ -470,6 +495,11 @@ async def process_inbounds_and_tags(
         return xray_template_overrides.get(template_id)
 
     for host_data in hosts:
+        if not isinstance(conf, XrayConfiguration) and _uses_xray_only_network(
+            host_data, nested_download_legs=not isinstance(conf, ClashMetaConfiguration)
+        ):
+            # Links, sing-box, Clash and Outline cannot carry these transports.
+            continue
         result = await process_host(host_data, format_variables, user.inbounds, proxy_settings, custom_variables)
         if not result:
             continue
@@ -480,6 +510,10 @@ async def process_inbounds_and_tags(
         # Format remark and address with user variables
         remark = _format_dynamic_value(inbound_copy.remark, format_variables)
         formatted_address = _format_dynamic_value(inbound_copy.address, format_variables)
+        if has_markup_unsafe_chars(formatted_address):
+            # Never valid, and links print the address unencoded; covers hosts saved before
+            # address validation existed and values that came in through a format variable.
+            continue
 
         download_settings = getattr(inbound_copy.transport_config, "download_settings", None)
         if download_settings:

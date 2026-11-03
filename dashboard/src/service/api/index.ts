@@ -1025,6 +1025,7 @@ export const FinalMaskUdpType = {
   xdns: 'xdns',
   xicmp: 'xicmp',
   realm: 'realm',
+  udphop: 'udphop',
   'header-dns': 'header-dns',
   'header-dtls': 'header-dtls',
   'header-srtp': 'header-srtp',
@@ -1051,24 +1052,55 @@ export interface FinalMaskDomainSettings {
   [key: string]: unknown;
  }
 
+export interface FinalMaskXdnsDomain {
+  names?: string[];
+  lenLimit?: number | null;
+  labelLimit?: number | null;
+  types?: number[] | null;
+  edns0?: number | null;
+  [key: string]: unknown;
+ }
+
+export type FinalMaskXdnsResolverTlsConfig = { [key: string]: unknown } | null;
+
+export type FinalMaskXdnsResolverQuicConfig = { [key: string]: unknown } | null;
+
+export interface FinalMaskXdnsResolver {
+  addrs?: string[];
+  worker?: number | null;
+  tlsConfig?: FinalMaskXdnsResolverTlsConfig;
+  quicConfig?: FinalMaskXdnsResolverQuicConfig;
+  [key: string]: unknown;
+ }
+
 export interface FinalMaskXdnsSettings {
-  domains?: string[] | null;
-  resolvers?: string[] | null;
-  domain?: string | null;
+  domains?: FinalMaskXdnsDomain[] | null;
+  resolvers?: FinalMaskXdnsResolver[] | null;
+  extraPoll?: number | null;
   [key: string]: unknown;
  }
 
 export interface FinalMaskXicmpSettings {
   dgram?: boolean | null;
   ips?: string[] | null;
-  listenIp?: string | null;
-  id?: number | null;
+  [key: string]: unknown;
+ }
+
+/**
+ * Packet item of the UDP noise mask. Unlike header-custom items, it also accepts exp, a packet template.
+ */
+export interface FinalMaskNoiseMaskItem {
+  type?: string | null;
+  packet?: string | number[] | null;
+  delay?: string | number | null;
+  rand?: number | string | null;
+  randRange?: string | null;
   [key: string]: unknown;
  }
 
 export interface FinalMaskNoiseSettings {
   reset?: string | number | null;
-  noise?: FinalMaskNoiseItem[] | null;
+  noise?: FinalMaskNoiseMaskItem[] | null;
   [key: string]: unknown;
  }
 
@@ -1087,13 +1119,22 @@ export interface FinalMaskRealmSettings {
   [key: string]: unknown;
  }
 
+export interface FinalMaskUdpHopSettings {
+  /** @pattern ^(?i:intervalLocal|intervalRemote|perConnRemote)(,(?i:intervalLocal|intervalRemote|perConnRemote))*$ */
+  mode: string;
+  interval?: string | null;
+  remoteIPs?: string[] | null;
+  remotePorts?: string | null;
+  [key: string]: unknown;
+ }
+
 export interface FinalMaskMkcpLegacySettings {
   header?: string | null;
   value?: string | null;
   [key: string]: unknown;
  }
 
-export type FinalMaskUdpLayerSettings = FinalMaskUdpHeaderCustomSettings | FinalMaskPasswordSettings | FinalMaskSudokuSettings | FinalMaskDomainSettings | FinalMaskXdnsSettings | FinalMaskXicmpSettings | FinalMaskNoiseSettings | FinalMaskSalamanderSettings | FinalMaskRealmSettings | FinalMaskMkcpLegacySettings | { [key: string]: unknown };
+export type FinalMaskUdpLayerSettings = FinalMaskUdpHeaderCustomSettings | FinalMaskPasswordSettings | FinalMaskSudokuSettings | FinalMaskDomainSettings | FinalMaskXdnsSettings | FinalMaskXicmpSettings | FinalMaskNoiseSettings | FinalMaskSalamanderSettings | FinalMaskRealmSettings | FinalMaskUdpHopSettings | FinalMaskMkcpLegacySettings | { [key: string]: unknown };
 
 export interface FinalMaskUdpLayer {
   type: FinalMaskUdpType;

@@ -4,7 +4,12 @@ from random import choice
 
 from pydantic import BaseModel
 
-from app.models.host import FinalMask, prune_blank_values, to_xray_finalmask
+from app.fork.finalmask import (
+    dump_fork_final_mask_for_xray,
+    restore_doh_tls_configs,
+    restore_nested_doh_tls_configs,
+)
+from app.models.host import FinalMask, prune_blank_values
 from app.models.subscription import (
     GRPCTransportConfig,
     KCPTransportConfig,
@@ -13,6 +18,7 @@ from app.models.subscription import (
     TCPTransportConfig,
     TLSConfig,
     WebSocketTransportConfig,
+    XDriveTransportConfig,
     XHTTPTransportConfig,
 )
 
@@ -21,6 +27,10 @@ from .base import dumps_compact
 
 
 class XrayConfiguration(BaseSubscription):
+    @staticmethod
+    def _normalize_and_remove_none_values(data: dict) -> dict:
+        return restore_nested_doh_tls_configs(BaseSubscription._normalize_and_remove_none_values(data))
+
     def __init__(
         self,
         xray_template_content: str | None = None,
@@ -40,6 +50,7 @@ class XrayConfiguration(BaseSubscription):
             "httpupgrade": self._transport_httpupgrade,
             "splithttp": self._transport_xhttp,
             "xhttp": self._transport_xhttp,
+            "xdrive": self._transport_xdrive,
             "quic": self._transport_quic,
             "grpc": self._transport_grpc,
             "gun": self._transport_grpc,
@@ -177,6 +188,11 @@ class XrayConfiguration(BaseSubscription):
 
         xhttp_settings["extra"] = extra
         return self._normalize_and_remove_none_values(xhttp_settings)
+
+    @staticmethod
+    def _transport_xdrive(config: XDriveTransportConfig, path: str) -> dict:
+        """Build XDrive transport settings using Xray's camelCase JSON keys."""
+        return config.model_dump(by_alias=True, exclude_none=True, exclude={"path", "host"})
 
     def _xhttp_download_config(self, download_settings: SubscriptionInboundData | dict) -> dict:
         if isinstance(download_settings, dict):
@@ -663,7 +679,11 @@ class XrayConfiguration(BaseSubscription):
         if inbound.mux_settings and (xray_mux := inbound.mux_settings.get("xray")) and xray_mux.get("enabled"):
             outbound["mux"] = self._normalize_and_remove_none_values(xray_mux)
 
-        return self._normalize_and_remove_none_values(outbound), extra_outbounds
+        outbound = self._normalize_and_remove_none_values(outbound)
+        if network == "xdrive" and network_setting:
+            # The cleanup drops false like 0, but Xray reads XDrive settings as given (s3 "pathStyle" defaults to true).
+            outbound["streamSettings"]["xdriveSettings"] = network_setting
+        return outbound, extra_outbounds
 
     @staticmethod
     def _stream_setting_config(
@@ -685,15 +705,13 @@ class XrayConfiguration(BaseSubscription):
         if finalmask is not None:
             if isinstance(finalmask, BaseModel):
                 finalmask = finalmask.model_dump(exclude_none=True, by_alias=True, mode="json")
-            else:
-                with suppress(TypeError, ValueError):
-                    finalmask = FinalMask.model_validate(finalmask).model_dump(
-                        exclude_none=True, by_alias=True, mode="json"
-                    )
-            finalmask = to_xray_finalmask(finalmask)
+            with suppress(TypeError, ValueError):
+                finalmask = FinalMask.model_validate(finalmask)
+            if isinstance(finalmask, (FinalMask, dict)):
+                finalmask = dump_fork_final_mask_for_xray(finalmask)
             # Blank optional fields must be dropped rather than emitted: Xray
             # reads a present-but-empty value as 0 and rejects the whole config.
-            finalmask = prune_blank_values(finalmask)
+            finalmask = restore_doh_tls_configs(prune_blank_values(finalmask))
             if finalmask:
                 stream_settings["finalmask"] = finalmask
 

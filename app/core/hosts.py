@@ -14,13 +14,13 @@ from app.core.manager import DB_RELOAD_ATTEMPTS, core_manager
 from app.db import GetDB
 from app.db.crud.host import get_hosts, upsert_inbounds
 from app.db.models import ProxyHost, ProxyHostSecurity
+from app.fork.finalmask import dump_fork_final_mask_for_xray, restore_doh_tls_configs
 from app.models.host import (
     BaseHost,
     FinalMask,
     OpenVPNHostOverrides,
     TransportSettings,
     WireGuardHostOverrides,
-    to_xray_finalmask,
 )
 from app.models.subscription import (
     GRPCTransportConfig,
@@ -30,6 +30,7 @@ from app.models.subscription import (
     TCPTransportConfig,
     TLSConfig,
     WebSocketTransportConfig,
+    XDriveTransportConfig,
     XHTTPTransportConfig,
 )
 from app.nats import is_multi_worker, is_nats_enabled
@@ -60,19 +61,18 @@ def _normalize_finalmask_link(final_mask_settings: FinalMask | dict | str | None
     if not final_mask_settings:
         return None
     fms = None
-    if isinstance(final_mask_settings, FinalMask):
-        fms = final_mask_settings.model_dump(by_alias=True, exclude_none=True)
-    elif isinstance(final_mask_settings, dict):
-        fms = deepcopy(final_mask_settings)
+    if isinstance(final_mask_settings, (FinalMask, dict)):
+        fms = dump_fork_final_mask_for_xray(final_mask_settings)
     elif isinstance(final_mask_settings, str):
         try:
             fms = json.loads(final_mask_settings)
         except Exception:
             return final_mask_settings
+        if isinstance(fms, dict):
+            fms = dump_fork_final_mask_for_xray(fms)
 
     if isinstance(fms, dict):
-        fms = normalize_and_remove_none_values(fms)
-        fms = to_xray_finalmask(fms)
+        fms = restore_doh_tls_configs(normalize_and_remove_none_values(fms))
 
     if fms:
         return json.dumps(fms, separators=(",", ":"))
@@ -100,6 +100,9 @@ async def _prepare_subscription_inbound_data(
     path = host.path or inbound_config.get("path", "")
 
     final_mask_settings = host.final_mask_settings if host.final_mask_settings else inbound_config.get("finalmask")
+    if isinstance(final_mask_settings, FinalMask):
+        # Dump with aliases once, so builders and the NATS KV copy see Xray field names
+        final_mask_settings = final_mask_settings.model_dump(by_alias=True, exclude_none=True, mode="json")
     finalmask_link = _normalize_finalmask_link(final_mask_settings)
 
     if protocol == "wireguard":
@@ -452,6 +455,22 @@ async def _prepare_subscription_inbound_data(
             host=host_list,
             header_type=qs.header if qs else inbound_header_type,
         )
+    elif network == "xdrive":
+        transport_config = XDriveTransportConfig(
+            remote_folder=inbound_config.get("xdrive_remote_folder"),
+            service=inbound_config.get("xdrive_service"),
+            secrets=inbound_config.get("xdrive_secrets"),
+            segment_bytes=inbound_config.get("xdrive_segment_bytes"),
+            flush_interval_ms=inbound_config.get("xdrive_flush_interval_ms"),
+            poll_interval_ms=inbound_config.get("xdrive_poll_interval_ms"),
+            max_poll_interval_ms=inbound_config.get("xdrive_max_poll_interval_ms"),
+            session_ttl_seconds=inbound_config.get("xdrive_session_ttl_seconds"),
+            concurrency=inbound_config.get("xdrive_concurrency"),
+            eager_window_ms=inbound_config.get("xdrive_eager_window_ms"),
+            hole_timeout_ms=inbound_config.get("xdrive_hole_timeout_ms"),
+            template=inbound_config.get("xdrive_template"),
+            s3=inbound_config.get("xdrive_s3"),
+        )
     elif network in ("ws", "websocket", "httpupgrade"):
         ws = ts.websocket_settings if ts else None
         transport_config = WebSocketTransportConfig(
@@ -536,6 +555,7 @@ class HostManager:
         self._generation = 0
         self._stamp = 0
         self._host_stamps: dict[int, int] = {}
+        self._publish_lock = Lock()
         self._add_hosts_impl = (
             self._add_hosts_nats if (self._nats_enabled and self._multi_worker) else self._add_hosts_local
         )
@@ -602,7 +622,8 @@ class HostManager:
         if action == "remove":
             host_id = data.get("host_id")
             if host_id:
-                await self._remove_host_local(host_id)
+                await self._add_prepared_hosts_local([], removed_ids=[host_id])
+                await self._persist_state()
             else:
                 await self._reload_from_cache()
         elif action == "add":
@@ -637,6 +658,9 @@ class HostManager:
     def _next_stamp(self) -> int:
         self._stamp += 1
         return self._stamp
+
+    def _is_current(self, host_id: int, stamp: int) -> bool:
+        return stamp >= self._host_stamps.get(host_id, 0)
 
     def _claim_host(self, host_id: int, stamp: int | None) -> bool:
         if stamp is None:
@@ -754,16 +778,21 @@ class HostManager:
     async def _add_hosts_nats(self, db: AsyncSession, hosts: list[BaseHost], stamp: int | None = None):
         prepared_hosts, hosts_to_remove, stamp = await self._prepare_hosts(db, hosts, stamp)
 
-        # Publish messages - all workers will process via listener
-        for host_id, host_data in prepared_hosts:
-            # Convert model to dict for JSON serialization
-            serialized_data = host_data.model_dump()
-            await self._publish({"action": "add", "host": {"id": host_id, "data": serialized_data}})
-        for host_id in hosts_to_remove:
-            await self._publish({"action": "remove", "host_id": host_id})
+        async with self._publish_lock:
+            async with self._lock:
+                prepared_hosts = [entry for entry in prepared_hosts if self._is_current(entry[0], stamp)]
+                hosts_to_remove = [host_id for host_id in hosts_to_remove if self._is_current(host_id, stamp)]
 
-        # Keep local state in sync immediately, while still broadcasting via NATS.
-        await self._add_prepared_hosts_local(prepared_hosts, stamp, hosts_to_remove)
+            # Publish messages - all workers will process via listener
+            for host_id, host_data in prepared_hosts:
+                # Convert model to dict for JSON serialization
+                serialized_data = host_data.model_dump()
+                await self._publish({"action": "add", "host": {"id": host_id, "data": serialized_data}})
+            for host_id in hosts_to_remove:
+                await self._publish({"action": "remove", "host_id": host_id})
+
+            # Keep local state in sync immediately, while still broadcasting via NATS.
+            await self._add_prepared_hosts_local(prepared_hosts, stamp, hosts_to_remove)
 
         # Persist state to NATS KV
         await self._persist_state()
@@ -777,8 +806,9 @@ class HostManager:
         await self._persist_state()
 
     async def _remove_host_nats(self, id: int):
-        await self._publish({"action": "remove", "host_id": id})
-        await self._remove_host_local(id)
+        async with self._publish_lock:
+            await self._publish({"action": "remove", "host_id": id})
+            await self._remove_host_local(id)
 
     async def get_host(self, id: int) -> dict | None:
         async with self._lock:

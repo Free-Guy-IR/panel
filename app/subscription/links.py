@@ -4,6 +4,7 @@ import urllib.parse as urlparse
 from random import choice
 from urllib.parse import quote
 
+from app.fork.finalmask import restore_nested_doh_tls_configs
 from app.fork.subscription.links import register_fork_link_handlers
 from app.models.subscription import (
     GRPCTransportConfig,
@@ -138,7 +139,7 @@ class StandardLinks(BaseSubscription):
             else:
                 extra["headers"]["User-Agent"] = choice(self.user_agent_list)
 
-        extra = self._normalize_and_remove_none_values(extra)
+        extra = restore_nested_doh_tls_configs(self._normalize_and_remove_none_values(extra))
         if extra:
             payload["extra"] = json.dumps(extra, separators=(",", ":"))
 

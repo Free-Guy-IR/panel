@@ -237,12 +237,19 @@ class CoreManager:
         if not await self._install_cores(cores, generation):
             await self._reload_from_db()
 
+    @staticmethod
+    def _build_inbound_index(cores: dict[int, AbstractCore]) -> dict:
+        # Hosts select inbounds by tag across all cores. Keep the last-core-wins
+        # rule in ID order so display order and NATS message order cannot change
+        # shared tags' encryption or other subscription settings after a restart.
+        inbounds_by_tag = {}
+        for core_id in sorted(cores):
+            inbounds_by_tag.update(cores[core_id].inbounds_by_tag)
+        return inbounds_by_tag
+
     async def update_inbounds(self):
         async with self._lock:
-            new_inbounds = {}
-            for core in self._cores.values():
-                new_inbounds.update(core.inbounds_by_tag)
-
+            new_inbounds = self._build_inbound_index(self._cores)
             self._inbounds_by_tag = new_inbounds
             self._inbounds = list(self._inbounds_by_tag.keys())
 

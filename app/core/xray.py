@@ -66,6 +66,7 @@ class XRayConfig(dict):
         self._inbounds = []
         self._inbounds_by_tag = {}
         self._fallbacks_inbound = []
+        self._processed_tls_sans: dict[int, list[str]] = {}
         self._protocols: frozenset[ProxyProtocol] = frozenset()
 
         # Registery pattern for network handlers, making it easy to add support for new network types in the future
@@ -79,6 +80,7 @@ class XRayConfig(dict):
             "httpupgrade": self._handle_httpupgrade_settings,
             "splithttp": self._handle_xhttp_settings,
             "xhttp": self._handle_xhttp_settings,
+            "xdrive": self._handle_xdrive_settings,
             "kcp": self._handle_kcp_settings,
             "http": self._handle_http_settings,
             "h2": self._handle_http_settings,
@@ -195,6 +197,13 @@ class XRayConfig(dict):
         settings["fp"] = tls_settings.get("fingerprint", "chrome")
         if sni := tls_settings.get("serverName"):
             settings["sni"].append(str(sni))
+        # The same real tlsSettings object can arrive from several passes (the parent and its fallback children).
+        # Do not read the files again: reuse the SANs collected on the first pass.
+        cache_key = id(tls_settings)
+        if cache_key in self._processed_tls_sans:
+            settings["sni"].extend(self._processed_tls_sans[cache_key])
+            return tls_settings
+        processed_sans: list[str] = []
         for certificate in tls_settings.get("certificates", []):
             serve_on_node = certificate.pop("serveOnNode", False)
             if serve_on_node:
@@ -204,7 +213,9 @@ class XRayConfig(dict):
                 cert_path = _resolve_allowed_cert_path(certificate["certificateFile"], inbound_tag)
                 with open(cert_path, "rb") as file:
                     cert = file.read()
-                    settings["sni"].extend(get_cert_SANs(cert))
+                    cert_sans = get_cert_SANs(cert)
+                    settings["sni"].extend(cert_sans)
+                    processed_sans.extend(cert_sans)
 
                 if certificate.get("keyFile", None):
                     key_path = _resolve_allowed_cert_path(certificate["keyFile"], inbound_tag)
@@ -225,8 +236,11 @@ class XRayConfig(dict):
                     cert = "\n".join(cert)
                 if isinstance(cert, str):
                     cert = cert.encode()
-                settings["sni"].extend(get_cert_SANs(cert))
+                cert_sans = get_cert_SANs(cert)
+                settings["sni"].extend(cert_sans)
+                processed_sans.extend(cert_sans)
 
+        self._processed_tls_sans[cache_key] = processed_sans
         return tls_settings
 
     def _handle_reality_settings(self, tls_settings: dict, settings: dict, inbound_tag: str):
@@ -408,6 +422,22 @@ class XRayConfig(dict):
             settings["host"] = host
         elif host and isinstance(host, list):
             settings["host"] = host[0]
+
+    def _handle_xdrive_settings(self, net_settings: dict, settings: dict, inbound_tag: str = ""):
+        """Normalize XDrive settings for the subscription model."""
+        settings["xdrive_remote_folder"] = net_settings.get("remoteFolder")
+        settings["xdrive_service"] = net_settings.get("service")
+        settings["xdrive_secrets"] = net_settings.get("secrets")
+        settings["xdrive_segment_bytes"] = net_settings.get("segmentBytes")
+        settings["xdrive_flush_interval_ms"] = net_settings.get("flushIntervalMs")
+        settings["xdrive_poll_interval_ms"] = net_settings.get("pollIntervalMs")
+        settings["xdrive_max_poll_interval_ms"] = net_settings.get("maxPollIntervalMs")
+        settings["xdrive_session_ttl_seconds"] = net_settings.get("sessionTtlSeconds")
+        settings["xdrive_concurrency"] = net_settings.get("concurrency")
+        settings["xdrive_eager_window_ms"] = net_settings.get("eagerWindowMs")
+        settings["xdrive_hole_timeout_ms"] = net_settings.get("holeTimeoutMs")
+        settings["xdrive_template"] = net_settings.get("template")
+        settings["xdrive_s3"] = net_settings.get("s3")
 
     @staticmethod
     def _hysteria_finalmask_from_stream(stream: dict, net_settings: dict) -> dict | None:

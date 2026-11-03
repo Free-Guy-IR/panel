@@ -25,7 +25,7 @@ import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { hostFormDefaultValues, type HostFormValues } from '@/features/hosts/forms/host-form'
 import { LoaderButton } from '@/components/ui/loader-button'
-import { FinalMaskSettings } from '../components/finalmask-settings'
+import { XrayStreamFinalmaskFields } from '@/features/core-editor/components/shared/xray-stream-finalmask-editor'
 import {
   applyHostProtocolPayload,
   hasHostProtocolExtraSection,
@@ -497,7 +497,11 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
                     />
                   </div>
                   {form.watch('final_mask_settings') !== undefined && form.watch('final_mask_settings') !== null && (
-                    <FinalMaskSettings form={form} />
+                    <XrayStreamFinalmaskFields
+                      value={form.watch('final_mask_settings')}
+                      onChange={next => form.setValue('final_mask_settings', next, { shouldDirty: true, shouldTouch: true })}
+                      t={t}
+                    />
                   )}
                 </div>
               </div>
