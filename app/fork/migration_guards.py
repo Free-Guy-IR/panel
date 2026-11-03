@@ -71,7 +71,12 @@ REVISION_COLUMNS = (
     ("1a2b3c4d5e6f", (("api_keys", "max_requests"), ("api_keys", "request_count"), ("api_keys", "delete_on_limit"))),
 )
 REPOINTED_V551_MERGE = "2e045b99a67e"
-REPOINTED_V551_MARKER = ("api_keys", "max_requests")
+REPOINTED_V551_MARKERS = (
+    ("api_keys", "max_requests"),
+    ("api_keys", "request_count"),
+    ("api_keys", "delete_on_limit"),
+    ("settings", "cleanup"),
+)
 RESTAMP_HEAD = "b708c8d4fc31"
 NODE_STATS_INDEX_REVISION = "f0420da90ff1"
 NODE_STATS_FOREIGN_KEYS = (("node_stats", "node_id", "ix_node_stats_node_id_created_at"),)
@@ -268,13 +273,16 @@ def guard_planned_steps(migration_context: MigrationContext, script: ScriptDirec
 def refuse_repointed_v551_merge(connection: Connection, heads: Iterable[str]) -> None:
     if set(heads) != {REPOINTED_V551_MERGE}:
         return
-    table, column = REPOINTED_V551_MARKER
-    if column not in _present_columns(inspect(connection), table):
+    inspector = inspect(connection)
+    present = [
+        f"{table}.{column}" for table, column in REPOINTED_V551_MARKERS if column in _present_columns(inspector, table)
+    ]
+    if not present:
         return
     raise StrayMigrationObjectError(
-        f"alembic_version holds only {REPOINTED_V551_MERGE} while {table}.{column} already exists, so the database "
-        f"was stamped by the earlier {REPOINTED_V551_MERGE} that already carried the upstream v5.6.0 revisions; "
-        f"nothing was changed, run `alembic stamp --purge {RESTAMP_HEAD}` once, then retry"
+        f"alembic_version holds only {REPOINTED_V551_MERGE} while the schema already holds {', '.join(present)}, "
+        f"so the database was stamped by the earlier {REPOINTED_V551_MERGE} that already carried the upstream v5.6.0 "
+        f"revisions; nothing was changed, run `alembic stamp --purge {RESTAMP_HEAD}` once, then retry"
     )
 
 

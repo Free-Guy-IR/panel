@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 from alembic.command import check, current, downgrade, stamp, upgrade
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 
@@ -417,3 +417,41 @@ def test_a_database_stamped_by_the_repointed_v551_merge_is_refused_without_chang
 
         assert _versions(url) == [V551_MERGE]
         assert _scalar_rows(url, "SELECT max_requests, request_count FROM api_keys WHERE id = 5") == [(40, 3)]
+
+
+UPSTREAM_V560_COLUMNS = (
+    ("api_keys", "max_requests"),
+    ("api_keys", "request_count"),
+    ("api_keys", "delete_on_limit"),
+    ("settings", "cleanup"),
+)
+
+
+def _v560_columns(url: str) -> set[tuple[str, str]]:
+    engine = create_engine(_sync(url))
+    try:
+        inspector = inspect(engine)
+        present = {
+            table: {column["name"] for column in inspector.get_columns(table)} for table in ("api_keys", "settings")
+        }
+    finally:
+        engine.dispose()
+    return {(table, column) for table, column in UPSTREAM_V560_COLUMNS if column in present[table]}
+
+
+@pytest.mark.parametrize("kept", UPSTREAM_V560_COLUMNS[1:], ids=lambda kept: ".".join(kept))
+def test_a_repointed_v551_database_without_max_requests_is_still_refused_without_change(tmp_path, kept):
+    with _scratch_database(tmp_path, f"repointed_{kept[1]}") as url:
+        config = _config(url)
+        _quiet(upgrade, config, "head")
+        for table, column in UPSTREAM_V560_COLUMNS:
+            if (table, column) != kept:
+                _execute(url, f"ALTER TABLE {table} DROP COLUMN {column}")
+        _execute(url, f"UPDATE alembic_version SET version_num = '{V551_MERGE}'")
+        assert _v560_columns(url) == {kept}
+
+        with pytest.raises(migration_guards.StrayMigrationObjectError, match=f"alembic stamp --purge {HEAD}"):
+            _quiet(upgrade, config, "head")
+
+        assert _versions(url) == [V551_MERGE]
+        assert _v560_columns(url) == {kept}
