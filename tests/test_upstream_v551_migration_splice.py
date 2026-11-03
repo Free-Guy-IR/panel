@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -280,6 +281,14 @@ def _insert(url: str, table: str, values: dict) -> dict:
         engine.dispose()
 
 
+def _kept(stored, value) -> bool:
+    if isinstance(stored, datetime):
+        if stored.tzinfo is not None:
+            stored = stored.astimezone(UTC).replace(tzinfo=None)
+        return stored == datetime.fromisoformat(str(value))
+    return str(stored) == str(value)
+
+
 FIXTURE = {
     "admins": {"id": 7, "username": "fixture_admin", "hashed_password": "fixture_hash"},
     "users": {"id": 21, "username": "fixture_user", "proxy_settings": '{"vless": {"id": "fixture-vless"}}'},
@@ -309,7 +318,7 @@ def test_the_production_revision_upgrade_keeps_rows_and_sets_upstream_defaults(t
                     kept = json.loads(stored[name]) if isinstance(stored[name], str) else stored[name]
                     assert kept["vless"] == json.loads(value)["vless"], (table, name)
                 else:
-                    assert str(stored[name]) == str(value), (table, name)
+                    assert _kept(stored[name], value), (table, name, stored[name], value)
         assert _scalar_rows(url, "SELECT max_requests, request_count, delete_on_limit FROM api_keys WHERE id = 5") == [
             (None, 0, 0)
         ]
