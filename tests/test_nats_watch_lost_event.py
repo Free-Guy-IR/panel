@@ -331,3 +331,51 @@ async def test_a_slow_consumer_drop_loses_no_revision(jetstream, writers):  # no
         with contextlib.suppress(Exception):
             await nc.close()
         await jetstream.js.delete_key_value(bucket)
+
+
+class BytesLimitThatDropsOnce(int):
+    def __new__(cls, limit):
+        instance = super().__new__(cls, limit)
+        instance.armed = True
+        instance.dropped = asyncio.Event()
+        return instance
+
+    def __le__(self, pending_size):
+        if self.armed:
+            self.armed = False
+            self.dropped.set()
+            return True
+        return int.__le__(self, pending_size)
+
+
+@pytest.mark.parametrize("drop", ["pending-queue-full", "pending-bytes-limit"])
+async def test_a_slow_consumer_drop_of_the_last_delivery_reaches_a_quiet_watcher(jetstream, drop):  # noqa: F811
+    bucket = "watch_" + uuid4().hex
+    writer = await jetstream.js.create_key_value(bucket=bucket, history=64)
+    await writer.put("p.1.seed", b"seed")
+    nc = await nats.connect(jetstream.url)
+    nc._error_cb = lambda error: asyncio.sleep(0)
+    watermark = await last_revision(jetstream.js, bucket)
+    reader = Reader(await watch_kv(await nc.jetstream().key_value(bucket), ">"))
+    try:
+        async with asyncio.timeout(10):
+            await reader.ready.wait()
+        await reader.reached(await writer.put("p.1.first", b"1"))
+        subscription = reader.watcher._live
+        if drop == "pending-queue-full":
+            dropped = drop_once_as_slow_consumer(subscription, watermark + 2)
+        else:
+            limit = BytesLimitThatDropsOnce(subscription._sub._pending_bytes_limit)
+            subscription._sub._pending_bytes_limit = limit
+            dropped = limit.dropped
+        last = await writer.put("p.1.last", b"2")
+        async with asyncio.timeout(10):
+            await dropped.wait()
+        await reader.reached(last, timeout=15)
+        assert reader.revisions == [watermark + 1, last]
+        assert len(nc._subs) <= 2
+    finally:
+        await reader.close()
+        with contextlib.suppress(Exception):
+            await nc.close()
+        await jetstream.js.delete_key_value(bucket)
