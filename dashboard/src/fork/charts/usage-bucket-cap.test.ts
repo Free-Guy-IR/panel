@@ -56,6 +56,13 @@ describe('the dashboard cap cannot drift from the backend', () => {
     expect(USAGE_MAX_BUCKETS).toBe(Number(match![1].replace(/_/g, '')))
   })
 
+  it('the backend rejects only a bucket count strictly above USAGE_MAX_BUCKETS', () => {
+    expect(backend).toMatch(/^\s*if period is not None and \(end_date - start_date\) \/ PERIOD_LENGTHS\[Period\(period\)\] > USAGE_MAX_BUCKETS:\s*$/m)
+    expect(exceedsUsageBucketCap(Period.minute, start, plus(USAGE_MAX_BUCKETS * USAGE_PERIOD_LENGTH_MS[Period.minute]))).toBe(false)
+    expect(exceedsUsageBucketCap(Period.hour, start, plus(USAGE_MAX_BUCKETS * USAGE_PERIOD_LENGTH_MS[Period.hour]))).toBe(false)
+    expect(exceedsUsageBucketCap(Period.hour, start, plus(USAGE_MAX_BUCKETS * USAGE_PERIOD_LENGTH_MS[Period.hour] + 1))).toBe(true)
+  })
+
   it('every period length equals the backend PERIOD_LENGTHS entry', () => {
     const block = backend.match(/^PERIOD_LENGTHS\s*=\s*\{([\s\S]*?)^\}/m)
     expect(block).not.toBeNull()
