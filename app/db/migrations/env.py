@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 from logging.config import fileConfig
 from sqlalchemy import JSON
 from sqlalchemy import BigInteger
@@ -12,8 +13,14 @@ from alembic import context
 from app.db.base import Base
 import app.db.models
 from app.db.compiles_types import SqliteCompatibleBigInteger, WebAuthnBinary, WebAuthnChallenge, WebAuthnCredentialId
-from app.fork.db_rollback import ROLLBACK_FLAG
-from app.fork.migration_guards import SqliteIdHighWater, migration_url, repair_interrupted_mysql_steps
+from app.fork.migration_guards import (
+    SqliteIdHighWater,
+    guard_planned_steps,
+    migration_command,
+    migration_lock,
+    migration_url,
+    version_hooks,
+)
 from config import database_settings
 
 # this is the Alembic Config object, which provides
@@ -122,8 +129,8 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def do_run_migrations(connection: Connection) -> None:
-    guards = [SqliteIdHighWater()] if connection.dialect.name == "sqlite" else []
+def do_run_migrations(connection: Connection, owns_connection: bool = False) -> None:
+    sqlite_high_water = SqliteIdHighWater() if connection.dialect.name == "sqlite" else None
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
@@ -132,18 +139,19 @@ def do_run_migrations(connection: Connection) -> None:
         include_name=_include_name,
         transaction_per_migration=True,
         transactional_ddl=True,
-        on_version_apply=guards,
+        on_version_apply=version_hooks(connection, sqlite_high_water),
     )
+    migration_context = context.get_context()
+    if migration_command(migration_context.opts.get("fn")) is None:
+        with context.begin_transaction():
+            context.run_migrations()
+        return
 
-    with context.begin_transaction():
-        for guard in guards:
-            guard.prime(connection)
-        repair_interrupted_mysql_steps(
-            connection,
-            context.script,
-            context.get_context().get_current_heads(),
-            rolling_back=bool(config.attributes.get(ROLLBACK_FLAG)),
-        )
+    guard_planned_steps(migration_context, context.script, commit=owns_connection)
+    lock = migration_lock(connection) if owns_connection else contextlib.nullcontext()
+    with lock, context.begin_transaction():
+        if sqlite_high_water is not None:
+            sqlite_high_water.prime(connection)
         context.run_migrations()
 
 
@@ -162,7 +170,7 @@ async def run_async_migrations() -> None:
     )
 
     async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
+        await connection.run_sync(do_run_migrations, True)
 
     await connectable.dispose()
 

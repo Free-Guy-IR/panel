@@ -1,9 +1,14 @@
-from collections.abc import Iterable
+import contextlib
+import hashlib
+import time
+from collections.abc import Callable, Iterable, Iterator
 
 from alembic.operations import Operations
+from alembic.runtime.migration import MigrationContext, RevisionStep
 from alembic.script import ScriptDirectory
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection, make_url
+from sqlalchemy.exc import SQLAlchemyError
 
 ID_GUARDED_TABLES = ("users", "nodes")
 AUTOINCREMENT_OWNER = "fd192e9628a5"
@@ -15,6 +20,84 @@ REVERSE_GROUP_FOREIGN_KEYS = (
     ("inbounds_groups_association", "group_id", "ix_inbounds_groups_association_group_id_inbound_id"),
     ("users_groups_association", "groups_id", "ix_users_groups_association_groups_id_user_id"),
 )
+MIGRATION_COMMANDS = ("upgrade", "downgrade")
+MIGRATION_LOCK = "pasarguard_alembic_"
+MIGRATION_LOCK_KEY = 5_026_101_103
+MIGRATION_LOCK_TIMEOUT = 3600
+
+
+class MigrationLockTimeout(RuntimeError):
+    pass
+
+
+def migration_command(fn) -> str | None:
+    if getattr(fn, "__module__", None) != "alembic.command":
+        return None
+    name = getattr(fn, "__name__", None)
+    return name if name in MIGRATION_COMMANDS else None
+
+
+def mysql_lock_name(connection: Connection) -> str:
+    database = connection.execute(text("SELECT DATABASE()")).scalar() or ""
+    return MIGRATION_LOCK + hashlib.sha1(database.encode()).hexdigest()
+
+
+def _acquire_mysql_lock(connection: Connection, timeout: int) -> tuple[bool, dict]:
+    name = mysql_lock_name(connection)
+    acquired = connection.execute(text("SELECT GET_LOCK(:name, :timeout)"), {"name": name, "timeout": timeout})
+    return acquired.scalar() == 1, {"name": name}
+
+
+def _acquire_postgresql_lock(connection: Connection, timeout: int) -> tuple[bool, dict]:
+    deadline = time.monotonic() + timeout
+    parameters = {"key": MIGRATION_LOCK_KEY}
+    while True:
+        acquired = bool(connection.execute(text("SELECT pg_try_advisory_lock(:key)"), parameters).scalar())
+        connection.rollback()
+        if acquired or time.monotonic() >= deadline:
+            return acquired, parameters
+        time.sleep(1)
+
+
+LOCKS = {
+    "mysql": (_acquire_mysql_lock, "SELECT RELEASE_LOCK(:name)"),
+    "mariadb": (_acquire_mysql_lock, "SELECT RELEASE_LOCK(:name)"),
+    "postgresql": (_acquire_postgresql_lock, "SELECT pg_advisory_unlock(:key)"),
+}
+
+
+@contextlib.contextmanager
+def migration_lock(connection: Connection, timeout: int = MIGRATION_LOCK_TIMEOUT) -> Iterator[None]:
+    lock = LOCKS.get(connection.dialect.name)
+    if lock is None:
+        yield
+        return
+    acquire, release = lock
+    acquired, parameters = acquire(connection, timeout)
+    connection.commit()
+    if not acquired:
+        raise MigrationLockTimeout(f"another migration held the database migration lock for {timeout} seconds")
+    try:
+        yield
+    finally:
+        with contextlib.suppress(SQLAlchemyError):
+            connection.rollback()
+            connection.execute(text(release), parameters)
+            connection.commit()
+
+
+def guard_planned_steps(migration_context: MigrationContext, script: ScriptDirectory, *, commit: bool) -> None:
+    plan: Callable = migration_context._migrations_fn
+    connection = migration_context.connection
+
+    def planned(heads, context) -> list:
+        steps = list(plan(heads, context))
+        repair_interrupted_mysql_steps(connection, script, heads, steps)
+        if commit and connection.in_transaction():
+            connection.commit()
+        return steps
+
+    migration_context._migrations_fn = planned
 
 
 def migration_url(url: str) -> str:
@@ -84,15 +167,37 @@ def _applied(script: ScriptDirectory, heads: Iterable[str]) -> set[str]:
     return applied
 
 
+def _removed(steps: Iterable) -> set[str]:
+    return {step.revision.revision for step in steps if isinstance(step, RevisionStep) and step.is_downgrade}
+
+
 def repair_interrupted_mysql_steps(
-    connection: Connection, script: ScriptDirectory, heads: Iterable[str], *, rolling_back: bool
+    connection: Connection, script: ScriptDirectory, heads: Iterable[str], steps: Iterable = ()
 ) -> None:
     if connection.dialect.name not in MYSQL_FAMILY:
         return
     applied = _applied(script, heads)
     _reconcile_sort_order(connection, SORT_ORDER_REVISION in applied)
-    if rolling_back and REVERSE_GROUP_INDEX_REVISION in applied:
+    if REVERSE_GROUP_INDEX_REVISION not in applied:
+        _undo_reverse_group_indexes(connection)
+    elif REVERSE_GROUP_INDEX_REVISION in _removed(steps):
         _index_reverse_group_foreign_keys(connection)
+    else:
+        _drop_redundant_foreign_key_indexes(connection)
+
+
+class MysqlReverseGroupIndexes:
+    def __call__(self, *, ctx, step, heads, run_args) -> None:
+        if step.up_revision_id == REVERSE_GROUP_INDEX_REVISION and step.is_upgrade:
+            _drop_redundant_foreign_key_indexes(ctx.connection)
+
+
+def version_hooks(connection: Connection, sqlite_high_water: SqliteIdHighWater | None) -> list:
+    if sqlite_high_water is not None:
+        return [sqlite_high_water]
+    if connection.dialect.name in MYSQL_FAMILY:
+        return [MysqlReverseGroupIndexes()]
+    return []
 
 
 def _reconcile_sort_order(connection: Connection, applied: bool) -> None:
@@ -108,15 +213,48 @@ def _reconcile_sort_order(connection: Connection, applied: bool) -> None:
             connection.exec_driver_sql(f"UPDATE {table} SET sort_order = id")
 
 
+def _foreign_key_index_name(inspector, table: str, column: str) -> str:
+    names = [key["name"] for key in inspector.get_foreign_keys(table) if key["constrained_columns"] == [column]]
+    return names[0] if names and names[0] else column
+
+
+def _index_names(inspector, table: str) -> dict[str, list[str]]:
+    return {index["name"]: index["column_names"] for index in inspector.get_indexes(table)}
+
+
+def _ensure_foreign_key_index(connection: Connection, inspector, table: str, column: str, upstream_index: str) -> None:
+    leading = {name for name, columns in _index_names(inspector, table).items() if columns[:1] == [column]}
+    if leading - {upstream_index}:
+        return
+    quote = connection.dialect.identifier_preparer.quote
+    name = _foreign_key_index_name(inspector, table, column)
+    connection.exec_driver_sql(f"CREATE INDEX {quote(name)} ON {table} ({quote(column)})")
+
+
 def _index_reverse_group_foreign_keys(connection: Connection) -> None:
+    inspector = inspect(connection)
+    for table, column, upstream_index in REVERSE_GROUP_FOREIGN_KEYS:
+        if inspector.has_table(table):
+            _ensure_foreign_key_index(connection, inspector, table, column, upstream_index)
+
+
+def _undo_reverse_group_indexes(connection: Connection) -> None:
+    inspector = inspect(connection)
+    quote = connection.dialect.identifier_preparer.quote
+    for table, column, upstream_index in REVERSE_GROUP_FOREIGN_KEYS:
+        if not inspector.has_table(table) or upstream_index not in _index_names(inspector, table):
+            continue
+        _ensure_foreign_key_index(connection, inspector, table, column, upstream_index)
+        connection.exec_driver_sql(f"DROP INDEX {quote(upstream_index)} ON {table}")
+
+
+def _drop_redundant_foreign_key_indexes(connection: Connection) -> None:
     inspector = inspect(connection)
     quote = connection.dialect.identifier_preparer.quote
     for table, column, upstream_index in REVERSE_GROUP_FOREIGN_KEYS:
         if not inspector.has_table(table):
             continue
-        leading = {index["name"] for index in inspector.get_indexes(table) if index["column_names"][:1] == [column]}
-        if leading - {upstream_index}:
-            continue
-        names = [key["name"] for key in inspector.get_foreign_keys(table) if key["constrained_columns"] == [column]]
-        name = names[0] if names and names[0] else column
-        connection.exec_driver_sql(f"CREATE INDEX {quote(name)} ON {table} ({quote(column)})")
+        indexes = _index_names(inspector, table)
+        name = _foreign_key_index_name(inspector, table, column)
+        if upstream_index in indexes and name != upstream_index and indexes.get(name) == [column]:
+            connection.exec_driver_sql(f"DROP INDEX {quote(name)} ON {table}")
