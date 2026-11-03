@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validat
 
 from app.db.models import DataLimitResetStrategy, NodeConnectionType, NodeStatus
 from app.fork.operation.node_messages import scrub_credentials
+from app.fork.proxy_url import proxy_url_reaches_its_host
 from app.models.stats import Period
 
 from .validators import ListValidator, OptionalAwareDatetime, ProxyValidator
@@ -167,6 +168,11 @@ class NodeCreate(Node):
     @classmethod
     def validate_proxy_url(cls, v):
         return ProxyValidator.validate_proxy_url(v)
+
+    @field_validator("proxy_url")
+    @classmethod
+    def proxy_url_is_usable(cls, v):
+        return proxy_url_reaches_its_host(v)
 
 
 class NodeModify(NodeCreate):

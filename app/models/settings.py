@@ -14,6 +14,7 @@ from pydantic import (
 )
 
 from app.fork.format_template import MAX_CUSTOM_VARIABLES, check_template_value
+from app.fork.proxy_url import proxy_url_reaches_its_host
 from app.models.proxy import ShadowsocksMethods
 from app.utils.logger import get_logger
 
@@ -607,12 +608,22 @@ class WebhookInput(Webhook):
     def validate_proxy_url(cls, v):
         return ProxyValidator.validate_proxy_url(v)
 
+    @field_validator("proxy_url")
+    @classmethod
+    def proxy_url_is_usable(cls, value):
+        return proxy_url_reaches_its_host(value)
+
 
 class NotificationSettingsInput(NotificationSettings):
     @field_validator("proxy_url", mode="before")
     @classmethod
     def validate_proxy_url(cls, v):
         return ProxyValidator.validate_proxy_url(v)
+
+    @field_validator("proxy_url")
+    @classmethod
+    def proxy_url_is_usable(cls, value):
+        return proxy_url_reaches_its_host(value)
 
 
 class SettingsSchemaInput(SettingsSchema):
