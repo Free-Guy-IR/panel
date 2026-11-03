@@ -1,6 +1,6 @@
 from datetime import UTC, datetime as dt
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.db import AsyncSession
@@ -232,6 +232,11 @@ class APIKeyOperation(BaseOperation):
             db_key = await update_api_key(db, db_key, update_data)
         except StaleDataError:
             await self.raise_error(message="API key not found", code=404, db=db)
+        except InvalidRequestError:
+            await db.rollback()
+            if await get_api_key_by_id(db, key_id) is None:
+                await self.raise_error(message="API key not found", code=404, db=db)
+            raise
         await db.commit()
 
         api_key_resp = APIKeyResponse.model_validate(db_key)

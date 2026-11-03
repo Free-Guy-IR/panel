@@ -155,8 +155,12 @@ def test_a_custom_key_rotation_is_decided_on_the_row_it_rotates(access_token, sc
 
 
 @pytest.mark.skipif(":memory:" in DATABASE_URL, reason="needs a database shared by several connections")
-@pytest.mark.parametrize("action", ["revoke", "modify"])
-def test_a_key_deleted_by_the_owner_mid_change_answers_404(access_token, scoped_admin, monkeypatch, action):
+@pytest.mark.parametrize(
+    "action,body",
+    [("revoke", None), ("modify", {"note": "renamed"}), ("modify", {}), ("modify", {"note": None})],
+    ids=["revoke", "modify", "modify-nothing", "modify-null-note"],
+)
+def test_a_key_deleted_by_the_owner_mid_change_answers_404(access_token, scoped_admin, monkeypatch, action, body):
     target_id, _ = _key(scoped_admin["token"], NARROW)
     operation = APIKeyOperation(operator_type=OperatorType.API)
     hook = "revoke_api_key_crud" if action == "revoke" else "update_api_key"
@@ -189,7 +193,7 @@ def test_a_key_deleted_by_the_owner_mid_change_answers_404(access_token, scoped_
                     if action == "revoke":
                         return await operation.revoke_api_key(db, admin=owner, key_id=target_id)
                     return await operation.modify_api_key(
-                        db, admin=owner, key_id=target_id, model=APIKeyUpdate.model_validate({"note": "renamed"})
+                        db, admin=owner, key_id=target_id, model=APIKeyUpdate.model_validate(body)
                     )
                 except HTTPException as exc:
                     return exc
