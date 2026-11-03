@@ -17,7 +17,8 @@ from app.fork.db_rollback import current_heads, default_config, rollback
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSIONS = ROOT / "app" / "db" / "migrations" / "versions"
-HEAD = "2e045b99a67e"
+HEAD = "b708c8d4fc31"
+V551_MERGE = "2e045b99a67e"
 FORK_HEAD = "e79833e2a0b2"
 UPSTREAM_V551_TIP = "c8d2e4f6a1b3"
 UPSTREAM_TIP = "1a2b3c4d5e6f"
@@ -186,7 +187,8 @@ def test_the_graph_has_one_head_that_merges_the_fork_head_with_the_upstream_v560
     script = ScriptDirectory.from_config(default_config())
 
     assert script.get_heads() == [HEAD]
-    assert script.get_revision(HEAD).down_revision == (FORK_HEAD, UPSTREAM_TIP)
+    assert script.get_revision(HEAD).down_revision == (V551_MERGE, UPSTREAM_TIP)
+    assert script.get_revision(V551_MERGE).down_revision == (FORK_HEAD, UPSTREAM_V551_TIP)
     assert script.get_revision("b7e2c4d91f60").down_revision == "b4c7e8f1a2d3"
     parents = [UPSTREAM_V551_TIP, *UPSTREAM_V560_CHAIN[:-1]]
     for revision, parent in zip(UPSTREAM_V560_CHAIN, parents, strict=True):
@@ -196,6 +198,123 @@ def test_the_graph_has_one_head_that_merges_the_fork_head_with_the_upstream_v560
 def test_the_six_upstream_v551_revisions_are_byte_identical():
     for name, blob in UPSTREAM_V551_BLOBS.items():
         assert _git_blob(VERSIONS / name) == blob, name
+
+
+def test_the_v551_merge_revision_keeps_its_released_parents_and_content():
+    assert _git_blob(VERSIONS / "2e045b99a67e_merge_upstream_v5_5_1_migrations_with_fork_head.py") == (
+        "8afb48c62b0f7e5337cc0421d392287cea02ed4b"
+    )
+
+
+@pytest.mark.parametrize(("merge", "parent"), [(HEAD, V551_MERGE), (V551_MERGE, FORK_HEAD)])
+def test_a_plain_downgrade_of_either_merge_revision_is_refused(tmp_path, merge, parent):
+    with _scratch_database(tmp_path, "refuse") as url:
+        config = _config(url)
+        _quiet(upgrade, config, "head")
+        if merge == V551_MERGE:
+            _quiet(rollback, config, V551_MERGE, echo=lambda _line: None)
+            assert _versions(url) == [V551_MERGE]
+        before = _schema(url)
+
+        with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
+            _quiet(downgrade, config, parent)
+
+        assert _versions(url) == [merge]
+        assert _schema(url) == before
+
+
+@pytest.mark.parametrize("stamp", [UPSTREAM_TIP, V551_MERGE], ids=["official-v560", "fork-v551-merge"])
+def test_a_database_stamped_at_an_earlier_tip_gets_every_missing_revision(tmp_path, stamp):
+    script = ScriptDirectory.from_config(default_config())
+    with _scratch_database(tmp_path, "stamped") as url, _scratch_database(tmp_path, "fresh") as fresh:
+        _quiet(upgrade, _config(url), stamp)
+        _quiet(upgrade, _config(fresh), "head")
+        applied = {rev.revision for rev in script.iterate_revisions(stamp, "base")}
+        missing = {rev.revision for rev in script.iterate_revisions(HEAD, "base")} - applied
+
+        _quiet(upgrade, _config(url), "head")
+
+        assert missing
+        if stamp == UPSTREAM_TIP:
+            assert {FORK_HEAD, V551_MERGE, HEAD} <= missing
+        else:
+            assert set(UPSTREAM_V560_CHAIN) | {HEAD} == missing
+        assert _versions(url) == [HEAD]
+        assert _schema(url) == _schema(fresh)
+
+
+def _filler(column) -> object:
+    kind = str(column["type"]).upper()
+    if "INT" in kind:
+        return 1
+    if "BOOL" in kind:
+        return 0
+    if any(word in kind for word in ("FLOAT", "REAL", "NUMERIC", "DECIMAL", "DOUBLE")):
+        return 1.0
+    if "DATE" in kind or "TIME" in kind:
+        return "2026-08-08 00:00:00"
+    if "JSON" in kind:
+        return "{}"
+    return "fixture"
+
+
+def _insert(url: str, table: str, values: dict) -> dict:
+    engine = create_engine(_sync(url))
+    try:
+        row = dict(values)
+        for column in inspect(engine).get_columns(table):
+            if column["name"] in row or column["nullable"] or column.get("default") is not None:
+                continue
+            if column.get("autoincrement") is True or column["name"] == "id":
+                continue
+            row[column["name"]] = _filler(column)
+        names = ", ".join(row)
+        marks = ", ".join(f":{name}" for name in row)
+        with engine.begin() as connection:
+            connection.execute(text(f"INSERT INTO {table} ({names}) VALUES ({marks})"), row)
+        return row
+    finally:
+        engine.dispose()
+
+
+FIXTURE = {
+    "admins": {"id": 7, "username": "fixture_admin", "hashed_password": "fixture_hash"},
+    "users": {"id": 21, "username": "fixture_user", "proxy_settings": '{"vless": {"id": "fixture-vless"}}'},
+    "nodes": {"id": 11, "name": "fixture_node", "address": "192.0.2.1", "port": 62050},
+    "node_stats": {"id": 3, "node_id": 11, "mem_used": 50},
+    "api_keys": {"id": 5, "admin_id": 7, "name": "fixture_key", "key_hash": "fixture_key_hash"},
+}
+
+
+def test_the_production_revision_upgrade_keeps_rows_and_sets_upstream_defaults(tmp_path):
+    with _scratch_database(tmp_path, "fixture") as url:
+        config = _config(url)
+        _quiet(upgrade, config, PROD_REVISION)
+        written = {table: _insert(url, table, values) for table, values in FIXTURE.items()}
+        before = {table: _scalar_rows(url, f"SELECT * FROM {table} ORDER BY id") for table in FIXTURE}
+        had_settings = bool(_scalar_rows(url, "SELECT id FROM settings"))
+
+        _quiet(upgrade, config, "head")
+
+        assert _versions(url) == [HEAD]
+        for table, values in written.items():
+            rows = _scalar_rows(url, f"SELECT {', '.join(values)} FROM {table} ORDER BY id")
+            assert len(rows) == len(before[table]) == 1, table
+            stored = dict(zip(values, rows[0], strict=True))
+            for name, value in values.items():
+                if name == "proxy_settings":
+                    kept = json.loads(stored[name]) if isinstance(stored[name], str) else stored[name]
+                    assert kept["vless"] == json.loads(value)["vless"], (table, name)
+                else:
+                    assert str(stored[name]) == str(value), (table, name)
+        assert _scalar_rows(url, "SELECT max_requests, request_count, delete_on_limit FROM api_keys WHERE id = 5") == [
+            (None, 0, 0)
+        ]
+        if had_settings:
+            for (cleanup,) in _scalar_rows(url, "SELECT cleanup FROM settings"):
+                assert isinstance(json.loads(cleanup) if isinstance(cleanup, str) else cleanup, dict)
+        assert _scalar_rows(url, "SELECT COUNT(*) FROM node_outbound_usages") == [(0,)]
+        _quiet(check, config)
 
 
 def test_the_four_upstream_v560_revisions_are_byte_identical():
