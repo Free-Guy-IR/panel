@@ -37,6 +37,8 @@ class _Delivery:
 class _Bus:
     def __init__(self):
         self.routers: list[NatsMessageRouter] = []
+        self.held = False
+        self.in_flight: list[bytes] = []
 
     def join(self, worker: HostManager) -> None:
         worker_router = NatsMessageRouter()
@@ -45,8 +47,18 @@ class _Bus:
 
     async def publish(self, topic: MessageTopic, data: dict, *, raise_on_error: bool = False):
         raw = NatsMessage(topic=topic, data=data).model_dump_json().encode()
+        if self.held:
+            self.in_flight.append(raw)
+            return
+        await self._deliver(raw)
+
+    async def _deliver(self, raw: bytes) -> None:
         for worker_router in list(self.routers):
             await worker_router._dispatch(_Delivery(raw))
+
+    async def deliver_in_flight(self) -> None:
+        while self.in_flight:
+            await self._deliver(self.in_flight.pop(0))
 
 
 class _Gate:
@@ -179,3 +191,106 @@ async def test_two_workers_never_serve_an_older_write_after_a_newer_one(bus, dat
     del database[HOST_ID]
     assert await _cached_remark(writer) is None
     assert await _cached_remark(reader) is None
+
+
+async def _remove(worker: HostManager, database: dict[int, str]) -> None:
+    database.pop(HOST_ID, None)
+    await worker.remove_host(HOST_ID)
+
+
+async def _paused_write(worker: HostManager, database: dict[int, str], gate: _Gate, remark: str) -> asyncio.Task:
+    gate.remark = remark
+    gate.armed = True
+    gate.paused.clear()
+    gate.resume.clear()
+    write = asyncio.create_task(_write(worker, database, remark))
+    await asyncio.wait_for(gate.paused.wait(), 5)
+    return write
+
+
+@pytest.mark.asyncio
+async def test_two_workers_converge_on_the_last_write_in_nats_order(bus, database, gate):
+    first = _worker(bus)
+    second = _worker(bus)
+    bus.held = True
+
+    await _write(first, database, "v1")
+    await _write(second, database, "v2")
+    await bus.deliver_in_flight()
+
+    assert database[HOST_ID] == "v2"
+    assert await _cached_remark(first) == "v2"
+    assert await _cached_remark(second) == "v2"
+
+
+@pytest.mark.asyncio
+async def test_own_remove_echo_landing_before_a_newer_readd_publishes_keeps_the_host(bus, database, gate):
+    writer = _worker(bus)
+    sibling = _worker(bus)
+    await _write(writer, database, "v0")
+    bus.held = True
+
+    await _remove(writer, database)
+    readd = await _paused_write(writer, database, gate, "v1")
+    await bus.deliver_in_flight()
+    gate.resume.set()
+    await asyncio.wait_for(readd, 5)
+    await bus.deliver_in_flight()
+
+    assert database[HOST_ID] == "v1"
+    assert await _cached_remark(writer) == "v1"
+    assert await _cached_remark(sibling) == "v1"
+
+
+@pytest.mark.asyncio
+async def test_own_remove_echo_landing_after_a_newer_readd_applied_keeps_the_host(bus, database, gate):
+    writer = _worker(bus)
+    sibling = _worker(bus)
+    await _write(writer, database, "v0")
+    bus.held = True
+
+    await _remove(writer, database)
+    await _write(writer, database, "v1")
+    await bus.deliver_in_flight()
+
+    assert database[HOST_ID] == "v1"
+    assert await _cached_remark(writer) == "v1"
+    assert await _cached_remark(sibling) == "v1"
+
+
+@pytest.mark.asyncio
+async def test_sibling_remove_landing_before_an_enable_publishes_does_not_drop_the_enable(bus, database, gate):
+    enabler = _worker(bus)
+    remover = _worker(bus)
+    await _write(enabler, database, "v0")
+    bus.held = True
+
+    await _remove(remover, database)
+    enable = await _paused_write(enabler, database, gate, "v1")
+    await bus.deliver_in_flight()
+    gate.resume.set()
+    await asyncio.wait_for(enable, 5)
+    await bus.deliver_in_flight()
+
+    assert database[HOST_ID] == "v1"
+    assert await _cached_remark(enabler) == "v1"
+    assert await _cached_remark(remover) == "v1"
+
+
+@pytest.mark.asyncio
+async def test_sibling_disable_landing_before_an_enable_publishes_does_not_drop_the_enable(bus, database, gate):
+    enabler = _worker(bus)
+    disabler = _worker(bus)
+    await _write(enabler, database, "v0")
+    bus.held = True
+
+    await _write(disabler, database, "disabled-v0")
+    enable = await _paused_write(enabler, database, gate, "v1")
+    await bus.deliver_in_flight()
+    gate.resume.set()
+    await asyncio.wait_for(enable, 5)
+    await bus.deliver_in_flight()
+
+    assert database[HOST_ID] == "v1"
+    assert await _cached_remark(enabler) == "v1"
+    assert await _cached_remark(disabler) == "v1"
