@@ -38,10 +38,10 @@ const xrayVlessInbound = {
 const profileWith = (inbounds: unknown[]) => ({ inbounds, outbounds: [], routing: { rules: [] } }) as unknown as Profile
 
 describe('Xray WireGuard inbound peers are left to the backend', () => {
-  it('clears the peers an inbound carries before validation and persistence', () => {
+  it('keeps the peers an inbound carries while the fork node does not supply Xray WireGuard user peers', () => {
     const sanitized = sanitizeProfileInbounds(profileWith([xrayWireguardInbound]))
     const inbound = sanitized.inbounds[0] as unknown as Record<string, unknown>
-    expect(inbound.peers).toEqual([])
+    expect(inbound.peers).toEqual(xrayWireguardInbound.peers)
     expect(inbound.secretKey).toBe(PRIVATE_KEY)
     expect(inbound.address).toEqual(['10.0.0.1/24'])
   })
@@ -56,7 +56,7 @@ describe('Xray WireGuard inbound peers are left to the backend', () => {
   it('leaves the other inbounds of the profile untouched', () => {
     const sanitized = sanitizeProfileInbounds(profileWith([xrayVlessInbound, xrayWireguardInbound]))
     expect(sanitized.inbounds[0]).toEqual(xrayVlessInbound as never)
-    expect((sanitized.inbounds[1] as unknown as Record<string, unknown>).peers).toEqual([])
+    expect((sanitized.inbounds[1] as unknown as Record<string, unknown>).peers).toEqual(xrayWireguardInbound.peers)
   })
 
   it('does not mutate the profile it was given', () => {
