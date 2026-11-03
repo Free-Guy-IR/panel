@@ -1,5 +1,6 @@
 import json
 import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -24,6 +25,7 @@ UPSTREAM_REF = (
 )
 UPSTREAM_LOCALE_PICKS_FILE = REPO_ROOT / "tests" / "fixtures" / "upstream_locale_picks.json"
 CHERRY_PICK_TRAILER_PREFIX = "(cherry picked from commit "
+UPSTREAM_REPOSITORY_URL = "https://github.com/PasarGuard/panel.git"
 
 FORK_MODULE_PREFIX = "app.fork."
 FORK_ROUTER_MODULE_PREFIX = "app.fork.routers."
@@ -196,9 +198,16 @@ def _git(*args):
     return subprocess.run(["git", *args], cwd=REPO_ROOT, capture_output=True, text=True, check=False)
 
 
+def _is_commit_in_clone(commit):
+    return _git("cat-file", "-e", f"{commit}^{{commit}}").returncode == 0
+
+
 def _require_upstream_ref():
     if _git("rev-parse", "--verify", "--quiet", f"{UPSTREAM_REF}^{{commit}}").returncode != 0:
-        pytest.skip(f"{UPSTREAM_REF} is not fetched in this clone")
+        pytest.fail(
+            f"the upstream sync point {UPSTREAM_REF} is not in this clone, fetch it with "
+            f"git fetch --no-tags {UPSTREAM_REPOSITORY_URL} {UPSTREAM_REF}"
+        )
 
 
 def _load_json_file(path):
@@ -265,12 +274,15 @@ def _ported_public_locale_picks():
 
 
 def _is_ahead_of_sync_point(upstream_commit):
+    if not _is_commit_in_clone(upstream_commit):
+        pytest.fail(
+            f"the cherry-pick trailer commit {upstream_commit} is not in this clone, so it cannot be placed against "
+            f"{UPSTREAM_REF}: fetch it from {UPSTREAM_REPOSITORY_URL} or drop the trailer"
+        )
     result = _git("merge-base", "--is-ancestor", upstream_commit, UPSTREAM_REF)
-    if result.returncode in (0, 1):
-        return result.returncode == 1
-    known = _git("cat-file", "-e", f"{upstream_commit}^{{commit}}")
-    assert known.returncode != 0, f"cannot place {upstream_commit} against {UPSTREAM_REF}: {result.stderr.strip()}"
-    return True
+    if result.returncode not in (0, 1):
+        pytest.fail(f"cannot place {upstream_commit} against {UPSTREAM_REF}: {result.stderr.strip()}")
+    return result.returncode == 1
 
 
 def _ported_public_locale_picks_ahead_of_sync_point():
@@ -404,8 +416,7 @@ def test_public_locale_file_is_unchanged_from_upstream(code):
     _require_upstream_ref()
     relative_path = f"{PUBLIC_LOCALE_RELATIVE_DIR}/{code}.json"
     shown = _git("show", f"{UPSTREAM_REF}:{relative_path}")
-    if shown.returncode != 0:
-        pytest.skip(f"{UPSTREAM_REF}:{relative_path} is not readable: {shown.stderr.strip()}")
+    assert shown.returncode == 0, f"{UPSTREAM_REF}:{relative_path} is not readable: {shown.stderr.strip()}"
     baseline_flat = _flatten_locale(json.loads(shown.stdout))
     assert baseline_flat, f"{code}: the pinned upstream baseline {UPSTREAM_REF} produced no keys"
     upstream_flat = _apply_locale_picks(baseline_flat, _recorded_locale_picks(), code)
@@ -449,17 +460,19 @@ def test_recorded_locale_picks_match_the_fork_cherry_pick_commits(code):
 
 @pytest.mark.parametrize("code", LOCALE_CODES)
 def test_recorded_locale_picks_match_the_upstream_commits(code):
-    checked = 0
-    for pick in _recorded_locale_picks():
+    _require_upstream_ref()
+    picks = _recorded_locale_picks()
+    missing = [pick["upstream"] for pick in picks if not _is_commit_in_clone(pick["upstream"])]
+    if missing:
+        pytest.fail(
+            f"recorded upstream locale picks are not in this clone, fetch each from {UPSTREAM_REPOSITORY_URL} "
+            f"or drop the forged entry: {missing}"
+        )
+    for pick in picks:
         upstream_commit = pick["upstream"]
-        if _git("cat-file", "-e", f"{upstream_commit}^{{commit}}").returncode != 0:
-            continue
-        checked += 1
         assert _commit_locale_delta(upstream_commit, code) == _recorded_pick_delta(pick, code), (
             f"{code}: the recorded locale change of {upstream_commit} differs from the upstream commit itself"
         )
-    if not checked:
-        pytest.skip("no recorded upstream locale pick is fetched in this clone")
 
 
 def test_public_locale_check_rejects_an_arbitrary_key_and_a_changed_ported_value():
@@ -480,6 +493,32 @@ def test_public_locale_check_rejects_an_arbitrary_key_and_a_changed_ported_value
     dropped = {("common", "save"): "Save"}
     assert _public_locale_violations(dropped, expected)[1] == [("coreEditor", "api", "title")]
     assert _apply_locale_picks(baseline_flat, picks, "fa") == baseline_flat
+
+
+FORGED_UPSTREAM_SHA = "f0" * 20
+
+
+def test_a_forged_cherry_pick_trailer_sha_is_rejected_not_counted_as_ahead():
+    _require_upstream_ref()
+    with pytest.raises(pytest.fail.Exception, match=FORGED_UPSTREAM_SHA):
+        _is_ahead_of_sync_point(FORGED_UPSTREAM_SHA)
+
+
+def test_a_recorded_upstream_pick_missing_from_the_clone_fails_the_upstream_check(monkeypatch):
+    forged = {"upstream": FORGED_UPSTREAM_SHA, "locales": {"en": {"set": [], "removed": []}}}
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_recorded_locale_picks",
+        lambda: [*_load_json_file(UPSTREAM_LOCALE_PICKS_FILE)["picks"], forged],
+    )
+    with pytest.raises(pytest.fail.Exception, match=FORGED_UPSTREAM_SHA):
+        test_recorded_locale_picks_match_the_upstream_commits("en")
+
+
+def test_an_unreachable_sync_point_fails_the_boundary_checks_instead_of_skipping(monkeypatch):
+    monkeypatch.setattr(sys.modules[__name__], "UPSTREAM_REF", FORGED_UPSTREAM_SHA)
+    with pytest.raises(pytest.fail.Exception, match=FORGED_UPSTREAM_SHA):
+        _require_upstream_ref()
 
 
 def test_public_locale_check_rejects_a_new_key_in_the_real_public_file():

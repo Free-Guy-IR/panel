@@ -23,6 +23,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Fetch the upstream sync point and the recorded upstream locale picks by SHA
+        run: |
+          set -euo pipefail
+          shas=$(python3 -c 'import json, pathlib; print("\n".join([pathlib.Path(".upstream-sync-point").read_text().strip()] + [pick["upstream"] for pick in json.loads(pathlib.Path("tests/fixtures/upstream_locale_picks.json").read_text())["picks"]]))')
+          for sha in $shas; do
+            if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::not a full upstream commit SHA: $sha"
+              exit 1
+            fi
+            git fetch --no-tags https://github.com/PasarGuard/panel.git "+$sha:refs/upstream-pins/$sha"
+          done
+
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
