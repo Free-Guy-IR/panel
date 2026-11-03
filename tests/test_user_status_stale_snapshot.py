@@ -42,6 +42,15 @@ async def _seed(factory, **users) -> dict[str, int]:
         return {name: user.id for name, user in made.items()}
 
 
+CONCURRENT_WRITER_GRACE = 1.0
+
+
+async def _enable(factory, user_id: int) -> None:
+    async with factory() as other_admin:
+        await other_admin.execute(update(User).where(User.id == user_id).values(status=UserStatus.active))
+        await other_admin.commit()
+
+
 async def test_a_usage_reset_does_not_undo_a_disable_committed_after_the_user_was_loaded(sessions):
     ids = await _seed(sessions, heavy={"status": UserStatus.limited, "data_limit": 10, "used_traffic": 10})
     async with sessions() as request_session:
@@ -80,26 +89,25 @@ async def test_a_bulk_data_limit_cut_reports_every_user_whose_status_it_changed(
 
     gb = 1024**3
     ids = await _seed(sessions, target={"status": UserStatus.disabled, "data_limit": 10 * gb, "used_traffic": 7 * gb})
+    other_admins: list[asyncio.Task] = []
     async with sessions() as request_session:
         original_execute = request_session.execute
 
         async def execute_with_concurrent_enable(statement, *args, **kwargs):
             if isinstance(statement, Update) and statement.table.name == "users":
-                async with sessions() as other_admin:
-                    await other_admin.execute(
-                        update(User).where(User.id == ids["target"]).values(status=UserStatus.active)
-                    )
-                    await other_admin.commit()
+                other_admins.append(asyncio.create_task(_enable(sessions, ids["target"])))
+                await asyncio.wait(other_admins[-1:], timeout=CONCURRENT_WRITER_GRACE)
             return await original_execute(statement, *args, **kwargs)
 
         request_session.execute = execute_with_concurrent_enable
         changed, _ = await update_users_datalimit(request_session, BulkUser(amount=-5 * gb, users=[ids["target"]]))
+    await asyncio.gather(*other_admins)
     async with sessions() as check:
         final = (await check.execute(select(User.status).where(User.id == ids["target"]))).scalar_one()
     reported = {user.id for user in changed}
-    assert final == UserStatus.active or ids["target"] in reported, (
-        f"UPDATE turned the user {final} but it is missing from the users handed to sync_users ({reported}); "
-        f"the node keeps the active user pushed by the concurrent enable"
+    assert ids["target"] in reported, (
+        f"UPDATE moved the user out of the status it was read with (final {final}) but it is missing from the "
+        f"users handed to sync_users ({reported}); the node keeps the active user pushed by the concurrent enable"
     )
 
 
@@ -169,24 +177,23 @@ async def test_a_bulk_expire_cut_reports_every_user_whose_status_it_changed(sess
         sessions,
         target={"status": UserStatus.disabled, "expire": datetime.now(UTC) + timedelta(hours=1)},
     )
+    other_admins: list[asyncio.Task] = []
     async with sessions() as request_session:
         original_execute = request_session.execute
 
         async def execute_with_concurrent_enable(statement, *args, **kwargs):
             if isinstance(statement, Update) and statement.table.name == "users":
-                async with sessions() as other_admin:
-                    await other_admin.execute(
-                        update(User).where(User.id == ids["target"]).values(status=UserStatus.active)
-                    )
-                    await other_admin.commit()
+                other_admins.append(asyncio.create_task(_enable(sessions, ids["target"])))
+                await asyncio.wait(other_admins[-1:], timeout=CONCURRENT_WRITER_GRACE)
             return await original_execute(statement, *args, **kwargs)
 
         request_session.execute = execute_with_concurrent_enable
         changed, count = await update_users_expire(request_session, BulkUser(amount=-7200, users=[ids["target"]]))
+    await asyncio.gather(*other_admins)
     async with sessions() as check:
         final = (await check.execute(select(User.status).where(User.id == ids["target"]))).scalar_one()
     assert count == 1
-    assert final == UserStatus.active or ids["target"] in {user.id for user in changed}, final
+    assert ids["target"] in {user.id for user in changed}, final
 
 
 async def test_a_negative_bulk_data_limit_reports_only_the_users_it_changed(sessions):

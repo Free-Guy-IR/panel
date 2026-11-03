@@ -13,12 +13,15 @@ b021d6f7be94bb5c7dc57cf6a648d4b89584e776 upstream/dependabot/uv/dev/fastapi-0.14
 3de496c0129d72440d9d59b0756e119b3b649629 upstream/dependabot/uv/dev/sse-starlette-3.6.0
 30b9f2d176cdaf3713493c8520ffaa386d96ba93 upstream/dependabot/uv/dev/uvloop-0.23.0
 d3fdded8243273e754f18b993dc3efdcec36d24a upstream/dependabot/uv/idna-3.15
+cfdce3765ee7ad7cb46782ba00fa360d0c7134ed upstream/dependabot/uv/pyasn1-0.6.5
 f936134cb19783a0871243d4904c088722b9ec26 upstream/deprecated-apis
 0c869b089278062a861de16e20de5102d190e40b upstream/dev
 0d57c2c44a5762fdbe950f39efb05bf6b32fa6ed upstream/dev
 16ce46d8ad6d8a9e15d84bf25aebd580b7813115 upstream/dev
 1ccd86d172c8ee24d3bc013645d9b5507409b510 upstream/dev
+238e7312bc9fc255aa44bb8ef79d054d1649eb01 upstream/dev
 26047f6b06e35366460288459f87e389eb924986 upstream/dev
+2b75db15cb0019a00252c59f9d1c34e6082a121f upstream/dev
 3ef603b347cf992a8096de3791dc58e83929049f upstream/dev
 61150ba4eb22504ca67eaa87e0071c506acb4ab7 upstream/dev
 6372404b8ed406fc536b987d78bbb88c1dcc1189 upstream/dev
@@ -28,6 +31,7 @@ f936134cb19783a0871243d4904c088722b9ec26 upstream/deprecated-apis
 8e92a1212919e58f487e7f96c18f9ea6c2938ca9 upstream/dev
 9e68477be17616a46f863249a675831268123244 upstream/dev
 a2fb3139b9bd038cbbb6f613d8c40c1f96fb8361 upstream/dev
+ae8681539d7482b0aa20452ef4062087fcf095db upstream/dev
 bb87d76a2772cc085de4602bc1b33e5370196fd6 upstream/dev
 d4d2fd4238469f34d6d730544f15d7ab96907d4a upstream/dev
 d94e157791ac1d098a48172e50a3689caaf2f46f upstream/dev
@@ -59,6 +63,7 @@ f8f4e0f7ddcc948de040f2c7ec24d58212e87814 upstream/fix/telegram-notify-no-preview
 eb73275ca80adc83be3ff44947de18472115fe82 upstream/fix/xray-wg-allocation-view
 29bc68f7e0cbdffdf88ea4c1561439ff99af63b9 upstream/free-threaded
 7b08b03960a12894b522565eed78b108402c4e83 upstream/hosts-group
+2b75db15cb0019a00252c59f9d1c34e6082a121f upstream/main
 b56ffe369f542152c52c69733205baeaf3f6e4cd upstream/main
 eba70d68eaa5a89e34ffebb47c8fd5ce054d0e43 upstream/main
 127543598f9b4353ad5dca6c3a3446770a3c5f1c upstream/masque
@@ -136,3 +141,4 @@ aebf7256927710329d380d67ce96224f287ae5f6 v5.3.0
 b56ffe369f542152c52c69733205baeaf3f6e4cd v5.4.1
 5eb8628cfe6db233ed2a6bbaf53f0ed497e797f9 v5.5.0
 eba70d68eaa5a89e34ffebb47c8fd5ce054d0e43 v5.5.1
+2b75db15cb0019a00252c59f9d1c34e6082a121f v5.6.0

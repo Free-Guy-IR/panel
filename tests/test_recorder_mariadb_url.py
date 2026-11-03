@@ -106,7 +106,11 @@ async def test_every_billing_statement_renders_on_a_mariadb_url(monkeypatch):
     statements = [sql for sql, _ in connection.sent]
     assert any("ON DUPLICATE KEY UPDATE" in sql for sql in statements)
     assert not any("ON CONFLICT" in sql for sql in statements)
-    billed = [params for sql, params in connection.sent if sql.startswith("UPDATE users")]
+    billed = [params for sql, params in connection.sent if sql.startswith("UPDATE users") and "used_traffic" in sql]
+    touched = [sql for sql, _ in connection.sent if sql.startswith("UPDATE users") and "used_traffic" not in sql]
+    assert len(touched) == 2
+    assert "online_at IS NULL OR" in touched[0]
+    assert "users.online_at < coalesce(users.edit_at, users.created_at)" in touched[1]
     credited = [params for sql, params in connection.sent if sql.startswith("UPDATE admins")]
     assert billed == [[{"uid": 7, "epoch": 0, "value": 1_000_000}]]
     assert credited == [[{"admin_id": 3, "value": 1_000_000}]]

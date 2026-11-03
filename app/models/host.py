@@ -13,6 +13,7 @@ from app.fork.config_text import (
     check_host_addresses,
     check_single_line,
 )
+from app.fork.format_template import is_unparseable
 from app.utils.helpers import MAX_FORMAT_SPEC_NUMBER, has_oversized_format_spec
 
 from .validators import ListValidator, StringArrayValidator
@@ -629,6 +630,8 @@ def validate_format_variables(value: str, allow_quoting: bool = True) -> str:
     Widths and precisions above ``MAX_FORMAT_SPEC_NUMBER`` are rejected before anything is formatted.
     ``allow_quoting=False`` also rejects the ``!r`` and ``!a`` conversions, which wrap the value in quotes.
     """
+    if is_unparseable(value):
+        raise ValueError(f'Invalid formatting variables in "{value}"')
     if has_oversized_format_spec(value):
         raise ValueError(
             f'Invalid formatting variables in "{value}": width and precision must be numbers up to '

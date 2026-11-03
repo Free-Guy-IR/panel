@@ -1,3 +1,4 @@
+import { fitUsageQueryRange } from '@/fork/charts/usage-bucket-cap'
 import dayjs from '@/lib/dayjs'
 import { Period } from '@/service/api'
 import type { TFunction } from 'i18next'
@@ -416,6 +417,7 @@ type ChartQueryRange = {
   period: Period
   startDate: string
   endDate: string
+  cappedFrom?: Period
 }
 
 const buildChartQueryRange = (period: Period, from: Date, to: Date): ChartQueryRange => {
@@ -432,7 +434,7 @@ export const getChartQueryRangeFromShortcut = (shortcut: string, now = new Date(
   const to = safeRange?.to ?? now
   const period = getShortcutPeriod(shortcut, options)
 
-  return buildChartQueryRange(period, from, to)
+  return fitUsageQueryRange(next => buildChartQueryRange(next, from, to), period, getShortcutPeriod(shortcut, { minuteForOneHour: options?.minuteForOneHour }))
 }
 
 export const getChartQueryRangeFromDateRange = (range: DateRange, fallbackShortcut: string = '1w', options?: ShortcutPeriodOptions): ChartQueryRange => {
@@ -441,7 +443,7 @@ export const getChartQueryRangeFromDateRange = (range: DateRange, fallbackShortc
   }
 
   const period = options?.periodOverride ?? getPeriodFromDateRange(range)
-  return buildChartQueryRange(period, dayjs(range.from).startOf('day').toDate(), dayjs(range.to).endOf('day').toDate())
+  return fitUsageQueryRange(next => buildChartQueryRange(next, dayjs(range.from).startOf('day').toDate(), dayjs(range.to).endOf('day').toDate()), period, getPeriodFromDateRange(range))
 }
 
 export const formatPeriodLabelForPeriod = (periodStart: string, period: Period, language: string, rangeHint?: ChartLabelRangeHint) => {

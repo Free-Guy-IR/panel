@@ -11,7 +11,7 @@ from typing import NamedTuple
 
 from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.common.service_pb2 import StatType
-from sqlalchemy import BigInteger, DateTime, bindparam, func, select, union_all, update
+from sqlalchemy import BigInteger, DateTime, bindparam, case, func, or_, select, union_all, update
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import ARRAY, insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -64,6 +64,7 @@ USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT = {
 }
 USER_ADMIN_LOOKUP_BATCH_SIZE = 1_000
 MYSQL_FAMILY = frozenset({"mysql", "mariadb"})
+ONLINE_AT_WRITE_INTERVAL = td(minutes=1)
 DEADLOCK_MAX_RETRIES = 5
 FENCED_USER_LOG_SAMPLE = 20
 UNKNOWN_UID_LOG_SAMPLE = 20
@@ -331,6 +332,121 @@ def build_node_user_usage_upsert(dialect: str, upsert_params: list[dict]):
         set_={"used_traffic": NodeUserUsage.used_traffic + stmt.excluded.used_traffic},
     )
     return [(stmt, stmt_params)]
+
+
+def build_user_traffic_update(dialect: str, usage_params: list[dict]):
+    """Build a set-based user traffic update on PostgreSQL and MySQL, an executemany one on SQLite."""
+    if dialect in ("postgresql", "mysql"):
+        aggregated_usage = defaultdict(int)
+        for param in usage_params:
+            aggregated_usage[param["uid"]] += param["value"]
+
+        aggregated_usage = dict(sorted(aggregated_usage.items()))
+
+    if dialect == "mysql":
+        # asyncmy runs an executemany UPDATE as one round trip per row, so add the
+        # deltas of the whole batch in one statement with a CASE on the primary key
+        stmt = (
+            update(User)
+            .where(User.id.in_(list(aggregated_usage)))
+            .values(used_traffic=User.used_traffic + case(aggregated_usage, value=User.id))
+            .execution_options(synchronize_session=False)
+        )
+        return stmt, None
+
+    if dialect == "postgresql":
+        source = (
+            func.unnest(
+                bindparam("uids", type_=ARRAY(BigInteger())),
+                bindparam("traffic_values", type_=ARRAY(BigInteger())),
+            )
+            .table_valued("uid", "value")
+            .render_derived(name="usage_source")
+        )
+        stmt = (
+            update(User)
+            .where(User.id == source.c.uid)
+            .values(used_traffic=User.used_traffic + source.c.value)
+            .execution_options(synchronize_session=False)
+        )
+        return (
+            stmt,
+            {
+                "uids": list(aggregated_usage),
+                "traffic_values": list(aggregated_usage.values()),
+            },
+        )
+
+    stmt = (
+        update(User)
+        .where(User.id == bindparam("uid"))
+        .values(used_traffic=User.used_traffic + bindparam("value"))
+        .execution_options(synchronize_session=False)
+    )
+    return stmt, usage_params
+
+
+def build_online_at_updates(dialect: str, user_ids: list[int], now: dt):
+    """Build throttled online timestamp updates without per-user statements."""
+    if not user_ids:
+        return []
+
+    cutoff = now - ONLINE_AT_WRITE_INTERVAL
+    stale_online_at = or_(User.online_at.is_(None), User.online_at <= cutoff)
+
+    if dialect == "postgresql":
+        source = (
+            func.unnest(bindparam("online_user_ids", type_=ARRAY(BigInteger())))
+            .table_valued("uid")
+            .render_derived(name="online_users")
+        )
+        stmt = (
+            update(User)
+            .where(User.id == source.c.uid, stale_online_at)
+            .values(online_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        return [(stmt, {"online_user_ids": user_ids})]
+
+    batch_size = NODE_USER_USAGE_BATCH_SIZE_BY_DIALECT.get(dialect, len(user_ids))
+    return [
+        (
+            update(User)
+            .where(User.id.in_(batch), stale_online_at)
+            .values(online_at=now)
+            .execution_options(synchronize_session=False),
+            None,
+        )
+        for batch in _chunked(user_ids, batch_size)
+    ]
+
+
+async def update_users_traffic(usage_params: list[dict]) -> None:
+    if not usage_params:
+        return
+
+    dialect = await get_dialect()
+    ordered_params = sorted(usage_params, key=lambda item: int(item["uid"]))
+    async with JOB_SEM:
+        if dialect == "postgresql":
+            await safe_execute(*build_user_traffic_update(dialect, ordered_params))
+            return
+
+        batch_size = USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT.get(dialect, len(ordered_params))
+        for batch in _chunked(ordered_params, batch_size):
+            await safe_execute(*build_user_traffic_update(dialect, batch))
+
+
+async def touch_users_online_at(user_ids: list[int], now: dt | None = None) -> None:
+    if not user_ids:
+        return
+
+    now = now or dt.now(UTC)
+    dialect = await get_dialect()
+    user_ids = sorted(set(user_ids))
+    async with JOB_SEM:
+        for stmt, params in build_online_at_updates(dialect, user_ids, now):
+            await safe_execute(stmt, params)
 
 
 def build_node_usage_upsert(dialect: str, upsert_param: dict):
@@ -628,7 +744,10 @@ async def record_node_stats_batched(all_node_params: dict):
     # Execute all node stats with limited concurrency
     tasks = [_record_single_node(node_id, params) for node_id, params in all_node_params.items()]
     if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for node_id, result in zip(all_node_params, results):
+            if isinstance(result, Exception):
+                logger.error("Failed to record node usage history for node %s: %s", node_id, result)
 
 
 def _process_users_stats_response(stats_response):
@@ -996,7 +1115,7 @@ async def apply_fenced_user_usage(
     user_stmt = (
         update(User)
         .where(User.id == bindparam("uid"), User.usage_epoch == bindparam("epoch"))
-        .values(used_traffic=User.used_traffic + bindparam("value"), online_at=online_at)
+        .values(used_traffic=User.used_traffic + bindparam("value"))
         .execution_options(synchronize_session=False)
     )
     admin_stmt = (
@@ -1045,6 +1164,16 @@ async def apply_fenced_user_usage(
 
         for update_batch in _chunked(billable, batch_size):
             await conn.execute(user_stmt, update_batch)
+        billed_ids = [item["uid"] for item in billable]
+        for online_stmt, online_params in build_online_at_updates(sql_family(dialect), billed_ids, online_at):
+            await conn.execute(online_stmt, online_params)
+        for id_batch in _chunked(billed_ids, batch_size):
+            await conn.execute(
+                update(User)
+                .where(User.id.in_(id_batch), User.online_at < func.coalesce(User.edit_at, User.created_at))
+                .values(online_at=online_at)
+                .execution_options(synchronize_session=False)
+            )
         if admin_data:
             await conn.execute(admin_stmt, admin_data)
 

@@ -25,6 +25,7 @@ from app.settings import hwid_settings, subscription_settings
 from app.subscription import sub_update_buffer as _sub_update_buffer  # noqa: F401  # registers per-worker flush loop
 from app.subscription.access_buffer import queue_subscription_access
 from app.subscription.share import (
+    _format_dynamic_value,
     apply_custom_format_variables,
     encode_title,
     generate_subscription,
@@ -145,11 +146,7 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         if not profile_title:
             return "Subscription"
 
-        try:
-            return profile_title.format_map(format_variables)
-        except (ValueError, KeyError):
-            # Invalid format string, return original title
-            return profile_title
+        return _format_dynamic_value(profile_title, format_variables)
 
     @staticmethod
     def _format_announce(sub_settings: SubSettings, format_variables: dict) -> str:
@@ -157,10 +154,7 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         if not sub_settings.announce:
             return ""
 
-        try:
-            return sub_settings.announce.format_map(format_variables)
-        except (ValueError, KeyError):
-            return sub_settings.announce
+        return _format_dynamic_value(sub_settings.announce, format_variables)
 
     @staticmethod
     def _format_announce_url(sub_settings: SubSettings, format_variables: dict) -> str:
@@ -168,10 +162,7 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         if not sub_settings.announce_url:
             return ""
 
-        try:
-            return sub_settings.announce_url.format_map(format_variables)
-        except (ValueError, KeyError):
-            return sub_settings.announce_url
+        return _format_dynamic_value(sub_settings.announce_url, format_variables)
 
     @staticmethod
     def create_response_headers(
@@ -283,10 +274,7 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
             header_value = value.strip()
             if not header_value:
                 return ""
-            try:
-                return header_value.format_map(format_variables)
-            except (ValueError, KeyError):
-                return header_value
+            return _format_dynamic_value(header_value, format_variables)
 
         if isinstance(value, (dict, list, tuple, bool, int, float)):
             return json_dumps(value, ensure_ascii=False, separators=(",", ":"))
@@ -860,7 +848,7 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         apps_with_updated_urls = []
         for app in applications:
             updated_app = app.model_copy()
-            import_url = app.import_url.format_map(format_variables)
+            import_url = _format_dynamic_value(app.import_url, format_variables)
             updated_app.import_url = import_url
             if is_hwid_enabled:
                 if app.show_when_hwid_enabled:

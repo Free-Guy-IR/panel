@@ -1,0 +1,387 @@
+{
+  "picks": [
+    {
+      "upstream": "2e009dc71c0816d8a835dbe6cf03db811327c184",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "coreConfigModal",
+                "apiServiceAlwaysOn"
+              ],
+              "always on"
+            ],
+            [
+              [
+                "coreConfigModal",
+                "apiServices"
+              ],
+              "API Services"
+            ],
+            [
+              [
+                "coreConfigModal",
+                "apiServicesUnknown"
+              ],
+              "Unrecognized API service(s): {{names}}. Remove or fix them to save."
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "alwaysOn"
+              ],
+              "always on"
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "hint"
+              ],
+              "gRPC API services exposed by this core. The node always enables the required services; enable optional ones as needed."
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "title"
+              ],
+              "API Services"
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "unknown"
+              ],
+              "Unrecognized API service(s): {{names}}. Fix them in the Advanced tab."
+            ],
+            [
+              [
+                "coreEditor",
+                "section",
+                "api"
+              ],
+              "API"
+            ],
+            [
+              [
+                "coreEditor",
+                "sectionDesc",
+                "api"
+              ],
+              "Xray gRPC API services"
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "admins",
+                "disabled"
+              ],
+              "غیرفعال"
+            ],
+            [
+              [
+                "coreConfigModal",
+                "apiServiceAlwaysOn"
+              ],
+              "همیشه فعال"
+            ],
+            [
+              [
+                "coreConfigModal",
+                "apiServices"
+              ],
+              "سرویس‌های API"
+            ],
+            [
+              [
+                "coreConfigModal",
+                "apiServicesUnknown"
+              ],
+              "سرویس(های) API ناشناخته: {{names}}. برای ذخیره آن‌ها را حذف یا اصلاح کنید."
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "alwaysOn"
+              ],
+              "همیشه فعال"
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "hint"
+              ],
+              "سرویس‌های gRPC API که این هسته ارائه می‌دهد. گره همیشه سرویس‌های موردنیاز را فعال می‌کند؛ موارد اختیاری را در صورت نیاز فعال کنید."
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "title"
+              ],
+              "سرویس‌های API"
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "unknown"
+              ],
+              "سرویس(های) API ناشناخته: {{names}}. آن‌ها را در تب پیشرفته اصلاح کنید."
+            ],
+            [
+              [
+                "coreEditor",
+                "section",
+                "api"
+              ],
+              "API"
+            ],
+            [
+              [
+                "coreEditor",
+                "sectionDesc",
+                "api"
+              ],
+              "سرویس‌های gRPC API مربوط به Xray"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "admins",
+                "disabled"
+              ],
+              "Отключен"
+            ],
+            [
+              [
+                "coreConfigModal",
+                "apiServiceAlwaysOn"
+              ],
+              "всегда включён"
+            ],
+            [
+              [
+                "coreConfigModal",
+                "apiServices"
+              ],
+              "Сервисы API"
+            ],
+            [
+              [
+                "coreConfigModal",
+                "apiServicesUnknown"
+              ],
+              "Нераспознанные сервисы API: {{names}}. Удалите или исправьте их, чтобы сохранить."
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "alwaysOn"
+              ],
+              "всегда включён"
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "hint"
+              ],
+              "Сервисы gRPC API, предоставляемые этим ядром. Узел всегда включает обязательные сервисы; необязательные включайте по мере необходимости."
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "title"
+              ],
+              "Сервисы API"
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "unknown"
+              ],
+              "Нераспознанные сервисы API: {{names}}. Исправьте их на вкладке «Дополнительно»."
+            ],
+            [
+              [
+                "coreEditor",
+                "section",
+                "api"
+              ],
+              "API"
+            ],
+            [
+              [
+                "coreEditor",
+                "sectionDesc",
+                "api"
+              ],
+              "Сервисы gRPC API Xray"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "admins",
+                "disabled"
+              ],
+              "已禁用"
+            ],
+            [
+              [
+                "coreConfigModal",
+                "apiServiceAlwaysOn"
+              ],
+              "始终启用"
+            ],
+            [
+              [
+                "coreConfigModal",
+                "apiServices"
+              ],
+              "API 服务"
+            ],
+            [
+              [
+                "coreConfigModal",
+                "apiServicesUnknown"
+              ],
+              "无法识别的 API 服务：{{names}}。请删除或修复后再保存。"
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "alwaysOn"
+              ],
+              "始终启用"
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "hint"
+              ],
+              "此核心提供的 gRPC API 服务。节点始终启用必需的服务；可按需启用可选服务。"
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "title"
+              ],
+              "API 服务"
+            ],
+            [
+              [
+                "coreEditor",
+                "api",
+                "unknown"
+              ],
+              "无法识别的 API 服务：{{names}}。请在“高级”选项卡中修复。"
+            ],
+            [
+              [
+                "coreEditor",
+                "section",
+                "api"
+              ],
+              "API"
+            ],
+            [
+              [
+                "coreEditor",
+                "sectionDesc",
+                "api"
+              ],
+              "Xray gRPC API 服务"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    },
+    {
+      "upstream": "034c44734b688ca1545d06c240f192ac77e96a5c",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressHint"
+              ],
+              "Example: 10.0.0.1/24"
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressHint"
+              ],
+              "مثال: 10.0.0.1/24"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressHint"
+              ],
+              "Пример: 10.0.0.1/24"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressHint"
+              ],
+              "示例：10.0.0.1/24"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    }
+  ]
+}

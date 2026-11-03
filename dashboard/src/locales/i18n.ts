@@ -22,6 +22,7 @@ i18n
       },
       react: {
         useSuspense: true,
+        transKeepBasicHtmlNodesFor: ['br', 'strong', 'i', 'p', 'b'],
       },
       load: 'languageOnly',
       detection: {

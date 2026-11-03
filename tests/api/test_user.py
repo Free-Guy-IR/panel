@@ -2106,6 +2106,135 @@ def test_reset_by_next_preserves_on_hold_template_status(access_token):
         cleanup_groups(access_token, core, groups)
 
 
+def _activate_next_plan_template(access_token: str, username: str, template_id: int) -> dict:
+    update = client.put(
+        f"/api/user/{username}",
+        headers=auth_headers(access_token),
+        json={"next_plan": {"user_template_id": template_id}},
+    )
+    assert update.status_code == status.HTTP_200_OK, update.text
+    response = client.post(f"/api/user/{username}/active_next", headers=auth_headers(access_token))
+    assert response.status_code == status.HTTP_200_OK, response.text
+    return response.json()
+
+
+def test_next_plan_with_on_hold_template_keeps_user_on_hold(access_token):
+    core, groups = setup_groups(access_token, 1)
+    template = create_user_template(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        expire_duration=86400 * 30,
+        status_value="on_hold",
+        on_hold_timeout=86400 * 7,
+    )
+    user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={"username": unique_name("test_next_plan_on_hold")},
+    )
+    try:
+        before = datetime.now(UTC)
+        body = _activate_next_plan_template(access_token, user["username"], template["id"])
+
+        assert body["status"] == "on_hold"
+        assert not body["expire"]
+        assert body["on_hold_expire_duration"] == 86400 * 30
+        on_hold_timeout = datetime.fromisoformat(body["on_hold_timeout"])
+        if on_hold_timeout.tzinfo is None:
+            on_hold_timeout = on_hold_timeout.replace(tzinfo=UTC)
+        assert timedelta(days=7, minutes=-2) < on_hold_timeout - before < timedelta(days=7, minutes=2)
+    finally:
+        delete_user(access_token, user["username"])
+        delete_user_template(access_token, template["id"])
+        cleanup_groups(access_token, core, groups)
+
+
+def test_next_plan_with_active_template_clears_on_hold_fields(access_token):
+    core, groups = setup_groups(access_token, 1)
+    template = create_user_template(access_token, group_ids=[groups[0]["id"]], expire_duration=86400 * 30)
+    user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={
+            "username": unique_name("test_next_plan_active"),
+            "status": "on_hold",
+            "on_hold_expire_duration": 3600,
+        },
+    )
+    try:
+        body = _activate_next_plan_template(access_token, user["username"], template["id"])
+
+        assert body["status"] == "active"
+        assert body["expire"]
+        assert not body["on_hold_expire_duration"]
+        assert not body["on_hold_timeout"]
+    finally:
+        delete_user(access_token, user["username"])
+        delete_user_template(access_token, template["id"])
+        cleanup_groups(access_token, core, groups)
+
+
+def test_bot_extend_get_then_put_keeps_on_hold_and_next_plan_then_activation_starts_the_plan(access_token):
+    core, groups = setup_groups(access_token, 1)
+    next_plan = {"data_limit": 5 * 1024**3, "expire": 86400 * 30, "add_remaining_traffic": False}
+    user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={
+            "username": unique_name("test_bot_extend_on_hold"),
+            "status": "on_hold",
+            "on_hold_expire_duration": 3600,
+            "data_limit": 1024**3,
+            "next_plan": next_plan,
+        },
+    )
+    try:
+        fetched = client.get(f"/api/user/{user['username']}", headers=auth_headers(access_token))
+        assert fetched.status_code == status.HTTP_200_OK, fetched.text
+        current = fetched.json()
+        assert current["status"] == "on_hold"
+        assert current["on_hold_expire_duration"] == 3600
+        assert current["next_plan"]["data_limit"] == next_plan["data_limit"]
+        assert current["next_plan"]["expire"] == next_plan["expire"]
+
+        updated = client.put(
+            f"/api/user/{user['username']}",
+            headers=auth_headers(access_token),
+            json={
+                "status": current["status"],
+                "data_limit": 2 * 1024**3,
+                "on_hold_expire_duration": 7200,
+                "next_plan": current["next_plan"],
+            },
+        )
+        assert updated.status_code == status.HTTP_200_OK, updated.text
+        body = updated.json()
+        assert body["status"] == "on_hold"
+        assert body["data_limit"] == 2 * 1024**3
+        assert body["on_hold_expire_duration"] == 7200
+        assert not body["expire"]
+        assert body["next_plan"]["data_limit"] == next_plan["data_limit"]
+        assert body["next_plan"]["expire"] == next_plan["expire"]
+
+        before = datetime.now(UTC)
+        activated = client.post(f"/api/user/{user['username']}/active_next", headers=auth_headers(access_token))
+        assert activated.status_code == status.HTTP_200_OK, activated.text
+        plan = activated.json()
+        assert plan["status"] == "active"
+        assert plan["data_limit"] == next_plan["data_limit"]
+        assert plan["used_traffic"] == 0
+        assert not plan["on_hold_expire_duration"]
+        assert not plan["on_hold_timeout"]
+        assert not plan["next_plan"]
+        expire = datetime.fromisoformat(plan["expire"])
+        if expire.tzinfo is None:
+            expire = expire.replace(tzinfo=UTC)
+        assert timedelta(days=30, minutes=-2) < expire - before < timedelta(days=30, minutes=2)
+    finally:
+        delete_user(access_token, user["username"])
+        cleanup_groups(access_token, core, groups)
+
+
 def test_revoke_user_subscription(access_token):
     """Test revoke user subscription info."""
     core, groups = setup_groups(access_token, 1)

@@ -1085,6 +1085,7 @@ def _register_fork_model_tables() -> None:
     from this file; a `from ... import Class` here would fail if those modules
     were already mid-import.
     """
+    import app.fork.models.api_key_permissions as _fork_api_key_permissions
     import app.fork.models.connection as _fork_connection
     import app.fork.models.content_filter as _fork_content_filter
     import app.fork.models.node_inbound_usage as _fork_inbound
@@ -1105,6 +1106,7 @@ def _register_fork_model_tables() -> None:
     _niu = getattr(_fork_inbound, "NodeInboundUsage", None)
     if _niu is not None:
         globals()["NodeInboundUsage"] = _niu
+    _fork_api_key_permissions.register()
 
 
 _register_fork_model_tables()

@@ -30,6 +30,7 @@ from app.fork.operation.admin_scope import (
     close_visible_restrictions,
     visible_users_query,
 )
+from app.fork.operation.admin_self_edit import self_edit_refusal, self_enable_refusal, self_reset_refusal
 from app.fork.operation.admin_transition import admin_transition_lock, status_blocks_user_sync
 from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import (
@@ -47,6 +48,7 @@ from app.models.admin import (
     RemoveAdminsResponse,
     hash_password,
 )
+from app.models.admin_role import RoleLimits
 from app.models.stats import Period, UserUsageStatsList
 from app.node.sync import remove_users as sync_remove_users, sync_users
 from app.operation import BaseOperation
@@ -56,6 +58,11 @@ from app.operation.user import UserOperation
 from app.utils.logger import get_logger
 
 logger = get_logger("admin-operation")
+
+
+def _set_limits(limits: RoleLimits | None) -> dict:
+    """The limits that are actually set; no overrides and all-null overrides are the same."""
+    return limits.model_dump(exclude_none=True) if limits is not None else {}
 
 
 class AdminOperation(BaseOperation):
@@ -138,6 +145,20 @@ class AdminOperation(BaseOperation):
         ):
             await self.raise_error(message="You're not allowed to disable your own account.", code=403)
 
+        # A limited admin must not be able to lift its own quota or role limits.
+        if not current_admin.is_owner and is_self:
+            new_overrides = modified_admin.permission_overrides
+            # The dashboard always sends the overrides object, with nulls when none are set, while
+            # an admin without overrides has None: compare the values that are actually set.
+            if new_overrides is not None and _set_limits(new_overrides) != _set_limits(
+                current_admin.permission_overrides
+            ):
+                await self.raise_error(message="You're not allowed to change your own limits.", code=403)
+            if modified_admin.data_limit is not None and (modified_admin.data_limit or 0) != (
+                current_admin.data_limit or 0
+            ):
+                await self.raise_error(message="You're not allowed to change your own data limit.", code=403)
+
         if modified_admin.telegram_id:
             existing_admins = await find_admins_by_telegram_id(
                 db, modified_admin.telegram_id, exclude_admin_id=db_admin.id, limit=1
@@ -148,6 +169,9 @@ class AdminOperation(BaseOperation):
         password_hash = await hash_password(modified_admin.password) if modified_admin.password is not None else None
         async with admin_transition_lock():
             await lock_admin_row(db, db_admin)
+            refusal = self_edit_refusal(db_admin, modified_admin, current_admin)
+            if refusal is not None:
+                await self.raise_error(message=refusal, code=403, db=db)
             old_users_sync_blocked = await admin_users_sync_blocked(db_admin)
             db_admin = await update_admin(db, db_admin, modified_admin, hashed_password=password_hash)
 
@@ -361,6 +385,8 @@ class AdminOperation(BaseOperation):
 
     async def _reset_admin_usage(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails) -> AdminDetails:
         """Reset an admin's traffic usage and log the action."""
+        if (refusal := self_reset_refusal([db_admin.id], admin)) is not None:
+            await self.raise_error(message=refusal, code=403)
         db_admin = await self._reset_admin_usage_and_sync(db, db_admin)
 
         logger.info(f'Admin "{db_admin.username}" usage has been reset by admin "{admin.username}"')
@@ -502,6 +528,8 @@ class AdminOperation(BaseOperation):
         for db_admin in db_admins:
             if is_disabled and db_admin.username == current_admin.username:
                 await self.raise_error(message="You're not allowed to disable your own account.", code=403)
+        if not is_disabled and (refusal := self_enable_refusal(db_admins, current_admin)) is not None:
+            await self.raise_error(message=refusal, code=403)
 
         admins_to_update = [a for a in db_admins if a.status != target_status]
         old_sync_blocked = {a.id: await admin_users_sync_blocked(a) for a in admins_to_update}
@@ -524,6 +552,8 @@ class AdminOperation(BaseOperation):
     ) -> BulkAdminsActionResponse:
         """Reset usage for selected admins by ID."""
         db_admins = await self._get_validated_bulk_admins(db, bulk_admins.ids, admin)
+        if (refusal := self_reset_refusal([db_admin.id for db_admin in db_admins], admin)) is not None:
+            await self.raise_error(message=refusal, code=403)
         for db_admin in db_admins:
             db_admin = await self._reset_admin_usage_and_sync(db, db_admin)
             reseted_admin = await admin_details_for(db, db_admin, admin)

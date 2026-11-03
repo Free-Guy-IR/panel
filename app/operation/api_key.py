@@ -1,6 +1,7 @@
 from datetime import UTC, datetime as dt
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, InvalidRequestError
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.db import AsyncSession
 from app.db.crud.admin import build_admin_details, get_admin_by_id
@@ -13,8 +14,9 @@ from app.db.crud.api_key import (
     revoke_api_key as revoke_api_key_crud,
     update_api_key,
 )
+from app.db.models import APIKey
 from app.models.admin import AdminDetails
-from app.models.admin_role import RolePermissions
+from app.models.admin_role import PermissionScope, RolePermissions
 from app.models.api_key import (
     APIKeyCreate,
     APIKeyCreateResponse,
@@ -34,16 +36,22 @@ from app.operation import BaseOperation
 
 
 def _check_permissions_not_exceed_admin(admin: AdminDetails, requested: RolePermissions) -> None:
-    """Raise ValueError if any permission in `requested` exceeds what `admin` has.
+    """Reject malformed scopes or permissions exceeding what `admin` has.
 
-    Owners are exempt — they can assign any permissions.
+    Owners are exempt from permission limits, but not scope validation.
     """
+    requested_permissions = requested.model_dump(exclude_none=True)
+    for resource_name, resource_perms in requested_permissions.items():
+        for action, value in resource_perms.items():
+            if isinstance(value, dict) and (set(value) != {"scope"} or value["scope"] not in PermissionScope):
+                raise ValueError(f"Invalid scope for '{resource_name}.{action}'")
+
     if admin.is_owner:
         return
 
     admin_perms = admin.role.permissions if admin.role else RolePermissions()
 
-    for resource_name, resource_perms in requested.model_dump(exclude_none=True).items():
+    for resource_name, resource_perms in requested_permissions.items():
         if resource_perms is None:
             continue
         admin_resource = admin_perms.get(resource_name)
@@ -55,6 +63,8 @@ def _check_permissions_not_exceed_admin(admin: AdminDetails, requested: RolePerm
                 continue
             admin_action = admin_resource.get(action) if admin_resource else None
             if admin_action is None:
+                raise ValueError(f"You don't have the '{action}' permission on '{resource_name}'")
+            if isinstance(value, dict) and admin_action is False:
                 raise ValueError(f"You don't have the '{action}' permission on '{resource_name}'")
             # True means unrestricted — cannot grant if admin only has scoped access
             if value is True and admin_action is not True:
@@ -70,6 +80,9 @@ def _check_permissions_not_exceed_admin(admin: AdminDetails, requested: RolePerm
                     raise ValueError(
                         f"Cannot grant '{resource_name}.{action}' with scope={key_scope}: your scope is {admin_scope}"
                     )
+
+
+_CUSTOM_KEY_INHERIT_DENIED = "An API key with custom permissions cannot create, change or rotate inheriting keys"
 
 
 class APIKeyOperation(BaseOperation):
@@ -90,6 +103,11 @@ class APIKeyOperation(BaseOperation):
             await self.raise_error(message="Target admin not found", code=404)
 
         target_admin = build_admin_details(target_db_admin)
+
+        # An inheriting key carries the admin's whole role, so a key with narrower custom permissions
+        # must not be able to mint one.
+        if model.inherit_permissions and admin.custom_api_key_id is not None:
+            await self.raise_error(message=_CUSTOM_KEY_INHERIT_DENIED, code=403)
 
         if not model.inherit_permissions:
             try:
@@ -148,61 +166,78 @@ class APIKeyOperation(BaseOperation):
     async def modify_api_key(
         self, db: AsyncSession, *, admin: AdminDetails, key_id: int, model: APIKeyUpdate
     ) -> APIKeyResponse:
-        db_key = await get_api_key_by_id(db, key_id)
+        db_key = await get_api_key_by_id(db, key_id, for_update=True)
         if db_key is None:
-            await self.raise_error(message="API key not found", code=404)
+            await self.raise_error(message="API key not found", code=404, db=db)
 
         if not admin.is_owner and db_key.admin_id != admin.id:
-            await self.raise_error(message="Permission denied", code=403)
+            await self.raise_error(message="Permission denied", code=403, db=db)
 
         target_admin_id = model.admin_id or db_key.admin_id
         if target_admin_id != db_key.admin_id and not admin.is_owner:
-            await self.raise_error(message="Only the owner can assign API keys to another admin", code=403)
+            await self.raise_error(message="Only the owner can assign API keys to another admin", code=403, db=db)
+
+        # Validate the key's resulting state, not just the fields in this request: permissions sent
+        # while the key inherits, or a later switch to custom permissions without new ones, must not
+        # leave the key with more than the caller and the target admin have.
+        final_inherit = db_key.inherit_permissions if model.inherit_permissions is None else model.inherit_permissions
+        permissions_changed = (
+            model.permissions is not None or model.inherit_permissions is not None or target_admin_id != db_key.admin_id
+        )
+        caller_is_sibling_key = admin.custom_api_key_id is not None and db_key.id != admin.custom_api_key_id
+        check_custom_permissions = not final_inherit and (permissions_changed or caller_is_sibling_key)
+
+        if final_inherit and admin.custom_api_key_id is not None:
+            await self.raise_error(message=_CUSTOM_KEY_INHERIT_DENIED, code=403, db=db)
 
         target_admin = None
-        if target_admin_id != db_key.admin_id or model.permissions is not None:
+        if target_admin_id != db_key.admin_id or check_custom_permissions:
             target_db_admin = await get_admin_by_id(
                 db, target_admin_id, load_users=False, load_usage_logs=False, load_role=True
             )
             if target_db_admin is None:
-                await self.raise_error(message="Target admin not found", code=404)
+                await self.raise_error(message="Target admin not found", code=404, db=db)
             target_admin = build_admin_details(target_db_admin)
 
         next_name = model.name if model.name is not None else db_key.name
         if next_name != db_key.name or target_admin_id != db_key.admin_id:
             duplicates, _ = await get_api_keys(db, admin_id=target_admin_id, offset=0, limit=1, name=next_name)
             if any(duplicate.id != db_key.id for duplicate in duplicates):
-                await self.raise_error(message="API key name already exists", code=409)
+                await self.raise_error(message="API key name already exists", code=409, db=db)
 
-        uses_custom_permissions = model.inherit_permissions is False or (
-            model.inherit_permissions is None and model.permissions is not None and not db_key.inherit_permissions
-        )
-
-        if model.permissions is not None and uses_custom_permissions:
+        if check_custom_permissions:
+            final_permissions = (
+                model.permissions
+                if model.permissions is not None
+                else RolePermissions.model_validate(db_key.permissions)
+            )
             try:
-                _check_permissions_not_exceed_admin(admin, model.permissions)
-                if target_admin is not None:
-                    _check_permissions_not_exceed_admin(target_admin, model.permissions)
+                _check_permissions_not_exceed_admin(admin, final_permissions)
+                _check_permissions_not_exceed_admin(target_admin, final_permissions)
             except ValueError as exc:
-                await self.raise_error(message=str(exc), code=403)
-        elif target_admin is not None and not db_key.inherit_permissions:
-            try:
-                _check_permissions_not_exceed_admin(target_admin, RolePermissions.model_validate(db_key.permissions))
-            except ValueError as exc:
-                await self.raise_error(message=str(exc), code=403)
+                await self.raise_error(message=str(exc), code=403, db=db)
 
         update_data = model.model_dump(exclude_unset=True)
         if update_data.get("admin_id") is None:
             update_data.pop("admin_id", None)
-        if update_data.get("inherit_permissions") is True:
-            update_data["permissions"] = {}
-        # Serialize permissions to plain dict for DB storage
-        if "permissions" in update_data and isinstance(update_data["permissions"], RolePermissions):
-            update_data["permissions"] = update_data["permissions"].model_dump(exclude_none=True)
-        elif "permissions" in update_data and model.permissions is not None:
+        if model.permissions is None:
+            # An explicit null means "unchanged", like an omitted field; the column must never become NULL.
+            update_data.pop("permissions", None)
+        elif "permissions" in update_data:
             update_data["permissions"] = model.permissions.model_dump(exclude_none=True)
+        if final_inherit:
+            # An inheriting key never keeps a stored snapshot (see the validation note above).
+            update_data["permissions"] = {}
 
-        db_key = await update_api_key(db, db_key, update_data)
+        try:
+            db_key = await update_api_key(db, db_key, update_data)
+        except StaleDataError:
+            await self.raise_error(message="API key not found", code=404, db=db)
+        except InvalidRequestError:
+            await db.rollback()
+            if await get_api_key_by_id(db, key_id) is None:
+                await self.raise_error(message="API key not found", code=404, db=db)
+            raise
         await db.commit()
 
         api_key_resp = APIKeyResponse.model_validate(db_key)
@@ -211,15 +246,35 @@ class APIKeyOperation(BaseOperation):
 
         return api_key_resp
 
-    async def revoke_api_key(self, db: AsyncSession, *, admin: AdminDetails, key_id: int) -> APIKeyCreateResponse:
-        db_key = await get_api_key_by_id(db, key_id)
-        if db_key is None:
-            await self.raise_error(message="API key not found", code=404)
-
+    async def _ensure_caller_may_rotate(self, db: AsyncSession, admin: AdminDetails, db_key: APIKey) -> None:
         if not admin.is_owner and db_key.admin_id != admin.id:
-            await self.raise_error(message="Permission denied", code=403)
+            await self.raise_error(message="Permission denied", code=403, db=db)
+        await self._ensure_custom_key_covers_sibling(db, admin, db_key)
 
-        raw_key, db_key = await revoke_api_key_crud(db, db_key)
+    async def _ensure_custom_key_covers_sibling(self, db: AsyncSession, admin: AdminDetails, db_key: APIKey) -> None:
+        if admin.custom_api_key_id is None or db_key.id == admin.custom_api_key_id:
+            return
+        if db_key.inherit_permissions:
+            await self.raise_error(message=_CUSTOM_KEY_INHERIT_DENIED, code=403, db=db)
+        try:
+            _check_permissions_not_exceed_admin(admin, RolePermissions.model_validate(db_key.permissions))
+        except ValueError as exc:
+            await self.raise_error(message=str(exc), code=403, db=db)
+
+    async def revoke_api_key(self, db: AsyncSession, *, admin: AdminDetails, key_id: int) -> APIKeyCreateResponse:
+        db_key = await get_api_key_by_id(db, key_id, for_update=True)
+        if db_key is None:
+            await self.raise_error(message="API key not found", code=404, db=db)
+
+        # Rotating returns the key's new secret, so a custom-permission key may only rotate itself or
+        # keys that stay within its own permissions.
+        await self._ensure_caller_may_rotate(db, admin, db_key)
+
+        try:
+            raw_key, db_key = await revoke_api_key_crud(db, db_key)
+        except StaleDataError:
+            await self.raise_error(message="API key not found", code=404, db=db)
+        await self._ensure_caller_may_rotate(db, admin, db_key)
         await db.commit()
 
         api_key_resp = APIKeyResponse.model_validate(db_key)
@@ -250,12 +305,13 @@ class APIKeyOperation(BaseOperation):
         return APIKeyResponse.model_validate(rows[0])
 
     async def delete_api_key(self, db: AsyncSession, *, admin: AdminDetails, key_id: int) -> None:
-        db_key = await get_api_key_by_id(db, key_id)
+        db_key = await get_api_key_by_id(db, key_id, for_update=True)
         if db_key is None:
-            await self.raise_error(message="API key not found", code=404)
+            await self.raise_error(message="API key not found", code=404, db=db)
 
         if not admin.is_owner and db_key.admin_id != admin.id:
-            await self.raise_error(message="Permission denied", code=403)
+            await self.raise_error(message="Permission denied", code=403, db=db)
+        await self._ensure_custom_key_covers_sibling(db, admin, db_key)
 
         api_key_resp = APIKeyResponse.model_validate(db_key)
         admin_username = db_key.admin.username if db_key.admin else "Unknown"
@@ -268,17 +324,19 @@ class APIKeyOperation(BaseOperation):
         self, db: AsyncSession, *, admin: AdminDetails, bulk_api_keys: BulkAPIKeySelection
     ) -> RemoveAPIKeysResponse:
         requested_ids = list(bulk_api_keys.ids)
-        db_keys = await get_api_keys_by_ids(db, requested_ids)
+        db_keys = await get_api_keys_by_ids(db, requested_ids, for_update=True)
         found_ids = {db_key.id for db_key in db_keys}
 
         for key_id in requested_ids:
             if key_id not in found_ids:
-                await self.raise_error(message="API key not found", code=404)
+                await self.raise_error(message="API key not found", code=404, db=db)
 
         if not admin.is_owner:
             for db_key in db_keys:
                 if db_key.admin_id != admin.id:
-                    await self.raise_error(message="Permission denied", code=403)
+                    await self.raise_error(message="Permission denied", code=403, db=db)
+        for db_key in db_keys:
+            await self._ensure_custom_key_covers_sibling(db, admin, db_key)
 
         api_key_responses: list[APIKeyResponse] = []
         admin_usernames: list[str] = []

@@ -8,6 +8,8 @@ Port the 176 owed upstream commits (B0 count, verified) in four waves with exclu
 work in parallel in wave 1 without touching the same file. Wave 0 lands the schema (six upstream revisions plus one
 fork merge revision). Wave 2 is one serial lane for the 41 commits that span several batches. Every batch: RED test
 first, interleaving test where state is touched, DB matrix, independent verifier, hostile rounds, ledger update.
+Upstream v5.6.0 (released 2026-11-03) adds 45 owed commits and four revisions, ported as wave 3 in the same lanes
+(section "Upstream v5.6.0", tasks T110-T125).
 
 ## Technical Context
 
@@ -165,13 +167,41 @@ touches an i18n file or adds `dangerouslySetInnerHTML`, `html-translation` or `e
 conflict resolution only: B-DASH and wave 2 run the fork's XSS regression test on every merge, plus a test that a
 translation value containing `<img src=x onerror=...>` renders as text.
 
-## Upstream dev past v5.5.1: 42 commits, all held (release-only rule)
+## Upstream v5.6.0 (released 2026-11-03): 45 commits, now owed (wave 3)
 
-Unreleased migrations (held): `1a2b3c4d5e6f` api_key request limit (`547fa96d1`), `b849540d85bb` runtime env vars to
-settings (`f6ebdf0fe`), `e5a7c3f9b214` node outbound usages (`b063e098e`), `f0420da90ff1` cleanup retention settings
-(`a2de6dee8`).
+Upstream released v5.6.0 on 2026-11-03 (`2b75db15cb00`, 14:18:07Z): the 43 dev commits held below plus
+`ae8681539d74` (users table Shamsi dates and ellipsis) and `2b75db15cb00` (version bump). Under the release-only
+rule every one is now owed. Upstream dev is `ae8681539d74` (nothing past the release). Full classification,
+production checks and ledger text: `v560-commits.md` here and the fleet's `work/fleet-20261102/PORT-PLAN-v560.md`
+(PANEL-AUDIT-C round 9).
 
-Flag for an early owner decision:
+- **Gate**: `scripts/upstream_inventory.py:1799-1806` fails every held line a final release contains, so the ledger
+  re-decision (T125) lands on 2026-11-03, before the 18:24 UTC scheduled run.
+- **Lanes** (by file ownership, totals): B-INFRA 18, B-DASH 8, B-SUB 4, B-USER 2, B-NODE 2, B-AUTH 1 (`0b21948e2`
+  taken early as `5d1514c83` on `port/b-auth`), W2 10. PANEL-DB takes the schema hunks of `f6ebdf0fe`,
+  `b063e098e`, `a2de6dee8`, `547fa96d1`. Each lane starts after its own v5.5.1 picks.
+- **Security yes (10)**: `d2795ed9d 4c35d98dc da158b572 f16fbfa41 2f00acd1e 155ed57dc 0b21948e2 8a706e967 547fa96d1
+  9708b0cd4`, owed under owner decision `2026-11-03-main-v560-sync` until 2026-12-03.
+- **Migration splice (option A)**: the four upstream files byte-identical with `b849540d85bb.down_revision =
+  "c8d2e4f6a1b3"`, plus one fork merge revision with `down_revision = ("2e045b99a67e", "1a2b3c4d5e6f")` and the
+  `ROLLBACK_FLAG` refusal of `2e045b99a67e`. Rewriting the upstream parent is rejected: it breaks the content proof
+  and a database stamped by official v5.6.0 would skip every fork revision. Production cost is negligible
+  (node_stats 0 rows, api_keys 7, settings 1; node_user_usages untouched); the risk is an MDL wait under
+  `lock_wait_timeout` = 31536000, so migrations run with the panel stopped and the processlist checked.
+- **Env vars to settings**: production sets none of the 11 moved vars and fork defaults equal the v5.6.0 setting
+  defaults, so `b849540d85bb` and `f0420da90ff1` are no-ops there. Two effective changes need decisions: node health
+  debounce (from v5.5.1 #950, already in W2) and gzip on by default (`bb87d76a2`; `GZIP_ENABLED=false` on
+  production keeps the upgrade identical). Every fork reader of the removed config attributes moves to the settings
+  getters in the `f6ebdf0fe` pick.
+- **Bots**: the 7 owner keys keep `max_requests` NULL and are neither limited nor deleted, but `547fa96d1` writes
+  `api_keys` on every API-key request; the optional seam (increment only when `max_requests` is set) is owner
+  decision O-5 in PORT-PLAN-v560.md, proven by the interleaving test of T121.
+
+Unreleased migrations at the time of the v5.5.1 plan (now released in v5.6.0): `1a2b3c4d5e6f` api_key request limit
+(`547fa96d1`), `b849540d85bb` runtime env vars to settings (`f6ebdf0fe`), `e5a7c3f9b214` node outbound usages
+(`b063e098e`), `f0420da90ff1` cleanup retention settings (`a2de6dee8`).
+
+Flagged for an early owner decision while v5.6.0 was unreleased (kept for the record):
 - `0b21948e2` #1093 fix(admins): prevent limited admins from changing their own limits: privilege escalation fix,
   security yes. Recommend an owner decision to take it early, with its test `tests/api/test_admin_self_limits.py`.
 - `bdce1ac6f` #1132 fix(node): `get_node_stats` HAVING clause rejected by MySQL 9 and MariaDB. Checked: the HAVING
@@ -209,7 +239,8 @@ specs/005-upstream-v551-full-port/
 ├── plan.md
 ├── tasks.md
 ├── owed-commits.md
-└── owed-commits.tsv
+├── owed-commits.tsv
+└── v560-commits.md
 ```
 
 ## Complexity Tracking

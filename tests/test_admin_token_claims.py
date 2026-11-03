@@ -22,7 +22,7 @@ def _token(**claims):
 @pytest.mark.asyncio
 async def test_a_token_the_panel_issues_is_accepted(monkeypatch, minutes):
     monkeypatch.setattr(jwt_utils.jwt_settings, "access_token_expire_minutes", minutes)
-    token = await jwt_utils.create_admin_token(7, "admin")
+    token = await jwt_utils.create_admin_token(7, "admin", "stored-hash")
     payload = await jwt_utils.get_admin_payload(token)
     assert payload is not None
     assert payload["admin_id"] == 7

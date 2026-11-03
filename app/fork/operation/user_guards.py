@@ -1,6 +1,22 @@
+from app.db.crud.bulk import bulk_out_of_range_target_exists
+from app.fork.crud.bulk_result_bounds import out_of_range_detail
 from app.models.admin import AdminDetails
 from app.operation.permissions import PermissionDenied, enforce_permission, get_scope_admin_id
 from app.utils.system import readable_duration, readable_size
+
+BULK_EXPIRE_AMOUNT_BOUND = 10**10
+BULK_DATA_LIMIT_AMOUNT_BOUND = 2**62
+
+
+async def reject_unbounded_bulk_amount(op, db, field: str, amount: int) -> None:
+    bound = BULK_EXPIRE_AMOUNT_BOUND if field == "expire" else BULK_DATA_LIMIT_AMOUNT_BOUND
+    if not -bound <= amount <= bound:
+        await op.raise_error(message=f"Bulk {field} amount must be between {-bound} and {bound}", code=422, db=db)
+
+
+async def reject_out_of_range_bulk_result(op, db, bulk_model, field: str, allowed_group_ids: list[int] | None) -> None:
+    if await bulk_out_of_range_target_exists(db, bulk_model, field, allowed_group_ids):
+        await op.raise_error(message=out_of_range_detail(field), code=422, db=db)
 
 
 async def reject_negative_next_plan(op, db, next_plan) -> None:

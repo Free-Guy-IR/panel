@@ -823,5 +823,9 @@
   "trafficLog.purge.freedMb": "{{value}} MB",
   "trafficLog.purge.freedGb": "{{value}} GB",
   "trafficLog.revokedBanner": "Your access to the traffic log was withdrawn while the feed was open. The live feed was closed and its rows were discarded. Reload the page.",
-  "trafficLog.accepted": "Accepted"
+  "trafficLog.accepted": "Accepted",
+  "statistics.periodCapped": "{{period}} would give more than {{max}} points for this range, so the chart uses Auto.",
+  "theme": {
+    "toggle": "Toggle theme"
+  }
 }

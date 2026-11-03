@@ -1,5 +1,8 @@
+import functools
 import json
+import re
 import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -22,6 +25,15 @@ UPSTREAM_SYNC_POINT_FILE = REPO_ROOT / ".upstream-sync-point"
 UPSTREAM_REF = (
     UPSTREAM_SYNC_POINT_FILE.read_text(encoding="utf-8").strip() if UPSTREAM_SYNC_POINT_FILE.is_file() else "v5.4.1"
 )
+UPSTREAM_LOCALE_PICKS_FILE = REPO_ROOT / "tests" / "fixtures" / "upstream_locale_picks.json"
+CHERRY_PICK_TRAILER_PREFIX = "(cherry picked from commit "
+UPSTREAM_REPOSITORY_URL = "https://github.com/PasarGuard/panel.git"
+UPSTREAM_REF_NAMESPACES = ("refs/remotes/upstream", "refs/upstream-tags")
+UPSTREAM_FETCH_COMMAND = (
+    f"git fetch --no-tags {UPSTREAM_REPOSITORY_URL} '+refs/heads/*:refs/remotes/upstream/*' "
+    "'+refs/tags/*:refs/upstream-tags/*'"
+)
+FULL_COMMIT_SHA = re.compile(r"[0-9a-f]{40}")
 
 FORK_MODULE_PREFIX = "app.fork."
 FORK_ROUTER_MODULE_PREFIX = "app.fork.routers."
@@ -194,13 +206,122 @@ def _git(*args):
     return subprocess.run(["git", *args], cwd=REPO_ROOT, capture_output=True, text=True, check=False)
 
 
+def _is_commit_in_clone(commit):
+    return _git("cat-file", "-e", f"{commit}^{{commit}}").returncode == 0
+
+
+@functools.cache
+def _fork_only_commits():
+    result = _git("rev-list", "HEAD", "--not", *(f"--glob={namespace}" for namespace in UPSTREAM_REF_NAMESPACES))
+    assert result.returncode == 0, f"cannot list the fork-only history of HEAD: {result.stderr.strip()}"
+    return frozenset(result.stdout.split())
+
+
+@functools.cache
+def _upstream_refs_containing(commit):
+    result = _git("for-each-ref", "--contains", commit, "--format=%(refname)", *UPSTREAM_REF_NAMESPACES)
+    assert result.returncode == 0, f"cannot list the upstream refs containing {commit}: {result.stderr.strip()}"
+    return tuple(result.stdout.split())
+
+
+def _require_upstream_commit(commit, role):
+    if not FULL_COMMIT_SHA.fullmatch(commit):
+        pytest.fail(f"the {role} {commit!r} is not a full lowercase 40-hex commit SHA")
+    if not _is_commit_in_clone(commit):
+        pytest.fail(
+            f"the {role} {commit} is not in this clone, fetch the upstream branches and tags by name: {UPSTREAM_FETCH_COMMAND}"
+        )
+    if commit in _fork_only_commits():
+        pytest.fail(f"the {role} {commit} is a commit of the fork's own history, not an upstream commit")
+    if not _upstream_refs_containing(commit):
+        pytest.fail(
+            f"the {role} {commit} is not reachable from any upstream branch or tag under "
+            f"{' or '.join(UPSTREAM_REF_NAMESPACES)}: {UPSTREAM_FETCH_COMMAND}"
+        )
+
+
 def _require_upstream_ref():
-    if _git("rev-parse", "--verify", "--quiet", f"{UPSTREAM_REF}^{{commit}}").returncode != 0:
-        pytest.skip(f"{UPSTREAM_REF} is not fetched in this clone")
+    resolved = _git("rev-parse", "--verify", "--quiet", f"{UPSTREAM_REF}^{{commit}}")
+    if resolved.returncode != 0:
+        pytest.fail(f"the upstream sync point {UPSTREAM_REF} is not in this clone: {UPSTREAM_FETCH_COMMAND}")
+    _require_upstream_commit(resolved.stdout.strip(), f"upstream sync point {UPSTREAM_REF}")
 
 
 def _load_json_file(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def _locale_at(ref, code):
+    shown = _git("show", f"{ref}:{PUBLIC_LOCALE_RELATIVE_DIR}/{code}.json")
+    if shown.returncode != 0:
+        return {}
+    return _flatten_locale(json.loads(shown.stdout))
+
+
+def _locale_delta(before_flat, after_flat):
+    return {
+        "set": [
+            [list(key), value] for key, value in sorted(after_flat.items()) if before_flat.get(key, MISSING) != value
+        ],
+        "removed": [list(key) for key in sorted(before_flat) if key not in after_flat],
+    }
+
+
+def _commit_locale_delta(commit, code):
+    return _locale_delta(_locale_at(f"{commit}^", code), _locale_at(commit, code))
+
+
+def _recorded_locale_picks():
+    return _load_json_file(UPSTREAM_LOCALE_PICKS_FILE)["picks"]
+
+
+def _recorded_pick_delta(pick, code):
+    return pick["locales"].get(code, {"set": [], "removed": []})
+
+
+def _apply_locale_picks(baseline_flat, picks, code):
+    expected = dict(baseline_flat)
+    for pick in picks:
+        delta = _recorded_pick_delta(pick, code)
+        for path, value in delta["set"]:
+            expected[tuple(path)] = value
+        for path in delta["removed"]:
+            expected.pop(tuple(path), None)
+    return expected
+
+
+def _public_locale_violations(local_flat, expected_flat):
+    added = sorted(set(local_flat) - set(expected_flat))
+    removed = sorted(set(expected_flat) - set(local_flat))
+    retranslated = sorted(key for key in expected_flat if key in local_flat and local_flat[key] != expected_flat[key])
+    return added, removed, retranslated
+
+
+def _ported_public_locale_picks():
+    log = _git("log", "--full-history", "--format=%H%x00%B%x01", "HEAD", "--", PUBLIC_LOCALE_RELATIVE_DIR)
+    assert log.returncode == 0, f"git log over {PUBLIC_LOCALE_RELATIVE_DIR} failed: {log.stderr.strip()}"
+    picks = {}
+    for record in log.stdout.split("\x01"):
+        fork_commit, _, body = record.strip().partition("\x00")
+        for line in body.splitlines():
+            line = line.strip()
+            if line.startswith(CHERRY_PICK_TRAILER_PREFIX) and line.endswith(")"):
+                picks[line[len(CHERRY_PICK_TRAILER_PREFIX) : -1]] = fork_commit
+    return picks
+
+
+def _is_ahead_of_sync_point(upstream_commit):
+    _require_upstream_commit(upstream_commit, "cherry-pick trailer commit")
+    result = _git("merge-base", "--is-ancestor", upstream_commit, UPSTREAM_REF)
+    if result.returncode not in (0, 1):
+        pytest.fail(f"cannot place {upstream_commit} against {UPSTREAM_REF}: {result.stderr.strip()}")
+    return result.returncode == 1
+
+
+def _ported_public_locale_picks_ahead_of_sync_point():
+    return {
+        upstream: fork for upstream, fork in _ported_public_locale_picks().items() if _is_ahead_of_sync_point(upstream)
+    }
 
 
 @pytest.fixture(scope="module")
@@ -328,19 +449,137 @@ def test_public_locale_file_is_unchanged_from_upstream(code):
     _require_upstream_ref()
     relative_path = f"{PUBLIC_LOCALE_RELATIVE_DIR}/{code}.json"
     shown = _git("show", f"{UPSTREAM_REF}:{relative_path}")
-    if shown.returncode != 0:
-        pytest.skip(f"{UPSTREAM_REF}:{relative_path} is not readable: {shown.stderr.strip()}")
-    upstream_flat = _flatten_locale(json.loads(shown.stdout))
+    assert shown.returncode == 0, f"{UPSTREAM_REF}:{relative_path} is not readable: {shown.stderr.strip()}"
+    baseline_flat = _flatten_locale(json.loads(shown.stdout))
+    assert baseline_flat, f"{code}: the pinned upstream baseline {UPSTREAM_REF} produced no keys"
+    upstream_flat = _apply_locale_picks(baseline_flat, _recorded_locale_picks(), code)
     local_flat = _flatten_locale(_load_json_file(REPO_ROOT / relative_path))
-    added = sorted(set(local_flat) - set(upstream_flat))
-    assert upstream_flat, f"{code}: the pinned upstream baseline {UPSTREAM_REF} produced no keys"
-    removed = sorted(set(upstream_flat) - set(local_flat))
+    added, removed, retranslated = _public_locale_violations(local_flat, upstream_flat)
     assert not added, (
         f"{code}: keys added to the public locale, they belong in dashboard/src/fork/locales: {added[:10]}"
     )
     assert not removed, f"{code}: keys removed from the public locale: {removed[:10]}"
-    retranslated = sorted(key for key in upstream_flat if local_flat[key] != upstream_flat[key])
     assert not retranslated, f"{code}: public locale values edited in place: {retranslated[:10]}"
+
+
+def test_recorded_locale_picks_are_exactly_the_ported_upstream_commits_ahead_of_the_sync_point():
+    _require_upstream_ref()
+    recorded = [pick["upstream"] for pick in _recorded_locale_picks()]
+    assert len(recorded) == len(set(recorded)), f"duplicate entries in {UPSTREAM_LOCALE_PICKS_FILE.name}: {recorded}"
+    ported = _ported_public_locale_picks_ahead_of_sync_point()
+    unrecorded = sorted(set(ported) - set(recorded))
+    assert not unrecorded, (
+        f"cherry-picked upstream commits ahead of {UPSTREAM_REF} change the public locale without an entry in "
+        f"{UPSTREAM_LOCALE_PICKS_FILE.name}: {unrecorded}"
+    )
+    unported = sorted(set(recorded) - set(ported))
+    assert not unported, (
+        f"{UPSTREAM_LOCALE_PICKS_FILE.name} lists upstream commits with no cherry-pick -x trailer on a public "
+        f"locale change ahead of {UPSTREAM_REF}: {unported}"
+    )
+
+
+@pytest.mark.parametrize("code", LOCALE_CODES)
+def test_recorded_locale_picks_match_the_fork_cherry_pick_commits(code):
+    _require_upstream_ref()
+    ported = _ported_public_locale_picks_ahead_of_sync_point()
+    for pick in _recorded_locale_picks():
+        fork_commit = ported.get(pick["upstream"])
+        assert fork_commit, f"{pick['upstream']} has no fork cherry-pick commit"
+        assert _commit_locale_delta(fork_commit, code) == _recorded_pick_delta(pick, code), (
+            f"{code}: fork commit {fork_commit} does not apply exactly the recorded locale change of {pick['upstream']}"
+        )
+
+
+@pytest.mark.parametrize("code", LOCALE_CODES)
+def test_recorded_locale_picks_match_the_upstream_commits(code):
+    _require_upstream_ref()
+    picks = _recorded_locale_picks()
+    for pick in picks:
+        _require_upstream_commit(pick["upstream"], "recorded upstream locale pick")
+    for pick in picks:
+        upstream_commit = pick["upstream"]
+        assert _commit_locale_delta(upstream_commit, code) == _recorded_pick_delta(pick, code), (
+            f"{code}: the recorded locale change of {upstream_commit} differs from the upstream commit itself"
+        )
+
+
+def test_public_locale_check_rejects_an_arbitrary_key_and_a_changed_ported_value():
+    baseline_flat = {("common", "save"): "Save"}
+    picks = [
+        {
+            "upstream": "0" * 40,
+            "locales": {"en": {"set": [[["coreEditor", "api", "title"], "API"]], "removed": []}},
+        }
+    ]
+    expected = _apply_locale_picks(baseline_flat, picks, "en")
+    assert expected == {("common", "save"): "Save", ("coreEditor", "api", "title"): "API"}
+    assert _public_locale_violations(dict(expected), expected) == ([], [], [])
+    arbitrary = {**expected, ("coreEditor", "api", "forkOnly"): "Fork text"}
+    assert _public_locale_violations(arbitrary, expected)[0] == [("coreEditor", "api", "forkOnly")]
+    edited = {**expected, ("coreEditor", "api", "title"): "API (edited)"}
+    assert _public_locale_violations(edited, expected)[2] == [("coreEditor", "api", "title")]
+    dropped = {("common", "save"): "Save"}
+    assert _public_locale_violations(dropped, expected)[1] == [("coreEditor", "api", "title")]
+    assert _apply_locale_picks(baseline_flat, picks, "fa") == baseline_flat
+
+
+FORGED_UPSTREAM_SHA = "f0" * 20
+
+
+def test_a_forged_cherry_pick_trailer_sha_is_rejected_not_counted_as_ahead():
+    _require_upstream_ref()
+    with pytest.raises(pytest.fail.Exception, match=FORGED_UPSTREAM_SHA):
+        _is_ahead_of_sync_point(FORGED_UPSTREAM_SHA)
+
+
+def test_a_recorded_upstream_pick_missing_from_the_clone_fails_the_upstream_check(monkeypatch):
+    forged = {"upstream": FORGED_UPSTREAM_SHA, "locales": {"en": {"set": [], "removed": []}}}
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_recorded_locale_picks",
+        lambda: [*_load_json_file(UPSTREAM_LOCALE_PICKS_FILE)["picks"], forged],
+    )
+    with pytest.raises(pytest.fail.Exception, match=FORGED_UPSTREAM_SHA):
+        test_recorded_locale_picks_match_the_upstream_commits("en")
+
+
+def test_an_unreachable_sync_point_fails_the_boundary_checks_instead_of_skipping(monkeypatch):
+    monkeypatch.setattr(sys.modules[__name__], "UPSTREAM_REF", FORGED_UPSTREAM_SHA)
+    with pytest.raises(pytest.fail.Exception, match=FORGED_UPSTREAM_SHA):
+        _require_upstream_ref()
+
+
+def test_a_fork_commit_laundered_as_an_upstream_locale_pick_is_rejected(monkeypatch):
+    _require_upstream_ref()
+    real_trailers = _ported_public_locale_picks()
+    real_picks = _load_json_file(UPSTREAM_LOCALE_PICKS_FILE)["picks"]
+    fork_commit = real_trailers[real_picks[0]["upstream"]]
+    laundered_pick = {**real_picks[0], "upstream": fork_commit}
+    module = sys.modules[__name__]
+    monkeypatch.setattr(module, "_ported_public_locale_picks", lambda: {**real_trailers, fork_commit: fork_commit})
+    monkeypatch.setattr(module, "_recorded_locale_picks", lambda: [*real_picks, laundered_pick])
+    with pytest.raises(pytest.fail.Exception, match=fork_commit):
+        _ported_public_locale_picks_ahead_of_sync_point()
+    with pytest.raises(pytest.fail.Exception, match=fork_commit):
+        test_recorded_locale_picks_match_the_upstream_commits("en")
+
+
+def test_an_abbreviated_or_uppercase_upstream_sha_is_rejected():
+    _require_upstream_ref()
+    full = _recorded_locale_picks()[0]["upstream"]
+    for malformed in (full[:12], full.upper()):
+        with pytest.raises(pytest.fail.Exception, match=malformed):
+            _is_ahead_of_sync_point(malformed)
+
+
+def test_public_locale_check_rejects_a_new_key_in_the_real_public_file():
+    _require_upstream_ref()
+    baseline_flat = _locale_at(UPSTREAM_REF, "en")
+    expected = _apply_locale_picks(baseline_flat, _recorded_locale_picks(), "en")
+    local_flat = _flatten_locale(_load_json_file(REPO_ROOT / PUBLIC_LOCALE_RELATIVE_DIR / "en.json"))
+    tampered = {**local_flat, ("coreEditor", "api", "forkOnlyHint"): "not upstream text"}
+    assert _public_locale_violations(tampered, expected)[0] == [("coreEditor", "api", "forkOnlyHint")]
 
 
 @pytest.mark.parametrize("code", LOCALE_CODES)

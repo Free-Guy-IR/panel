@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 import warnings
+from pathlib import Path
 
 import pytest
 from aiorwlock import RWLock
@@ -19,6 +20,25 @@ runtime_settings.debug = True
 server_settings.proxy_headers = True
 server_settings.forwarded_allow_ips = "*"
 auth_settings.sudoers["testadmin"] = "testadmin"
+
+
+def _directory_grouped(args: list[str], invocation_dir: Path) -> list[str]:
+    first_seen: dict[Path, int] = {}
+    keys = []
+    for index, arg in enumerate(args):
+        target = (invocation_dir / arg.split("::", 1)[0]).resolve()
+        directories = [*reversed(target.parents)]
+        if target.is_dir():
+            directories.append(target)
+        for directory in directories:
+            first_seen.setdefault(directory, index)
+        keys.append((*(first_seen[directory] for directory in directories), index))
+    return [arg for _, arg in sorted(zip(keys, args), key=lambda pair: pair[0])]
+
+
+def pytest_sessionstart(session):
+    args = session.config.args
+    args[:] = _directory_grouped(args, session.config.invocation_params.dir)
 
 
 # Filter out all warnings

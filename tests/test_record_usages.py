@@ -1,19 +1,23 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from collections import defaultdict
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import bindparam, delete, select, update
+from sqlalchemy.dialects import mysql, postgresql
 from sqlalchemy.exc import DatabaseError, OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool, StaticPool
+from sqlalchemy.pool import NullPool
 
 from app.db import base
 from app.db.crud.bulk import reset_all_users_data_usage
+from app.db.crud.node import remove_node
 from app.db.crud.user import bulk_reset_user_data_usage, reset_user_data_usage
 from app.db.models import (
     Admin,
@@ -24,12 +28,15 @@ from app.db.models import (
     NodeUserUsage,
     System,
     User,
+    UserStatus,
     UserUsageResetLogs,
 )
 from app.fork.jobs import usage_limits
 from app.jobs import record_usages
 from app.models.proxy import ProxyTable
+from app.models.settings import ConnectionLimit
 from app.operation import admin_sync
+from app.utils import connection_limiter
 from config import database_settings, runtime_settings
 from tests.test_recorder_harness import restore_seeded_rows, snapshot_seeded_rows
 
@@ -43,26 +50,55 @@ class DummyNode:
         return {"usage_coefficient": self._usage_coefficient}
 
 
-def _get_test_database_url() -> str:
+def test_postgres_user_traffic_update_uses_one_unnest_statement():
+    usage_params = [
+        {"uid": 1, "value": 10},
+        {"uid": 2, "value": 20},
+        {"uid": 1, "value": 30},
+    ]
+
+    stmt, params = record_usages.build_user_traffic_update("postgresql", usage_params)
+    sql = str(stmt.compile(dialect=postgresql.dialect()))
+
+    assert "UPDATE users" in sql
+    assert "FROM unnest" in sql
+    assert "online_at" not in sql
+    assert params == {"uids": [1, 2], "traffic_values": [40, 20]}
+
+
+def test_mysql_user_traffic_update_uses_one_case_statement():
+    usage_params = [
+        {"uid": 1, "value": 10},
+        {"uid": 2, "value": 20},
+        {"uid": 1, "value": 30},
+    ]
+
+    stmt, params = record_usages.build_user_traffic_update("mysql", usage_params)
+    compiled = stmt.compile(dialect=mysql.dialect(), compile_kwargs={"render_postcompile": True})
+    sql = str(compiled)
+
+    assert "UPDATE users" in sql
+    assert "CASE users.id WHEN" in sql
+    assert params is None
+    assert list(compiled.params.values()) == [1, 40, 2, 20, 1, 2]
+
+
+def _get_test_database_url(tmp_path) -> str:
     test_from = os.getenv("TEST_FROM", "local").lower()
     if test_from == "local":
-        return "sqlite+aiosqlite:///:memory:"
+        return f"sqlite+aiosqlite:///{tmp_path / 'record_usages.db'}"
     return database_settings.url
 
 
 @pytest.fixture
-async def session_factory(monkeypatch: pytest.MonkeyPatch):
-    database_url = _get_test_database_url()
+async def session_factory(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    database_url = _get_test_database_url(tmp_path)
     is_sqlite = database_url.startswith("sqlite")
 
-    engine_kwargs = {}
+    engine_kwargs = {"poolclass": NullPool}
     connect_args = {}
     if is_sqlite:
         connect_args["check_same_thread"] = False
-        # Keep the in-memory database alive across connections
-        engine_kwargs["poolclass"] = StaticPool
-    else:
-        engine_kwargs["poolclass"] = NullPool
 
     # MySQL/MariaDB do not allow defaults on JSON columns; strip them temporarily
     proxy_default = None
@@ -75,7 +111,7 @@ async def session_factory(monkeypatch: pytest.MonkeyPatch):
         proxy_column.server_default = None
 
     engine = create_async_engine(database_url, connect_args=connect_args, **engine_kwargs)
-    seeded = None if ":memory:" in database_url else await snapshot_seeded_rows(engine)
+    seeded = None if str(tmp_path) in database_url else await snapshot_seeded_rows(engine)
     async with engine.begin() as conn:
         await conn.run_sync(base.Base.metadata.drop_all)
         await conn.run_sync(base.Base.metadata.create_all)
@@ -124,6 +160,73 @@ async def session_factory(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.asyncio
+async def test_touch_users_online_at_throttles_indexed_timestamp_writes(session_factory):
+    async with session_factory() as session:
+        user = User(username="online-write-throttle")
+        session.add(user)
+        await session.commit()
+        user_id = user.id
+
+    first_seen = datetime.now(UTC).replace(microsecond=0)
+    await record_usages.touch_users_online_at([user_id], first_seen)
+
+    async def get_online_at():
+        async with session_factory() as session:
+            return (await session.execute(select(User.online_at).where(User.id == user_id))).scalar_one()
+
+    initial_online_at = await get_online_at()
+    await record_usages.touch_users_online_at([user_id], first_seen + timedelta(seconds=30))
+    throttled_online_at = await get_online_at()
+    await record_usages.touch_users_online_at([user_id], first_seen + timedelta(seconds=60))
+    refreshed_online_at = await get_online_at()
+
+    assert initial_online_at == throttled_online_at
+    assert refreshed_online_at > throttled_online_at
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+@pytest.mark.asyncio
+async def test_apply_fenced_user_usage_throttles_online_at(session_factory):
+    admin_ids, user_ids, _ = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[],
+        user_names=["online-recent-user", "online-stale-user", "online-never-user"],
+        admin_names=["online-throttle-admin"],
+    )
+    recent_id, stale_id, never_id = user_ids
+    now = datetime.now(UTC).replace(microsecond=0)
+    recent_seen = now - timedelta(seconds=30)
+    stale_seen = now - timedelta(minutes=5)
+    async with session_factory() as session:
+        await session.execute(update(User).where(User.id.in_(user_ids)).values(created_at=now - timedelta(days=1)))
+        await session.execute(update(User).where(User.id == recent_id).values(online_at=recent_seen))
+        await session.execute(update(User).where(User.id == stale_id).values(online_at=stale_seen))
+        await session.execute(update(User).where(User.id == never_id).values(online_at=None))
+        await session.commit()
+
+    epoch_at_poll = await _read_usage_epochs(session_factory, user_ids)
+    user_context = await record_usages.load_user_usage_context(set(user_ids))
+    outcome = await record_usages.apply_fenced_user_usage(
+        [{"uid": recent_id, "value": 10}, {"uid": stale_id, "value": 20}, {"uid": never_id, "value": 30}],
+        user_context,
+        epoch_at_poll,
+    )
+
+    assert outcome.applied_users == 3
+    async with session_factory() as session:
+        online = dict((await session.execute(select(User.id, User.online_at).where(User.id.in_(user_ids)))).all())
+    assert _as_utc(online[recent_id]) == recent_seen
+    assert _as_utc(online[stale_id]) > stale_seen
+    assert online[never_id] is not None
+    user_totals, admin_totals, _ = await _read_totals(session_factory, user_ids, admin_ids)
+    assert [user_totals[uid] for uid in user_ids] == [10, 20, 30]
+    assert admin_totals[admin_ids[0]] == 60
+
+
+@pytest.mark.asyncio
 async def test_record_user_usages_updates_users_and_admins(monkeypatch: pytest.MonkeyPatch, session_factory):
     async with session_factory() as session:
         admin = Admin(username="admin", hashed_password="secret", role_id=3)
@@ -155,20 +258,31 @@ async def test_record_user_usages_updates_users_and_admins(monkeypatch: pytest.M
             api_key="key2",
             core_config_id=None,
         )
-        session.add_all([node_one, node_two])
+        node_zero = Node(
+            name="node-zero",
+            address="10.0.0.3",
+            port=1003,
+            api_port=1004,
+            server_ca="ca3",
+            api_key="key3",
+            core_config_id=None,
+        )
+        session.add_all([node_one, node_two, node_zero])
         await session.flush()
-        node_one_id, node_two_id = node_one.id, node_two.id
+        node_one_id, node_two_id, node_zero_id = node_one.id, node_two.id, node_zero.id
         await session.commit()
 
     nodes = [
         (node_one_id, DummyNode(node_one_id, usage_coefficient=2)),
         (node_two_id, DummyNode(node_two_id, usage_coefficient=1)),
+        (node_zero_id, DummyNode(node_zero_id, usage_coefficient=0)),
     ]
     monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
 
     stats_map = {
         node_one_id: [{"uid": str(user_one_id), "value": 100}, {"uid": str(user_two_id), "value": 50}],
         node_two_id: [{"uid": str(user_one_id), "value": 75}],
+        node_zero_id: [{"uid": str(user_one_id), "value": 500}],
     }
 
     async def fake_get_users_stats(node: DummyNode, node_id: int | None = None):
@@ -186,18 +300,21 @@ async def test_record_user_usages_updates_users_and_admins(monkeypatch: pytest.M
         user_rows = users_result.all()
         user_totals = {row.id: (row.used_traffic, row.online_at) for row in user_rows}
 
-        assert user_totals[user_one_id][0] > user_totals[user_two_id][0]
+        assert user_totals[user_one_id][0] == 275
+        assert user_totals[user_two_id][0] == 100
         assert all(total > 0 for total, _ in user_totals.values())
         assert all(online_at is not None for _, online_at in user_totals.values())
 
         admin_total = await session.execute(select(Admin.used_traffic).where(Admin.id == admin_id))
         admin_used = admin_total.scalar_one()
-        assert admin_used == sum(total for total, _ in user_totals.values())
+        assert admin_used == 375
 
         node_usage_rows = await session.execute(
             select(NodeUserUsage.node_id, NodeUserUsage.user_id, NodeUserUsage.used_traffic)
         )
-        node_usage_records = node_usage_rows.all()
+        all_node_usage_records = node_usage_rows.all()
+        assert all(row.used_traffic == 0 for row in all_node_usage_records if row.node_id == node_zero_id)
+        node_usage_records = [row for row in all_node_usage_records if row.node_id != node_zero_id]
         usage_pairs = {(row.node_id, row.user_id) for row in node_usage_records}
         assert usage_pairs == {
             (node_one_id, user_one_id),
@@ -521,6 +638,26 @@ async def test_record_node_usages_returns_when_totals_zero(monkeypatch: pytest.M
         assert node_usage_rows.first() is None
 
 
+@pytest.mark.asyncio
+async def test_record_node_stats_batched_logs_write_errors(monkeypatch: pytest.MonkeyPatch, caplog):
+    written_nodes = []
+
+    async def fake_safe_execute(stmt, params=None, max_retries=5):
+        if params[0]["node_id"] == 2:
+            raise OperationalError("INSERT INTO node_usages", {}, Exception("database is locked"))
+        written_nodes.append(params[0]["node_id"])
+
+    monkeypatch.setattr(record_usages, "get_dialect", AsyncMock(return_value="postgresql"))
+    monkeypatch.setattr(record_usages, "safe_execute", fake_safe_execute)
+    caplog.set_level(logging.ERROR)
+
+    await record_usages.record_node_stats_batched({1: [{"up": 10, "down": 4}], 2: [{"up": 1, "down": 1}]})
+
+    assert written_nodes == [1]
+    assert "Failed to record node usage history for node 2" in caplog.text
+    assert "database is locked" in caplog.text
+
+
 class _DeadlockOrig(Exception):
     def __init__(self):
         super().__init__(1213, "Deadlock found when trying to get lock; try restarting transaction")
@@ -719,9 +856,7 @@ async def _seed_billing_fixture(
 
 
 def _install_nodes(monkeypatch: pytest.MonkeyPatch, node_ids, coefficients, stats_map):
-    nodes = [
-        (node_id, DummyNode(node_id, usage_coefficient=coeff)) for node_id, coeff in zip(node_ids, coefficients)
-    ]
+    nodes = [(node_id, DummyNode(node_id, usage_coefficient=coeff)) for node_id, coeff in zip(node_ids, coefficients)]
     monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
 
     async def fake_get_users_stats(node: DummyNode, node_id: int | None = None):
@@ -783,9 +918,9 @@ async def test_usage_writes_are_ordered_by_user_id(monkeypatch: pytest.MonkeyPat
 
         async def execute(self, statement, params=None):
             table_name = getattr(getattr(statement, "table", None), "name", "")
-            if table_name == "users" and params is not None:
+            if table_name == "users" and isinstance(params, list):
                 captured["users"].extend(item["uid"] for item in params)
-            elif table_name == "admins" and params is not None:
+            elif table_name == "admins" and isinstance(params, list):
                 captured["admins"].extend(item["admin_id"] for item in params)
             if params is None:
                 result = await self._conn.execute(statement)
@@ -1322,3 +1457,288 @@ def test_scheduler_defaults_serialize_unflagged_jobs():
     assert defaults["max_instances"] == 1
     assert defaults["coalesce"] is True
     assert defaults["misfire_grace_time"] == 30
+
+
+async def _seed_node_delete_race(session_factory):
+    async with session_factory() as session:
+        admin = Admin(username="race-admin", hashed_password="secret", role_id=3)
+        session.add(admin)
+        await session.flush()
+        users = [
+            User(username=name, admin_id=admin.id, proxy_settings=ProxyTable().dict(no_obj=True))
+            for name in ("race-user-1", "race-user-2")
+        ]
+        nodes = [
+            Node(
+                name=name,
+                address=f"10.9.0.{index}",
+                port=2000 + index,
+                api_port=3000 + index,
+                server_ca="ca",
+                api_key=f"race-key-{index}",
+                core_config_id=None,
+            )
+            for index, name in enumerate(("race-kept-node", "race-deleted-node"), start=1)
+        ]
+        session.add_all(users + nodes)
+        await session.flush()
+        ids = admin.id, [user.id for user in users], [node.id for node in nodes]
+        await session.commit()
+    return ids
+
+
+async def _delete_node(session_factory, node_id: int) -> None:
+    async with session_factory() as session:
+        node = (await session.execute(select(Node).where(Node.id == node_id))).scalar_one()
+        await remove_node(session, node)
+
+
+async def _race_totals(session_factory, admin_id, user_ids):
+    async with session_factory() as session:
+        users = dict((await session.execute(select(User.id, User.used_traffic).where(User.id.in_(user_ids)))).all())
+        admin = (await session.execute(select(Admin.used_traffic).where(Admin.id == admin_id))).scalar_one()
+        history = (
+            await session.execute(select(NodeUserUsage.node_id, NodeUserUsage.user_id, NodeUserUsage.used_traffic))
+        ).all()
+    return users, admin, history
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ordering", ["overlapping", "delete_commits_first"])
+async def test_usage_recording_survives_a_concurrent_node_delete(
+    monkeypatch: pytest.MonkeyPatch, session_factory, ordering
+):
+    admin_id, (user_one, user_two), (kept_node, deleted_node) = await _seed_node_delete_race(session_factory)
+    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+
+    stats_map = {
+        kept_node: [{"uid": str(user_one), "value": 100}, {"uid": str(user_two), "value": 50}],
+        deleted_node: [{"uid": str(user_one), "value": 70}],
+    }
+    stats_read = asyncio.Event()
+    delete_committed = asyncio.Event()
+
+    async def fake_get_users_stats(node: DummyNode, node_id: int | None = None):
+        if node.node_id == deleted_node:
+            stats_read.set()
+            if ordering == "delete_commits_first":
+                await delete_committed.wait()
+            else:
+                await asyncio.sleep(0)
+        return stats_map[node.node_id]
+
+    monkeypatch.setattr(record_usages, "get_users_stats", fake_get_users_stats)
+    monkeypatch.setattr(
+        record_usages.node_manager,
+        "get_healthy_nodes",
+        AsyncMock(return_value=[(node_id, DummyNode(node_id)) for node_id in (kept_node, deleted_node)]),
+    )
+
+    async def delete_after_read():
+        await stats_read.wait()
+        await _delete_node(session_factory, deleted_node)
+        delete_committed.set()
+
+    await asyncio.wait_for(asyncio.gather(record_usages.record_user_usages(), delete_after_read()), timeout=30)
+
+    users, admin_used, history = await _race_totals(session_factory, admin_id, [user_one, user_two])
+    assert users == {user_one: 170, user_two: 50}
+    assert admin_used == 220
+    assert all(row.node_id != deleted_node for row in history)
+    kept_history = defaultdict(int)
+    user_history = defaultdict(int)
+    for row in history:
+        user_history[row.user_id] += row.used_traffic
+        if row.node_id == kept_node:
+            kept_history[row.user_id] += row.used_traffic
+    assert dict(kept_history) == {user_one: 100, user_two: 50}
+    assert dict(user_history) == {user_one: 170, user_two: 50}
+
+    stats_map[kept_node] = [{"uid": str(user_one), "value": 30}]
+    monkeypatch.setattr(
+        record_usages.node_manager,
+        "get_healthy_nodes",
+        AsyncMock(return_value=[(kept_node, DummyNode(kept_node))]),
+    )
+    await record_usages.record_user_usages()
+
+    users, admin_used, history = await _race_totals(session_factory, admin_id, [user_one, user_two])
+    assert users == {user_one: 200, user_two: 50}
+    assert admin_used == 250
+    assert all(row.node_id != deleted_node for row in history)
+    assert sum(row.used_traffic for row in history if row.node_id == kept_node and row.user_id == user_one) == 130
+
+
+@pytest.mark.asyncio
+async def test_billed_user_drops_out_of_limiter_window(session_factory):
+    _, user_ids, _ = await _seed_billing_fixture(
+        session_factory, node_coefficients=[], user_names=["hostile-limiter-user"], admin_names=["hostile-a"]
+    )
+    uid = user_ids[0]
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == uid)
+            .values(
+                created_at=datetime.now(UTC) - timedelta(days=1),
+                online_at=datetime.now(UTC) - timedelta(seconds=58),
+                status=UserStatus.active,
+            )
+        )
+        await session.commit()
+    epochs = await _read_usage_epochs(session_factory, user_ids)
+    ctx = await record_usages.load_user_usage_context(set(user_ids))
+    await record_usages.apply_fenced_user_usage([{"uid": uid, "value": 5}], ctx, epochs)
+    await asyncio.sleep(3)
+    async with session_factory() as session:
+        found = await connection_limiter.candidate_users(
+            session, ConnectionLimit(enabled=True, online_window_seconds=60)
+        )
+    assert uid in [u.id for u in found], "user billed 3s ago is not a limiter candidate"
+
+
+@pytest.mark.asyncio
+async def test_limiter_look_back_ends_one_recorder_throttle_past_the_window(session_factory):
+    _, user_ids, _ = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[],
+        user_names=["limiter-inside-user", "limiter-outside-user"],
+        admin_names=["limiter-bound-admin"],
+    )
+    inside_id, outside_id = user_ids
+    window = 60
+    throttle = connection_limiter.RECORDER_ONLINE_AT_THROTTLE
+    now = datetime.now(UTC)
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == inside_id)
+            .values(online_at=now - timedelta(seconds=window) - throttle + timedelta(seconds=20))
+        )
+        await session.execute(
+            update(User)
+            .where(User.id == outside_id)
+            .values(online_at=now - timedelta(seconds=window) - throttle - timedelta(seconds=20))
+        )
+        await session.commit()
+    async with session_factory() as session:
+        found = await connection_limiter.candidate_users(
+            session, ConnectionLimit(enabled=True, online_window_seconds=window)
+        )
+    found_ids = {u.id for u in found}
+    assert inside_id in found_ids
+    assert outside_id not in found_ids
+
+
+def test_limiter_slack_covers_the_recorder_online_at_throttle():
+    assert connection_limiter.RECORDER_ONLINE_AT_THROTTLE >= record_usages.ONLINE_AT_WRITE_INTERVAL
+
+
+@pytest.mark.asyncio
+async def test_on_hold_user_billed_after_edit_becomes_online(session_factory):
+    _, user_ids, _ = await _seed_billing_fixture(
+        session_factory, node_coefficients=[], user_names=["hostile-onhold-user"], admin_names=["hostile-b"]
+    )
+    uid = user_ids[0]
+    now = datetime.now(UTC)
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == uid)
+            .values(
+                status=UserStatus.on_hold,
+                online_at=now - timedelta(seconds=30),
+                edit_at=now - timedelta(seconds=10),
+                on_hold_expire_duration=86400,
+            )
+        )
+        await session.commit()
+    epochs = await _read_usage_epochs(session_factory, user_ids)
+    ctx = await record_usages.load_user_usage_context(set(user_ids))
+    await record_usages.apply_fenced_user_usage([{"uid": uid, "value": 5}], ctx, epochs)
+    async with session_factory() as session:
+        became = (await session.execute(select(User.id).where(User.id == uid, User.become_online))).scalar_one_or_none()
+    assert became == uid, "on-hold user billed after its edit is not become_online"
+
+
+async def _admin_edit(session_factory, user_id: int) -> None:
+    async with session_factory() as session:
+        await session.execute(update(User).where(User.id == user_id).values(edit_at=datetime.now(UTC)))
+        await session.commit()
+
+
+async def _one_billing_pass(session_factory, user_id: int, value: int) -> None:
+    epochs = await _read_usage_epochs(session_factory, [user_id])
+    ctx = await record_usages.load_user_usage_context({user_id})
+    outcome = await record_usages.apply_fenced_user_usage([{"uid": user_id, "value": value}], ctx, epochs)
+    assert outcome.applied_users == 1
+
+
+async def _online_state(session_factory, user_id: int):
+    async with session_factory() as session:
+        row = (
+            await session.execute(
+                select(User.online_at, User.used_traffic, User.become_online).where(User.id == user_id)
+            )
+        ).one()
+    return row.online_at, row.used_traffic, bool(row.become_online)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ordering", ["edit_first", "pass_first", "edit_inside_pass", "overlapping"])
+async def test_admin_edit_racing_a_billing_pass_is_online_by_the_next_pass(
+    monkeypatch: pytest.MonkeyPatch, session_factory, ordering
+):
+    _, user_ids, _ = await _seed_billing_fixture(
+        session_factory,
+        node_coefficients=[],
+        user_names=[f"edit-race-{ordering}"],
+        admin_names=[f"edit-race-admin-{ordering}"],
+    )
+    uid = user_ids[0]
+    now = datetime.now(UTC)
+    async with session_factory() as session:
+        await session.execute(
+            update(User)
+            .where(User.id == uid)
+            .values(
+                status=UserStatus.on_hold,
+                created_at=now - timedelta(days=1),
+                online_at=now - timedelta(seconds=30),
+                on_hold_expire_duration=86400,
+            )
+        )
+        await session.commit()
+
+    if ordering == "edit_first":
+        await _admin_edit(session_factory, uid)
+        await _one_billing_pass(session_factory, uid, 5)
+    elif ordering == "pass_first":
+        await _one_billing_pass(session_factory, uid, 5)
+        await _admin_edit(session_factory, uid)
+    elif ordering == "edit_inside_pass":
+        original_settle = record_usages.settle_batches
+
+        async def settle_after_edit(conn, stat_type, stat_batches):
+            await _admin_edit(session_factory, uid)
+            return await original_settle(conn, stat_type, stat_batches)
+
+        monkeypatch.setattr(record_usages, "settle_batches", settle_after_edit)
+        await _one_billing_pass(session_factory, uid, 5)
+        monkeypatch.setattr(record_usages, "settle_batches", original_settle)
+    else:
+        await asyncio.wait_for(
+            asyncio.gather(_admin_edit(session_factory, uid), _one_billing_pass(session_factory, uid, 5)),
+            timeout=30,
+        )
+
+    await _one_billing_pass(session_factory, uid, 7)
+    online_at, used, became = await _online_state(session_factory, uid)
+    assert became, f"{ordering}: user edited around a billing pass is not online after the next pass"
+    assert used == 12
+
+    await _one_billing_pass(session_factory, uid, 11)
+    throttled_online_at, used, became = await _online_state(session_factory, uid)
+    assert became
+    assert used == 23
+    assert _as_utc(throttled_online_at) == _as_utc(online_at)

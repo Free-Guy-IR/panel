@@ -111,11 +111,78 @@ Each batch task is done only when all of these hold, and each item is evidence i
   is the first to run `bfd88026565b` on production, so the #879 loopback rewrite of system template id=2 goes in the
   runbook and the user-visible change list as newly delivered, not as already live.
 
+## Phase 7: Upstream v5.6.0 (released 2026-11-03, 45 commits, wave 3)
+
+Source: `v560-commits.md` (per-commit lane, conflicts, ledger text) and the fleet's
+`work/fleet-20261102/PORT-PLAN-v560.md` (production checks, owner decisions O-1 to O-7). The definition of done
+above applies to every task here. Each lane starts after its own v5.5.1 picks.
+
+- [ ] T125 [PANEL-LEAD] Today, before the 18:24 UTC gate run: remove the 43 held `dev-only after v5.5.1` lines, add
+  the 45 Port-queue lines and owner decision `2026-11-03-main-v560-sync` (10 security-yes commits, until
+  2026-12-03) and the held line of `cfdce3765ee7` (pyasn1, branch-only) from `v560-commits.md`, run the gate
+  with `--write-refs-snapshot` (5 new heads); gate exit 0 on that head (dry run on `a0b48fcb9`: exit 0).
+- [ ] T110 [PANEL-DB] After T010-T015: add `b849540d85bb e5a7c3f9b214 f0420da90ff1 1a2b3c4d5e6f` byte-identical
+  (blob hashes in `v560-commits.md`), the `app/db/models.py` hunks of `b063e098e a2de6dee8 547fa96d1`
+  (NodeOutboundUsage, NodeStat indexes, `Settings.cleanup` with `default_factory=dict`, APIKey `max_requests`,
+  `request_count`, `delete_on_limit`, `is_limited`), and one fork merge revision with `down_revision =
+  ("2e045b99a67e", "1a2b3c4d5e6f")` refusing a plain downgrade without `ROLLBACK_FLAG`. RED tests: single head and
+  parents (split the existing one-head test), byte-identical blobs, fresh install vs production path
+  (`d8b2c4f60a17` → head) same schema and `alembic check` clean on all four engines, a database stamped at
+  `1a2b3c4d5e6f` gets every fork revision, MySQL index set of `node_stats` after upgrade and
+  `fk_node_stats_node_id_nodes` back after downgrade (no error 1553), `app.fork.db_rollback` round trip to
+  `2e045b99a67e` and `d8b2c4f60a17`, ORM insert into `settings` under strict mode.
+- [ ] T117 [PANEL-DB] Extend `app/fork/migration_guards.py` `REVISION_OBJECTS` with column repair for
+  `settings.cleanup` and the three `api_keys` columns, plus `node_outbound_usages` and both `node_stats` indexes;
+  MySQL test leaves each partial state of `f0420da90ff1` and `1a2b3c4d5e6f` and re-runs. Production-size MySQL 9.7.2
+  rehearsal from a `--single-transaction` dump: time upgrade from `d8b2c4f60a17`, `lock_wait_timeout=60`, SHOW
+  INDEX proof, rollback via `app.fork.db_rollback`, simulated cut.
+- [ ] T118 [PANEL-DB] Env-copy tests for `b849540d85bb` and `f0420da90ff1`: the 17 production `.env` names with
+  placeholder values, empty dotenv, production-shaped settings row → effective settings equal a frozen dict of
+  today's effective config; all 11 moved vars set to non-defaults → copied; `.env` read from the process cwd.
+- [ ] T111 [B-AUTH] `0b21948e2fae` lands on main with `port/b-auth` (`5d1514c83`); remove its queue line.
+- [ ] T112 [B-USER] `1ccd86d172c8` → `c25e582fb9f0`.
+- [ ] T113 [B-INFRA] Workflows `d2795ed9d250` (security) → `dddd3b9d7716` → `155ed57dcec1` (security) →
+  `77238f82ca77`; then `2781be689700 e582fe7d9573 86bcd0d0a24d ada6fdf857ff f40673225fcc 4c085f24803e
+  4c35d98dc9c5` (security, keep spec 004's emSign strip) `0d57c2c44a57 8e92a1212919 b1fd63493699 de75b25f5581
+  a93bdf65a261 d6c8c5032f4c 9e8a0a7deb22`, `uv lock` after each; before any T120 pick. Now, ahead of the
+  lane: fork-side `uv lock --upgrade-package pyasn1` to 0.6.5 (four OSV advisories against 0.6.4, reached through
+  webauthn), with an OSV check test of the lock.
+- [ ] T114 [B-SUB] `2f00acd1e95f` (security) → `8a706e967b53` (security; keep the fork `logger` line and upstream's
+  name constants) → `4bdf321cce2a` (host-state cache key `state_v6`: cold cache after deploy, in the runbook) →
+  `f16fbfa41c30` (security: XDrive s3 object reaches subscriber JSON; test that only xdrive hosts carry it).
+- [ ] T115 [B-NODE] `bb87d76a2772` (gzip; tests: no Accept-Encoding gives identity JSON and `/sub/{t}/links` without
+  Content-Encoding, gzip decodes to identical bytes, SSE untouched) → `b1cfc5f73429`.
+- [ ] T116 [B-DASH] `238e7312bc9f`; after the v5.5.1 finalmask picks `8e2277de8693` → `921bc7997e21`; after fork
+  core-kit parity with upstream core-kit 0.3.0 and xray-config-kit 0.4.2 `8ae9e31c1090`; after W2 `cc7c7108f44f`
+  `2f760968a46f` → `9e68477be176` → `ae8681539d74`; after T120's `9708b0cd4be7` `bef908793b6b`. Fork XSS regression
+  test on every merge; browser render check.
+- [ ] T120 [Wave2] After T080-T082 and T111-T116: `d4d2fd423846` → `da158b5729e4` (security: 5000-bucket cap) →
+  `f6ebdf0fea4e` (move every fork reader of the removed config attributes to the settings getters; import test of
+  each module; keep the fork node-stats guard that excludes only SQLite) → `b063e098e90e` → `bdce1ac6f288` (no
+  HAVING reintroduced) → `a2de6dee8283` (fork retention jobs NODE_STATS/NODE_USER_USAGES/NODE_USAGES_RETENTION_DAYS
+  stay) → `019e70d695b1` → `547fa96d1051` (T121) → `9708b0cd4be7` (security: S3 secret fields in subscriber JSON;
+  needs `8ae9e31c1090` and `f16fbfa41c30`); orval regenerated after each pick that touches `api/index.ts`.
+- [ ] T121 [Wave2] `547fa96d1051` API-key request limits: RED and interleaving tests on MySQL and PostgreSQL (about
+  50 concurrent Mirza-shaped requests on one unlimited owner-shaped key while the key's note is edited and another
+  key revoked: every status unchanged, key intact; limited key K with about 3K concurrent requests: exactly K
+  succeed, count K; with `delete_on_limit`: exactly K, one delete, one notification, then 401); BOT-COMPAT clean
+  template flow (201, 201, 200, 200, 200, 200, 200, 204, 404). If owner decision O-5 takes the seam: the increment
+  runs only when `max_requests` is set (fork predicate module, one-line guard, OVERRIDES.md) with a test that an
+  unlimited key issues no `UPDATE api_keys` and survives an injected `OperationalError`.
+- [ ] T122 [Wave2] Last: `2b75db15cb00` re-decided `Ported by design` under the fork version scheme only after the
+  other 44 are on main.
+- [ ] T123 [PANEL-LEAD] Owner decisions O-1 to O-6 of PORT-PLAN-v560.md section F recorded before T100 (outbound
+  usage FK policy, node health debounce, `GZIP_ENABLED=false` for the production upgrade, node-stats guard,
+  api_keys counter seam, retention off).
+- [ ] T124 [PANEL-LEAD] After T122: gate on main owed 0 for v5.6.0; two-tree diff `v5.6.0` vs main, every remaining
+  difference in `OVERRIDES.md`; branch-only squash sources re-decided `Ported by design` (list in section E).
+
 ## Dependencies & Execution Order
 
 T001 → T002 → Wave 0 (T010-T015) → Wave 1 (T020, T030, T040, T050, T060, T070 in parallel) → Wave 2 (T080-T082) →
 T090-T091 → T100 → T101. Inside each lane, picks follow upstream topological order (`owed-commits.md` column
-"owed predecessors").
+"owed predecessors"). v5.6.0: T125 today; T110 → T117/T118 after wave 0; T111-T116 after each lane's v5.5.1
+picks; T120 → T121 → T122 after wave 2; T123 before T100; T124 last. The rollout tasks T100/T101 then carry v5.6.0.
 
 ## Parallel Team Strategy
 

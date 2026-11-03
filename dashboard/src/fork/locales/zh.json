@@ -754,5 +754,9 @@
   "trafficLog.purge.freedMb": "{{value}} MB",
   "trafficLog.purge.freedGb": "{{value}} GB",
   "trafficLog.revokedBanner": "在数据流打开期间，你对流量日志的访问权限被撤销。实时数据流已关闭，其中的行已丢弃。请重新加载页面。",
-  "trafficLog.accepted": "已接受"
+  "trafficLog.accepted": "已接受",
+  "statistics.periodCapped": "按「{{period}}」统计时，该时间范围会超过 {{max}} 个数据点，图表已改用自动粒度。",
+  "theme": {
+    "toggle": "切换主题"
+  }
 }

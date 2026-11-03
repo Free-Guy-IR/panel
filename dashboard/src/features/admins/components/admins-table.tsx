@@ -28,7 +28,8 @@ import { useQueryClient } from '@tanstack/react-query'
 import { BulkActionItem, BulkActionsBar } from '@/features/users/components/bulk-actions-bar'
 import { BulkActionAlertDialog } from '@/features/users/components/bulk-action-alert-dialog'
 import { Power, PowerOff, RefreshCw, Trash2, UserCheck, UserMinus, UserX } from 'lucide-react'
-import { hasPermission, hasScopeAll } from '@/utils/rbac'
+import { hasPermission, hasScopeAll, isOwner } from '@/utils/rbac'
+import { currentAdminUsername, resetEligibleAdmins } from '@/fork/admins/reset-usage-eligibility'
 
 interface AdminFilters {
   sort?: string
@@ -264,6 +265,9 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
   const selectedEnableEligibleAdmins = selectedAdmins.filter(admin => getAdminStatus(admin) === 'disabled')
   const selectedDisableEligibleAdmins = selectedAdmins.filter(admin => getAdminStatus(admin) !== 'disabled')
   const selectedAdminIds = compactAdminIds(selectedAdmins)
+  const selectedResetEligibleIds = compactAdminIds(
+    resetEligibleAdmins(selectedAdmins, (admin: AdminDetails) => ({ username: admin.username, isOwner: isOwner(admin) }), currentAdminUsername(currentAdmin)),
+  )
   const selectedEnableEligibleIds = compactAdminIds(selectedEnableEligibleAdmins)
   const selectedDisableEligibleIds = compactAdminIds(selectedDisableEligibleAdmins)
 
@@ -557,12 +561,12 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
   }
 
   const handleBulkResetUsage = async () => {
-    if (!selectedAdminIds.length) return
+    if (!selectedResetEligibleIds.length) return
 
     try {
       const response = await bulkResetAdminsUsageMutation.mutateAsync({
         data: {
-          ids: selectedAdminIds,
+          ids: selectedResetEligibleIds,
         },
       })
       toast.success(t('success', { defaultValue: 'Success' }), {
@@ -723,7 +727,7 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
               } as BulkActionItem,
             ]
           : []),
-        ...(canResetAdmins
+        ...(canResetAdmins && selectedResetEligibleIds.length > 0
           ? [
               {
                 key: 'reset',
@@ -797,7 +801,7 @@ export default function AdminsTable({ onEdit, onDelete, onToggleStatus, onResetU
     reset: {
       title: t('admins.bulkResetTitle', { defaultValue: 'Reset Usage for Selected Admins' }),
       description: t('admins.bulkResetPrompt', {
-        count: selectedCount,
+        count: selectedResetEligibleIds.length,
         defaultValue: 'Are you sure you want to reset usage for {{count}} selected admins?',
       }),
       actionLabel: t('admins.reset'),

@@ -27,6 +27,7 @@ class KvWatcher:
     """
 
     BATCH_SIZE = 256
+    RECONNECT_CHECK_INTERVAL = 1.0
 
     def __init__(self, kv, pattern, ignore_deletes, inactive_threshold, snapshot_only, start_revision):
         self._kv = kv
@@ -42,6 +43,8 @@ class KvWatcher:
         self._subject = kv._pre + pattern
         self._snapshot = None
         self._live = None
+        self._delivered = 0
+        self._gap = False
         self._updates = asyncio.Queue(maxsize=self.BATCH_SIZE)
         self._iterator = self._iterate()
 
@@ -133,27 +136,64 @@ class KvWatcher:
                 yield None
                 return
 
-            async def receive(msg):
-                entry = self._entry(msg)
-                if entry is not None:
-                    await self._updates.put(entry)
-
-            self._live = await self._js.subscribe(
-                self._subject,
-                stream=self._stream,
-                config=ConsumerConfig(opt_start_seq=watermark + 1),
-                deliver_policy=DeliverPolicy.BY_START_SEQUENCE,
-                ordered_consumer=True,
-                headers_only=True,
-                inactive_threshold=self._inactive_threshold,
-                cb=receive,
-            )
+            self._delivered = watermark
+            self._live = await self._subscribe_live()
             yield None
             while True:
-                yield await self._updates.get()
+                if self._gap or nc.stats["reconnects"] != reconnects:
+                    reconnects = nc.stats["reconnects"]
+                    self._gap = False
+                    live, self._live = self._live, None
+                    await self._close_subscription(live)
+                    self._live = await self._subscribe_live()
+                try:
+                    revision, entry = await asyncio.wait_for(self._updates.get(), self.RECONNECT_CHECK_INTERVAL)
+                except TimeoutError:
+                    if self._dropped_tail():
+                        self._gap = True
+                    continue
+                if revision <= self._delivered:
+                    continue
+                self._delivered = revision
+                if entry is not None:
+                    yield entry
         finally:
             await self._close_subscription(self._snapshot)
             await self._close_subscription(self._live)
+
+    def _dropped_tail(self):
+        subscription = getattr(self._live, "_sub", None)
+        jsi = getattr(subscription, "_jsi", None)
+        if jsi is None or not self._updates.empty() or not subscription._pending_queue.empty():
+            return False
+        return jsi._sseq > self._delivered
+
+    async def _subscribe_live(self):
+        consumer_sequence = 0
+
+        async def receive(msg):
+            nonlocal consumer_sequence
+            if consumer_sequence is None:
+                return
+            if msg.metadata.sequence.consumer != consumer_sequence + 1:
+                consumer_sequence = None
+                self._gap = True
+                with contextlib.suppress(asyncio.QueueFull):
+                    self._updates.put_nowait((0, None))
+                return
+            consumer_sequence += 1
+            await self._updates.put((msg.metadata.sequence.stream, self._entry(msg)))
+
+        return await self._js.subscribe(
+            self._subject,
+            stream=self._stream,
+            config=ConsumerConfig(opt_start_seq=self._delivered + 1),
+            deliver_policy=DeliverPolicy.BY_START_SEQUENCE,
+            ordered_consumer=True,
+            headers_only=True,
+            inactive_threshold=self._inactive_threshold,
+            cb=receive,
+        )
 
     async def stop(self):
         await self._iterator.aclose()

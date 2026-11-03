@@ -29,6 +29,7 @@ import {
   TrafficShortcutKey,
 } from '@/utils/chart-period-utils'
 import { getChartRenderFlags } from '@/utils/chart-performance'
+import { axisPeriodOverride } from '@/fork/charts/usage-axis-period'
 
 type DataPoint = {
   time: string
@@ -237,9 +238,9 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
         shortcut: selectedTime,
         windowWidth,
         customRange: showCustomRange ? customRange : undefined,
-        periodOverride: resolvePeriodOverride(periodOverride),
+        periodOverride: axisPeriodOverride(resolvePeriodOverride(periodOverride), activeQueryRange.cappedFrom),
       }),
-    [showCustomRange, customRange, activePeriod, chartData.length, selectedTime, windowWidth, periodOverride],
+    [showCustomRange, customRange, activePeriod, chartData.length, selectedTime, windowWidth, periodOverride, activeQueryRange.cappedFrom],
   )
 
   const { isAnimationActive, useAccessibilityLayer, areaCurveType } = useMemo(() => getChartRenderFlags(chartData.length), [chartData.length])
@@ -285,7 +286,7 @@ export function CostumeBarChart({ nodeId }: CostumeBarChartProps) {
             <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <TimeSelector selectedTime={selectedTime} setSelectedTime={handleTimeSelect} shortcuts={TRAFFIC_TIME_SELECTOR_SHORTCUTS} maxVisible={5} className="w-full sm:w-fit" />
               <div className="flex w-full items-center gap-2 sm:w-auto">
-                <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} className="min-w-0 flex-1 sm:w-[7rem] sm:flex-none" />
+                <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} cappedFrom={activeQueryRange.cappedFrom} className="min-w-0 flex-1 sm:w-[7rem] sm:flex-none" />
                 <button
                   type="button"
                   aria-label="Custom Range"

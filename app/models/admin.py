@@ -5,11 +5,12 @@ from enum import Enum
 from typing import Literal
 
 import bcrypt
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field, field_validator
 
 from app.db.models import AdminStatus
+from app.fork.format_template import MAX_CUSTOM_VARIABLES
 from app.models.admin_role import RoleAccess, RoleFeatures, RoleHWIDSettings, RoleLimits, RolePermissions
-from app.models.settings import CustomVariable, validate_custom_variables
+from app.models.settings import CustomVariable, CustomVariableInput, validate_custom_variables
 from app.models.stats import Period
 
 from .notification_enable import UserNotificationEnable
@@ -133,10 +134,22 @@ class AdminDetails(AdminContactInfo):
     note: str | None = None
     role: AdminRoleData | None = None
     permission_overrides: RoleLimits | None = None
+    # Id of the custom-permission API key the request authenticated with. `role.permissions` then holds that
+    # key's permissions, not the admin's. Never serialized.
+    _custom_api_key_id: int | None = PrivateAttr(default=None)
+    _api_key_id: int | None = PrivateAttr(default=None)
 
     @property
     def is_owner(self) -> bool:
         return self.role.is_owner if self.role is not None else False
+
+    @property
+    def custom_api_key_id(self) -> int | None:
+        return self._custom_api_key_id
+
+    @property
+    def api_key_id(self) -> int | None:
+        return self._api_key_id
 
     @computed_field
     @property
@@ -165,7 +178,7 @@ class AdminModify(BaseModel):
     sub_domain: str | None = None
     profile_title: str | None = None
     support_url: str | None = None
-    custom_variables: list[CustomVariable] | None = None
+    custom_variables: list[CustomVariableInput] | None = Field(default=None, max_length=MAX_CUSTOM_VARIABLES)
     note: str | None = None
     notification_enable: UserNotificationEnable | None = None
     role_id: int | None = None
@@ -211,6 +224,7 @@ class AdminValidationResult(BaseModel):
     id: int | None = None
     username: str
     status: AdminStatus = Field(default=AdminStatus.active)
+    hashed_password: str | None = Field(default=None, exclude=True, repr=False)
 
 
 class AdminsResponse(BaseModel):

@@ -57,6 +57,8 @@ logger = get_logger("connection-limiter")
 # different code and are dropped rather than shown as current.
 STARTED_AT = datetime.now(UTC)
 
+RECORDER_ONLINE_AT_THROTTLE = timedelta(minutes=1)
+
 # Published ranges for the two CDNs in use here. Editable in settings, because
 # the next one to be added will not be in this list.
 DEFAULT_CDN_RANGES = [
@@ -183,7 +185,7 @@ def scope_conditions(settings: ConnectionLimit) -> list:
 
 async def candidate_users(db: AsyncSession, settings: ConnectionLimit) -> list[User]:
     """Users recent enough to be worth asking the nodes about."""
-    since = datetime.now(UTC) - timedelta(seconds=settings.online_window_seconds)
+    since = datetime.now(UTC) - timedelta(seconds=settings.online_window_seconds) - RECORDER_ONLINE_AT_THROTTLE
     stmt = select(User).where(User.online_at.is_not(None), User.online_at > since, *scope_conditions(settings))
     return list((await db.execute(stmt)).scalars().all())
 

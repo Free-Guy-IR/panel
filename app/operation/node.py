@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import ClassVar
 
+import nats.errors
 from fastapi import HTTPException
 from PasarGuardNodeBridge import Health, NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.common import service_pb2 as service
@@ -94,7 +95,7 @@ from app.node.manager_sync import publish_node_sync
 from app.node.nats_memory import clear_bridge_memory_for_node
 from app.operation import BaseOperation, OperatorType
 from app.utils.logger import get_logger
-from config import runtime_settings
+from config import nats_settings, runtime_settings
 
 MAX_MESSAGE_LENGTH = 128
 # Cap parallel start/attach so ~100 nodes don't stampede NATS lifecycle KV.
@@ -105,6 +106,27 @@ FENCE_WAIT_SECONDS = 60.0
 type CoreUsers = list | Callable[[], Awaitable[list]]
 
 logger = get_logger("node-operation")
+
+
+# Maintenance RPCs (split roles) wait for the node worker, which waits for node-serviced's pg-node command
+# (5 minute deadline; the bridge itself allows 330 s). The default node RPC timeout (30 s) is far too short.
+_MAINTENANCE_RPC_TIMEOUT = 340.0
+
+
+def _maintenance_rpc_timeout() -> float:
+    return max(_MAINTENANCE_RPC_TIMEOUT, nats_settings.node_rpc_timeout)
+
+
+_BRIDGE_TIMEOUT_CODE = -1
+
+
+def _maintenance_error_status(error: NodeAPIError) -> int:
+    if error.code > 0:
+        return error.code
+    if error.code == _BRIDGE_TIMEOUT_CODE or isinstance(error.__cause__, TimeoutError):
+        return 504
+    return 503
+
 
 class NodeOperation(NodeExtraCoresMixin, BaseOperation):
     # Local Start RPCs in progress on this process. Health checks must not fire a
@@ -314,6 +336,13 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             info = await pg_node.info()
             if info is None or not info.started or not info.node_version or not info.core_version:
                 return None
+
+            # The running flag can outlive a missing WireGuard interface. Confirm
+            # a broken backend has recovered before marking the attachment healthy.
+            if await pg_node.get_health() is Health.BROKEN or (
+                state is not None and state.observed is LifecycleStatus.BROKEN
+            ):
+                await pg_node.get_backend_stats()
 
             await pg_node.connect(info.node_version, info.core_version)
             # Shared pending work survives a panel restart. Attaching must
@@ -982,16 +1011,20 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         except Exception as e:
             await self.raise_error(code=400, message=f"Deletion failed due to server error: {e!s}")
 
-    async def update_node(self, db: AsyncSession, node_id: int) -> dict:
+    async def _validate_node_then_release_db(self, db: AsyncSession, node_id: int) -> None:
         await self.get_validated_node(db, node_id, load_usage_logs=False)
+        await db.close()
+
+    async def update_node(self, db: AsyncSession, node_id: int) -> dict:
+        await self._validate_node_then_release_db(db, node_id)
         return await self._update_node_api_impl(node_id)
 
     async def update_core(self, db: AsyncSession, node_id: int, node_core_update: NodeCoreUpdate) -> dict:
-        await self.get_validated_node(db, node_id, load_usage_logs=False)
+        await self._validate_node_then_release_db(db, node_id)
         return await self._update_core_impl(node_id, node_core_update)
 
     async def update_geofiles(self, db: AsyncSession, node_id: int, node_geofiles_update: NodeGeoFilesUpdate) -> dict:
-        await self.get_validated_node(db, node_id, load_usage_logs=False)
+        await self._validate_node_then_release_db(db, node_id)
         return await self._update_geofiles_impl(node_id, node_geofiles_update)
 
     async def _update_node_local(self, db_node: Node) -> None:
@@ -1444,14 +1477,23 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         try:
             response = await node.update_node()
         except NodeAPIError as e:
-            await self.raise_error(message=e.detail, code=e.code)
+            await self.raise_error(message=e.detail, code=_maintenance_error_status(e))
         return response.json()
 
-    async def _update_node_api_remote(self, node_id: int) -> dict:
+    async def _maintenance_request(self, action: str, payload: dict) -> dict:
         try:
-            return await node_nats_client.request("update_node_api", {"node_id": node_id})
+            return await node_nats_client.request(action, payload, timeout=_maintenance_rpc_timeout())
+        except nats.errors.TimeoutError:
+            await self.raise_error(message=f"Node {action} timed out", code=504)
+        except nats.errors.Error as exc:
+            await self.raise_error(message=f"Node {action} unavailable: {exc}", code=503)
         except RuntimeError as exc:
+            if not hasattr(exc, "code"):
+                await self.raise_error(message=str(exc), code=503)
             await self.handle_rpc_error(exc)
+
+    async def _update_node_api_remote(self, node_id: int) -> dict:
+        return await self._maintenance_request("update_node_api", {"node_id": node_id})
 
     async def _update_core_local(self, node_id: int, node_core_update: NodeCoreUpdate) -> dict:
         node = await node_manager.get_node(node_id)
@@ -1460,13 +1502,12 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         try:
             response = await node.update_core(node_core_update.model_dump(mode="json"))
         except NodeAPIError as e:
-            await self.raise_error(message=e.detail, code=e.code)
+            await self.raise_error(message=e.detail, code=_maintenance_error_status(e))
         return response.json()
 
     async def _update_core_remote(self, node_id: int, node_core_update: NodeCoreUpdate) -> dict:
-        return await node_nats_client.request(
-            "update_core",
-            {"node_id": node_id, "core_update": node_core_update.model_dump(mode="json")},
+        return await self._maintenance_request(
+            "update_core", {"node_id": node_id, "core_update": node_core_update.model_dump(mode="json")}
         )
 
     async def _update_geofiles_local(self, node_id: int, node_geofiles_update: NodeGeoFilesUpdate) -> dict:
@@ -1476,13 +1517,12 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         try:
             response = await node.update_geofiles(node_geofiles_update.model_dump(mode="json"))
         except NodeAPIError as e:
-            await self.raise_error(message=e.detail, code=e.code)
+            await self.raise_error(message=e.detail, code=_maintenance_error_status(e))
         return response.json()
 
     async def _update_geofiles_remote(self, node_id: int, node_geofiles_update: NodeGeoFilesUpdate) -> dict:
-        return await node_nats_client.request(
-            "update_geofiles",
-            {"node_id": node_id, "geofiles_update": node_geofiles_update.model_dump(mode="json")},
+        return await self._maintenance_request(
+            "update_geofiles", {"node_id": node_id, "geofiles_update": node_geofiles_update.model_dump(mode="json")}
         )
 
     async def bulk_remove_nodes(
@@ -1611,21 +1651,22 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         self, db: AsyncSession, bulk_nodes: BulkNodeSelection, admin: AdminDetails
     ) -> BulkNodesActionResponse:
         db_nodes = await self._get_validated_nodes(db, bulk_nodes.ids)
+        targets = [(db_node.id, db_node.name) for db_node in db_nodes]
 
-        updated_nodes = []
+        updated_names = []
         errors = []
-        for db_node in db_nodes:
+        for node_id, node_name in targets:
             try:
-                await self.update_node(db, db_node.id)
+                await self.update_node(db, node_id)
             except HTTPException as exc:
                 errors.append(exc)
-                logger.warning(f'Node "{db_node.name}" bulk update failed by admin "{admin.username}": {exc}')
+                logger.warning(f'Node "{node_name}" bulk update failed by admin "{admin.username}": {exc}')
                 continue
 
-            updated_nodes.append(db_node)
-            logger.info(f'Node "{db_node.name}" updated by admin "{admin.username}"')
+            updated_names.append(node_name)
+            logger.info(f'Node "{node_name}" updated by admin "{admin.username}"')
 
-        if not updated_nodes and errors:
+        if not updated_names and errors:
             raise errors[0]
 
-        return self._build_bulk_action_response(updated_nodes)
+        return BulkNodesActionResponse(nodes=updated_names, count=len(updated_names))

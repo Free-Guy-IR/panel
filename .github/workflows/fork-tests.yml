@@ -23,6 +23,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Fetch the upstream branches and tags by name
+        run: |
+          set -euo pipefail
+          git fetch --no-tags https://github.com/PasarGuard/panel.git "+refs/heads/*:refs/remotes/upstream/*"
+          git fetch --no-tags https://github.com/PasarGuard/panel.git "+refs/tags/*:refs/upstream-tags/*"
+          echo "upstream branches: $(git for-each-ref refs/remotes/upstream | wc -l), tags: $(git for-each-ref refs/upstream-tags | wc -l)"
+
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
