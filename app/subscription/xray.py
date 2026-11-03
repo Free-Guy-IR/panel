@@ -4,7 +4,11 @@ from random import choice
 
 from pydantic import BaseModel
 
-from app.fork.finalmask import dump_fork_final_mask_for_xray, restore_doh_tls_configs
+from app.fork.finalmask import (
+    dump_fork_final_mask_for_xray,
+    restore_doh_tls_configs,
+    restore_nested_doh_tls_configs,
+)
 from app.models.host import FinalMask, prune_blank_values
 from app.models.subscription import (
     GRPCTransportConfig,
@@ -23,6 +27,10 @@ from .base import dumps_compact
 
 
 class XrayConfiguration(BaseSubscription):
+    @staticmethod
+    def _normalize_and_remove_none_values(data: dict) -> dict:
+        return restore_nested_doh_tls_configs(BaseSubscription._normalize_and_remove_none_values(data))
+
     def __init__(
         self,
         xray_template_content: str | None = None,

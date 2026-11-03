@@ -87,3 +87,15 @@ def restore_doh_tls_configs(final_mask: Any) -> Any:
         if _is_doh_resolver(resolver) and not isinstance(resolver.get("tlsConfig"), dict):
             resolver["tlsConfig"] = {}
     return final_mask
+
+
+def restore_nested_doh_tls_configs(data: Any) -> Any:
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if key == "finalmask":
+                restore_doh_tls_configs(value)
+            restore_nested_doh_tls_configs(value)
+    elif isinstance(data, list):
+        for item in data:
+            restore_nested_doh_tls_configs(item)
+    return data

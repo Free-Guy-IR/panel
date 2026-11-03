@@ -232,3 +232,29 @@ def test_xray_finalmask_xdns_plain_resolver_gets_no_tls_config():
     stream_settings = XrayConfiguration._stream_setting_config(finalmask=finalmask)
 
     assert stream_settings["finalmask"]["udp"][0]["settings"]["resolvers"] == [{"addrs": ["udp://1.1.1.1"]}]
+
+
+def test_xray_finalmask_xdns_doh_tls_config_survives_outbound_normalization():
+    finalmask = {
+        "udp": [
+            {
+                "type": "xdns",
+                "settings": {
+                    "domains": [{"names": ["t.example.com"]}],
+                    "resolvers": [{"addrs": ["https://d.example/q"]}],
+                },
+            }
+        ]
+    }
+    stream_settings = XrayConfiguration._stream_setting_config(finalmask=finalmask)
+    outbound = {"protocol": "vless", "settings": {}, "streamSettings": stream_settings}
+    download = {"address": "a.example", "finalmask": stream_settings["finalmask"]}
+
+    normalized = XrayConfiguration._normalize_and_remove_none_values(outbound)
+    normalized_download = XrayConfiguration._normalize_and_remove_none_values(download)
+
+    assert '"tlsConfig": {}' in json.dumps(normalized)
+    assert normalized["streamSettings"]["finalmask"]["udp"][0]["settings"]["resolvers"] == [
+        {"addrs": ["https://d.example/q"], "tlsConfig": {}}
+    ]
+    assert normalized_download["finalmask"]["udp"][0]["settings"]["resolvers"][0]["tlsConfig"] == {}
