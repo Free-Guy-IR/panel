@@ -239,3 +239,34 @@ def test_10m_ghost_cited_with_backticks_or_colon_is_flagged(inventory, reason):
         {"where": "kit.md:3", "token": SELF, "reason": reason}, "main", frozenset({SELF})
     )
     assert any(GHOST[:12] in problem for problem in problems), problems
+
+
+def test_10m_compact_include_list_is_read():
+    text = "jobs:\n  b:\n    strategy:\n      matrix:\n        goos: [linux]\n        goarch: [amd64]\n        include:\n        - goos: linux\n          goarch: riscv64\n"
+    assert load_inventory().workflow_linux_arches(text) == frozenset({"amd64", "riscv64"})
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "jobs:\n  b:\n    strategy: {matrix: {goos: [linux], goarch: [riscv64]}}\n",
+        'jobs:\n  b:\n    strategy:\n      "matrix":\n        goos: [linux]\n        goarch: [riscv64]\n',
+    ],
+    ids=["flow-strategy", "quoted-matrix-key"],
+)
+def test_10m_matrix_written_in_a_form_the_parser_does_not_read_fails_closed(text):
+    module = load_inventory()
+    with pytest.raises(module.ShippedArchesUnreadable):
+        module.workflow_linux_arches(text)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        'package x\n\nimport (\n\t"fmt" // )\n\t"C"\n)\n',
+        'package x\n\nimport /* c */ "C"\n',
+    ],
+    ids=["paren-in-comment", "block-comment"],
+)
+def test_10m_cgo_import_hidden_behind_a_comment_is_excluded(content):
+    assert load_inventory().go_build_excluded("pkg/x.go", content, 26)

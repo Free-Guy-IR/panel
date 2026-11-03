@@ -214,6 +214,8 @@ GO_CGO_IMPORT_RE = re.compile(r'\bimport\s*(?:\([^)]*?)?(?:[\w.]+\s+)?["`]C["`]'
 WORKFLOW_DIRECTORY = ".github/workflows"
 WORKFLOW_PLATFORMS_RE = re.compile(r"^\s*-?\s*platforms:\s*(.*)$")
 WORKFLOW_MATRIX_KEYS = ("goos", "goarch")
+WORKFLOW_MATRIX_KEY_RE = re.compile(r"""\bmatrix['"]?\s*:""")
+GO_COMMENT_RE = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)
 GO_LINUX_TRUE_TERMS = frozenset({"linux", "unix"})
 GO_CONSTRAINT_RE = re.compile(r"^\s*//\s*(?:go:build|\+build)\b(.*)$", re.MULTILINE)
 NAMED_BRANCH_RE = re.compile(
@@ -1613,13 +1615,13 @@ def matrix_linux_arches(block):
     index = 0
     while index < len(block):
         indent, text = block[index]
-        if indent != child:
+        if indent != child or text.startswith("-"):
             raise ShippedArchesUnreadable(f"cannot read the matrix line {text!r}")
         key, colon, value = text.partition(":")
         if not colon:
             raise ShippedArchesUnreadable(f"cannot read the matrix line {text!r}")
         end = index + 1
-        while end < len(block) and block[end][0] > child:
+        while end < len(block) and (block[end][0] > child or block[end][1].startswith("- ")):
             end += 1
         keys[key.strip()] = (value, block[index + 1 : end])
         index = end
@@ -1667,6 +1669,8 @@ def workflow_linux_arches(text):
             continue
         key, colon, value = line.partition(":")
         if key.strip() != "matrix" or not colon:
+            if WORKFLOW_MATRIX_KEY_RE.search(line):
+                raise ShippedArchesUnreadable(f"cannot read the matrix line {line!r}")
             continue
         if value.strip():
             raise ShippedArchesUnreadable(f"cannot read the matrix line {line!r}")
@@ -1720,7 +1724,7 @@ def go_build_excluded(path, content, go_minor=None, arches=GO_SHIPPED_ARCHES):
     parts = Path(path).parts
     if any(part == "testdata" or part.startswith(("_", ".")) for part in parts):
         return True
-    if go_filename_excluded(parts[-1]) or GO_CGO_IMPORT_RE.search(content):
+    if go_filename_excluded(parts[-1]) or GO_CGO_IMPORT_RE.search(GO_COMMENT_RE.sub(" ", content)):
         return True
     for match in GO_CONSTRAINT_RE.finditer(content):
         terms = match.group(1).split()
