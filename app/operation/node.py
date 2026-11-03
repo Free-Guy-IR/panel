@@ -20,7 +20,6 @@ from app.db.crud.node import (
     get_node_by_id,
     get_node_stats,
     get_nodes,
-    get_nodes_in_fresh_view,
     get_nodes_simple,
     get_nodes_usage,
     modify_node,
@@ -1076,8 +1075,12 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             return
 
         snapshot = current_connect_snapshot()
-        fresh = await get_nodes_in_fresh_view(db, [node.id for node in nodes if node is not None])
-        nodes = [fresh[node.id] for node in nodes if node is not None and node.id in fresh]
+        reread = [
+            await get_node_by_id(db, node.id, load_usage_logs=False, fresh_view=True)
+            for node in nodes
+            if node is not None
+        ]
+        nodes = [node for node in reread if node is not None]
         if not nodes:
             return
         core_ids = {core_id for node in nodes for core_id in self._node_core_ids(node)}
