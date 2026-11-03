@@ -220,7 +220,9 @@ WORKFLOW_GOARCH_RE = re.compile(
     r"""(?<![\w$.-])(?<!\$\{)(["']?)goarch\1(?:(=)|\s*:(?=\s|$))\s*(.*)$""", re.IGNORECASE
 )
 WORKFLOW_GOARCH_BARE_RE = re.compile(
-    r"\b(?:for|read|export|readonly|declare|typeset|local)\b[^;&|]*?(?<![\w$.{-])goarch\b(?!\s*=)", re.IGNORECASE
+    r"\b(?:for|read|export|readonly|declare|typeset|local)\b[^;&|]*?(?<![\w$.{-])(?:goarch|targetarch)\b(?!\s*=)"
+    r"|\bprintf\b[^;&|]*?-v\s*['\"]?(?:goarch|targetarch)\b",
+    re.IGNORECASE,
 )
 WORKFLOW_FLOW_VALUE_RE = re.compile(r"""\s*(["']?)([^,}"'\s]*)\1\s*(?:[,}].*)?""")
 WORKFLOW_SHELL_WORD_RE = re.compile(r"""(?:\$\{\{.*?\}\}|\$\([^)]*\)|"[^"]*"|'[^']*'|[^\s;&|)"'])*""")
@@ -244,7 +246,14 @@ GOARCH_SELF_REFERENCES = frozenset({"$goarch", "${goarch}", "$(goarch)"})
 GOARCH_DOCKER_TARGET_REFERENCES = frozenset({"$targetarch", "${targetarch}"})
 DOCKER_BUILDER_PLATFORMS = frozenset({"$buildplatform", "${buildplatform}", "$targetplatform", "${targetplatform}"})
 MAKE_GOARCH_RE = re.compile(r"^(?:(?:export|override)\s+)*goarch\s*(?:::|[:?+!])?=\s*(.*)$", re.IGNORECASE)
-MAKE_INCLUDE_RE = re.compile(r"^ *(?:-|s)?include(?:\s|$)")
+MAKE_INCLUDE_RE = re.compile(r"include|\$[({]\s*eval\b", re.IGNORECASE)
+SHELL_CONTINUATION_RE = re.compile(r"\\\r?\n")
+QUOTED_HEREDOC_RE = re.compile(r"""<<-?\s*(['"])(\w+)\1""")
+SHELL_SCRIPT_RE = re.compile(r".+\.(?:sh|bash|zsh|ksh)", re.IGNORECASE)
+OTHER_MAKEFILE_RE = re.compile(r"(?:gnu)?makefile(?:\..+)?|.+\.(?:mk|make|inc)", re.IGNORECASE)
+COMPOSE_FILE_RE = re.compile(r"(?:docker-)?compose(?:[._-].*)?\.ya?ml", re.IGNORECASE)
+EARTHFILE_RE = re.compile(r"earthfile(?:\..*)?|.+\.earth", re.IGNORECASE)
+SCRIPT_FOLDERS = ("scripts/", "hack/")
 MAKEFILE_NAMES = frozenset({"Makefile", "GNUmakefile", "makefile"})
 DOCKER_LEGACY_ENV_GOARCH_RE = re.compile(r"^env\s+goarch\s+(.*)$", re.IGNORECASE)
 TARGETARCH_ASSIGNMENT_RE = re.compile(r"(?<![\w$.{-])targetarch\s*(?:::|[:?+!])?=\s*(\S+)", re.IGNORECASE)
@@ -1467,6 +1476,108 @@ def named_commits(reason, head, upstream_sha):
     return found
 
 
+@functools.lru_cache(maxsize=1024)
+def later_line_changes(fork_sha, head, path):
+    removed, added = set(), set()
+    in_hunk = False
+    diff = git(
+        "log", "--format=", "-p", "-U0", "--no-color", "--no-ext-diff", "--diff-merges=first-parent",
+        f"{fork_sha}..{head}", "--", path,
+    )
+    for line in diff.splitlines():
+        if line.startswith("diff --git "):
+            in_hunk = False
+        elif HUNK_RANGE_RE.match(line):
+            in_hunk = True
+        elif in_hunk and line[:1] in "-+":
+            text = normalise_line(path, line[1:])
+            if text:
+                (removed if line[0] == "-" else added).add(text)
+    return frozenset(removed), frozenset(added)
+
+
+def tolerant_follows(lines, start, step, context, dropped, inserted):
+    slack = CONTEXT_SLACK
+    index = start
+    for expected in context:
+        if expected in dropped:
+            if 0 <= index < len(lines) and lines[index] == expected:
+                index += step
+            continue
+        while 0 <= index < len(lines) and lines[index] != expected:
+            if lines[index] not in inserted:
+                if slack == 0:
+                    return False
+                slack -= 1
+            index += step
+        if not 0 <= index < len(lines):
+            return False
+        index += step
+    return True
+
+
+def own_core_end(lines, start, core, dropped, inserted):
+    index = start
+    for position, (text, changed) in enumerate(core):
+        if not changed and text in dropped:
+            if index < len(lines) and lines[index] == text:
+                index += 1
+            continue
+        while position and index < len(lines) and lines[index] != text and lines[index] in inserted:
+            index += 1
+        if index >= len(lines) or lines[index] != text:
+            return None
+        index += 1
+    return index
+
+
+def own_lines_in_place(lines, path, side, dropped, inserted):
+    if lines is None:
+        return False
+    marked = [(text, changed) for text, changed in ((normalise_line(path, t), c) for t, c in side) if text]
+    changed_at = [i for i, (_, changed) in enumerate(marked) if changed]
+    first, last = changed_at[0], changed_at[-1]
+    before = tuple(text for text, _ in reversed(marked[:first]))
+    after = tuple(text for text, _ in marked[last + 1 :])
+    core = marked[first : last + 1]
+    for start in range(len(lines)):
+        if lines[start] != core[0][0]:
+            continue
+        end = own_core_end(lines, start, core, dropped, inserted)
+        if (
+            end is not None
+            and tolerant_follows(lines, start - 1, -1, before, dropped, inserted)
+            and tolerant_follows(lines, end, 1, after, dropped, inserted)
+        ):
+            return True
+    return False
+
+
+def own_lines_missing(fork_sha, head, paths):
+    expected = 0
+    missing = []
+    for hunk in commit_hunks(fork_sha):
+        path = hunk["new"] or hunk["old"]
+        if paths and path not in paths:
+            continue
+        post = hunk_side(path, hunk["post"])
+        pre = hunk_side(path, hunk["pre"])
+        fork_now = normalised_file(fork_sha, path)
+        check_post = hunk["new"] is not None and post is not None and block_in_place(fork_now, post)
+        check_pre = pre is not None and pre != post and not block_in_place(fork_now, pre)
+        if not (check_post or check_pre):
+            continue
+        expected += 1
+        here = normalised_file(head, path)
+        if check_post:
+            dropped, inserted = later_line_changes(fork_sha, head, path)
+            if not own_lines_in_place(here, path, hunk["post"], dropped, inserted):
+                missing.append((path, post[1][0]))
+        elif block_in_place(here, pre):
+            missing.append((path, f"-{pre[1][0]}"))
+    return expected, missing
+
+
 def design_fork_commit(reason, head, upstream_sha, in_range):
     upstream_paths = set(commit_paths(upstream_sha))
     for fork_sha in named_commits(reason, head, upstream_sha):
@@ -1477,7 +1588,7 @@ def design_fork_commit(reason, head, upstream_sha, in_range):
         if not brought and not picks_upstream(fork_sha, upstream_sha):
             continue
         named = {path for path in touched if re.search(rf"(?<![\w./-]){re.escape(path)}(?![\w/-])", reason)}
-        expected, missing = missing_pick_lines(fork_sha, fork_sha, head, named | brought if named else touched)
+        expected, missing = own_lines_missing(fork_sha, head, named | brought if named else touched)
         if expected and not missing:
             return fork_sha
     return None
@@ -1654,7 +1765,7 @@ def workflow_lines(text):
             continue
         cut = re.sub(r"\s+#.*$", "", raw).rstrip()
         if lines and lines[-1][1].endswith("\\"):
-            lines[-1] = (lines[-1][0], f"{lines[-1][1][:-1].rstrip()} {cut.strip()}")
+            lines[-1] = (lines[-1][0], f"{lines[-1][1][:-1]}{cut.strip()}")
             continue
         lines.append((len(cut) - len(cut.lstrip()), cut.strip()))
     return lines
@@ -1890,7 +2001,7 @@ def workflow_linux_arches(text):
     return frozenset(found)
 
 
-def build_file_linux_arches(text):
+def build_file_linux_arches(text, passthrough=GOARCH_SELF_REFERENCES | GOARCH_DOCKER_TARGET_REFERENCES):
     found = set()
     for indent, line in workflow_lines(text):
         if WORKFLOW_UNREAD_TOOL_RE.search(line):
@@ -1902,7 +2013,7 @@ def build_file_linux_arches(text):
             value = legacy.group(1).strip()
             if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
                 value = value[1:-1].strip()
-            if value.lower() in GOARCH_SELF_REFERENCES | GOARCH_DOCKER_TARGET_REFERENCES:
+            if value.lower() in passthrough:
                 continue
             if not re.fullmatch(r"[a-z0-9]+", value):
                 raise ShippedArchesUnreadable(f"cannot read the GOARCH on the line {line!r}")
@@ -1917,7 +2028,7 @@ def build_file_linux_arches(text):
                 raise ShippedArchesUnreadable(f"cannot read the GOARCH on the line {line!r}")
             found.add(value)
             continue
-        found |= workflow_goarch_arches(line, GOARCH_SELF_REFERENCES | GOARCH_DOCKER_TARGET_REFERENCES)
+        found |= workflow_goarch_arches(line, passthrough)
         for flag in WORKFLOW_PLATFORM_FLAG_RE.finditer(line):
             if flag.group(1).strip("'\"").lower() in DOCKER_BUILDER_PLATFORMS:
                 continue
@@ -1926,20 +2037,43 @@ def build_file_linux_arches(text):
 
 
 def makefile_linux_arches(text):
-    for line in text.splitlines():
-        if MAKE_INCLUDE_RE.match(line):
-            raise ShippedArchesUnreadable(f"the Makefile line {line!r} includes a file the gate does not read")
-    return build_file_linux_arches(text)
+    for line in SHELL_CONTINUATION_RE.sub("", text).splitlines():
+        if MAKE_INCLUDE_RE.search(line):
+            raise ShippedArchesUnreadable(f"the Makefile line {line!r} includes or evaluates text the gate does not read")
+    return build_file_linux_arches(text, GOARCH_SELF_REFERENCES)
 
 
-def unread_source_linux_arches(text):
-    for raw in text.splitlines():
+def quoted_heredoc_lines(lines):
+    inside = set()
+    tag = None
+    for index, line in enumerate(lines):
+        if tag is not None:
+            if line.strip() == tag:
+                tag = None
+            else:
+                inside.add(index)
+            continue
+        opened = QUOTED_HEREDOC_RE.search(line)
+        if opened:
+            tag = opened.group(2)
+    return inside
+
+
+def unread_dockerfile_linux_arches(text):
+    return unread_source_linux_arches(text, GOARCH_SELF_REFERENCES | GOARCH_DOCKER_TARGET_REFERENCES)
+
+
+def unread_source_linux_arches(text, passthrough=GOARCH_SELF_REFERENCES):
+    lines = SHELL_CONTINUATION_RE.sub("", text).splitlines()
+    literal = quoted_heredoc_lines(lines)
+    for index, raw in enumerate(lines):
         line = raw.replace("\\", "")
+        allowed = passthrough | GOARCH_DOCKER_TARGET_REFERENCES if index in literal else passthrough
         if WORKFLOW_GOARCH_BARE_RE.search(line) or UNREAD_OS_ARCH_RE.search(line):
             raise ShippedArchesUnreadable(f"the line {raw!r} names an arch in a source the gate does not read")
         for match in UNREAD_ARCH_VALUE_RE.finditer(line):
             value = (match.group(1) or match.group(2) or "").strip("'\"").lower()
-            if value and value not in GOARCH_SELF_REFERENCES | GOARCH_DOCKER_TARGET_REFERENCES:
+            if value and value not in allowed:
                 raise ShippedArchesUnreadable(f"the line {raw!r} sets an arch in a source the gate does not read")
         for match in UNREAD_PLATFORM_RE.finditer(line):
             value = match.group(1).strip("'\"").lower()
@@ -1960,8 +2094,15 @@ def shipped_linux_arch_source(path):
     if not folder and name in MAKEFILE_NAMES:
         return makefile_linux_arches
     if CONTAINER_FILE_RE.fullmatch(name):
-        return unread_source_linux_arches if folder else build_file_linux_arches
-    if name.endswith(".mk") or (path.startswith("scripts/") and name.endswith(".sh")):
+        return unread_dockerfile_linux_arches if folder else build_file_linux_arches
+    if (
+        OTHER_MAKEFILE_RE.fullmatch(name)
+        or SHELL_SCRIPT_RE.fullmatch(name)
+        or COMPOSE_FILE_RE.fullmatch(name)
+        or EARTHFILE_RE.fullmatch(name)
+        or path.startswith("hack/")
+        or (path.startswith(SCRIPT_FOLDERS) and "." not in name)
+    ):
         return unread_source_linux_arches
     return None
 
@@ -1981,6 +2122,11 @@ def shipped_linux_arches(ref):
         return frozenset(found)
     for path in listing.stdout.split("\n"):
         reader = shipped_linux_arch_source(path) if path else None
+        if reader is None and path and "." not in path.rsplit("/", 1)[-1]:
+            content = head_blob(ref, path)
+            if content is not None and content.startswith("#!"):
+                found |= unread_source_linux_arches(content)
+            continue
         if reader is None:
             continue
         content = head_blob(ref, path)
