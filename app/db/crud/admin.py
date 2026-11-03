@@ -21,6 +21,7 @@ from app.db.models import (
     ReminderType,
     User,
 )
+from app.fork.crud.admin_scope import detach_admin_users
 from app.fork.crud.group_scope import user_in_allowed_groups
 from app.fork.operation.usage_guard import execute_with_statement_timeout
 from app.models.admin import (
@@ -860,7 +861,7 @@ async def remove_admins(db: AsyncSession, admin_ids: list[int]) -> None:
     if not admin_ids:
         return
 
-    await db.execute(update(User).where(User.admin_id.in_(admin_ids)).values(admin_id=None))
+    await detach_admin_users(db, admin_ids)
     await db.execute(delete(APIKey).where(APIKey.admin_id.in_(admin_ids)))
     await db.execute(delete(AdminUsageLogs).where(AdminUsageLogs.admin_id.in_(admin_ids)))
     await db.execute(delete(Admin).where(Admin.id.in_(admin_ids)))

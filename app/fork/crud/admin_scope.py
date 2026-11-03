@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import User
@@ -33,6 +33,14 @@ async def lock_admin_users(db: AsyncSession, admin_id: int, allowed_group_ids: l
         stmt = _admin_users(admin_id, allowed_group_ids).where(User.id.in_(batch))
         locked.extend(user_id for (user_id,) in await read_committed_rows(db, stmt))
     return sorted(locked)
+
+
+async def detach_admin_users(db: AsyncSession, admin_ids: list[int]) -> None:
+    owned = select(User.id).where(User.admin_id.in_(admin_ids))
+    candidates = [user_id for (user_id,) in await read_committed_rows(db, owned)]
+    await lock_user_rows(db, candidates)
+    for statement in locked_targets(update(User).where(User.admin_id.in_(admin_ids)), candidates):
+        await db.execute(statement.values(admin_id=None))
 
 
 async def count_visible_admin_users(db: AsyncSession, admin_id: int, allowed_group_ids: list[int]) -> int:
