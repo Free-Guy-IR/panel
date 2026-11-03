@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterable, Iterator
 from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext, RevisionStep
 from alembic.script import ScriptDirectory
-from sqlalchemy import inspect, pool, text
+from sqlalchemy import Column, inspect, pool, text, update
 from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -66,6 +66,12 @@ REVISION_OBJECTS = (
         ),
     ),
 )
+REVISION_COLUMNS = (
+    ("f0420da90ff1", (("settings", "cleanup"),)),
+    ("1a2b3c4d5e6f", (("api_keys", "max_requests"), ("api_keys", "request_count"), ("api_keys", "delete_on_limit"))),
+)
+NODE_STATS_INDEX_REVISION = "f0420da90ff1"
+NODE_STATS_FOREIGN_KEYS = (("node_stats", "node_id", "ix_node_stats_node_id_created_at"),)
 MIGRATION_COMMANDS = ("upgrade", "downgrade")
 MIGRATION_LOCK = "pasarguard_alembic_"
 MIGRATION_LOCK_KEY = 5_026_101_103
@@ -342,6 +348,8 @@ class MysqlReverseGroupIndexes:
             return
         if step.up_revision_id == REVERSE_GROUP_INDEX_REVISION and step.is_upgrade:
             _drop_redundant_foreign_key_indexes(ctx.connection)
+        if step.up_revision_id == NODE_STATS_INDEX_REVISION and step.is_upgrade:
+            _drop_redundant_node_stats_foreign_key_index(ctx.connection)
 
 
 def version_hooks(connection: Connection, sqlite_high_water: SqliteIdHighWater | None) -> list:
@@ -411,9 +419,17 @@ def _undo_reverse_group_indexes(connection: Connection) -> None:
 
 
 def _drop_redundant_foreign_key_indexes(connection: Connection) -> None:
+    _drop_foreign_key_indexes_covered_by(connection, REVERSE_GROUP_FOREIGN_KEYS)
+
+
+def _drop_redundant_node_stats_foreign_key_index(connection: Connection) -> None:
+    _drop_foreign_key_indexes_covered_by(connection, NODE_STATS_FOREIGN_KEYS)
+
+
+def _drop_foreign_key_indexes_covered_by(connection: Connection, covered: Iterable[tuple[str, str, str]]) -> None:
     inspector = inspect(connection)
     quote = connection.dialect.identifier_preparer.quote
-    for table, column, upstream_index in REVERSE_GROUP_FOREIGN_KEYS:
+    for table, column, upstream_index in covered:
         if not inspector.has_table(table):
             continue
         indexes = _index_names(inspector, table)
@@ -445,16 +461,41 @@ def _refuse_filled_stray_tables(connection: Connection, strays: list[tuple[str, 
         )
 
 
+def _keep_foreign_key_indexed(connection: Connection, table: str, index: str) -> None:
+    inspector = inspect(connection)
+    leading = _index_names(inspector, table)[index][:1]
+    if any(key["constrained_columns"] == leading for key in inspector.get_foreign_keys(table)):
+        _ensure_foreign_key_index(connection, inspector, table, leading[0], index)
+
+
+def _present_columns(inspector, table: str) -> set[str]:
+    if not inspector.has_table(table):
+        return set()
+    return {column["name"] for column in inspector.get_columns(table)}
+
+
+def _remove_unapplied_columns(connection: Connection, applied: set[str]) -> None:
+    quote = connection.dialect.identifier_preparer.quote
+    for revision, columns in reversed(REVISION_COLUMNS):
+        if revision in applied:
+            continue
+        for table, column in reversed(columns):
+            if column in _present_columns(inspect(connection), table):
+                connection.exec_driver_sql(f"ALTER TABLE {quote(table)} DROP COLUMN {quote(column)}")
+
+
 def _remove_unapplied_objects(connection: Connection, applied: set[str]) -> None:
     inspector = inspect(connection)
     strays = _stray_tables(inspector, applied)
     _refuse_filled_stray_tables(connection, strays)
     quote = connection.dialect.identifier_preparer.quote
+    _remove_unapplied_columns(connection, applied)
     for revision, tables, indexes in reversed(REVISION_OBJECTS):
         if revision in applied:
             continue
         for table, name, _columns in indexes:
-            if table not in tables and inspector.has_table(table) and name in _index_names(inspector, table):
+            if table not in tables and inspector.has_table(table) and name in _index_names(inspect(connection), table):
+                _keep_foreign_key_indexed(connection, table, name)
                 connection.exec_driver_sql(f"DROP INDEX {quote(name)} ON {quote(table)}")
     for _revision, table in strays:
         connection.exec_driver_sql(f"DROP TABLE {quote(table)}")
@@ -469,6 +510,34 @@ def _backfill_proxy_secret_claims(connection: Connection, _table, module) -> Non
 
 
 TABLE_REFILLS = {"named_locks": _seed_named_locks, "proxy_secret_claims": _backfill_proxy_secret_claims}
+
+
+def _fill_cleanup_settings(connection: Connection, column, module) -> None:
+    connection.execute(update(column.table).values({column.name: module.build_cleanup(module.read_env_values())}))
+
+
+COLUMN_REFILLS = {("settings", "cleanup"): _fill_cleanup_settings}
+
+
+def _restore_applied_columns(connection: Connection, script: ScriptDirectory, applied: set[str]) -> None:
+    from app.db.models import Base
+
+    operations = Operations(MigrationContext.configure(connection))
+    for revision, columns in REVISION_COLUMNS:
+        if revision not in applied:
+            continue
+        for table, name in columns:
+            inspector = inspect(connection)
+            if not inspector.has_table(table) or name in _present_columns(inspector, table):
+                continue
+            model = Base.metadata.tables[table].c[name]
+            refill = COLUMN_REFILLS.get((table, name))
+            nullable = model.nullable or refill is not None
+            server_default = None if model.server_default is None else model.server_default.arg
+            operations.add_column(table, Column(name, model.type, nullable=nullable, server_default=server_default))
+            if refill is not None:
+                refill(connection, model, script.get_revision(revision).module)
+                operations.alter_column(table, name, existing_type=model.type, nullable=model.nullable)
 
 
 def _restore_applied_objects(
@@ -488,6 +557,7 @@ def _restore_applied_objects(
             refill = TABLE_REFILLS.get(table)
             if refill is not None and revision not in removed:
                 refill(connection, model, script.get_revision(revision).module)
+    _restore_applied_columns(connection, script, applied)
     inspector = inspect(connection)
     quote = connection.dialect.identifier_preparer.quote
     for revision, _tables, indexes in REVISION_OBJECTS:
@@ -497,3 +567,5 @@ def _restore_applied_objects(
             if inspector.has_table(table) and name not in _index_names(inspector, table):
                 listed = ", ".join(quote(column) for column in columns)
                 connection.exec_driver_sql(f"CREATE INDEX {quote(name)} ON {quote(table)} ({listed})")
+    if NODE_STATS_INDEX_REVISION in applied and NODE_STATS_INDEX_REVISION not in removed:
+        _drop_redundant_node_stats_foreign_key_index(connection)

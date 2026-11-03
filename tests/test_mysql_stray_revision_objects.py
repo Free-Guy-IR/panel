@@ -11,7 +11,10 @@ from app.fork.db_rollback import main
 from app.fork.migration_guards import (
     REVERSE_GROUP_FOREIGN_KEYS,
     REVERSE_GROUP_INDEX_REVISION,
+    REVISION_COLUMNS,
     REVISION_OBJECTS,
+    SORT_ORDER_REVISION,
+    SORT_ORDER_TABLES,
     StrayMigrationObjectError,
 )
 from tests.test_mysql_interrupted_migrations import _execute, _rollback
@@ -26,6 +29,36 @@ from tests.test_upstream_v551_migration_splice import (
 )
 
 OBJECTS = {revision: (tables, indexes) for revision, tables, indexes in REVISION_OBJECTS}
+COLUMNS = dict(REVISION_COLUMNS)
+NODE_STATS_FOREIGN_KEY_INDEX = "CREATE INDEX fk_node_stats_node_id_nodes ON node_stats (node_id)"
+COLUMN_UPGRADE_CUTS = (
+    ("f0420da90ff1", ("ALTER TABLE settings ADD COLUMN cleanup JSON NULL",)),
+    ("1a2b3c4d5e6f", ("ALTER TABLE api_keys ADD COLUMN max_requests INTEGER NULL",)),
+    (
+        "1a2b3c4d5e6f",
+        (
+            "ALTER TABLE api_keys ADD COLUMN max_requests INTEGER NULL",
+            "ALTER TABLE api_keys ADD COLUMN request_count INTEGER NOT NULL DEFAULT '0'",
+        ),
+    ),
+)
+COLUMN_DOWNGRADE_CUTS = (
+    ("f0420da90ff1", (NODE_STATS_FOREIGN_KEY_INDEX, "DROP INDEX ix_node_stats_node_id_created_at ON node_stats")),
+    (
+        "f0420da90ff1",
+        (
+            NODE_STATS_FOREIGN_KEY_INDEX,
+            "DROP INDEX ix_node_stats_node_id_created_at ON node_stats",
+            "DROP INDEX ix_node_stats_created_at ON node_stats",
+            "ALTER TABLE settings DROP COLUMN cleanup",
+        ),
+    ),
+    ("1a2b3c4d5e6f", ("ALTER TABLE api_keys DROP COLUMN delete_on_limit",)),
+    (
+        "1a2b3c4d5e6f",
+        ("ALTER TABLE api_keys DROP COLUMN delete_on_limit", "ALTER TABLE api_keys DROP COLUMN request_count"),
+    ),
+)
 DOWNGRADE_CUTS = (
     ("9a5c2e7f1b4d", "DROP TABLE passkey_challenges"),
     ("e5a9c3f1b7d2", "DROP TABLE named_locks"),
@@ -35,6 +68,7 @@ DOWNGRADE_CUTS = (
     ("6d8eb8fba21b", "DROP INDEX ix_node_stat_acks_node_id_stat_type ON node_stat_acks"),
     ("009f2a24cc7b", "DROP INDEX ix_pending_node_removals_requested_at ON pending_node_removals"),
     ("e79833e2a0b2", "DROP TABLE proxy_secret_claims"),
+    ("e5a7c3f9b214", "DROP TABLE node_outbound_usages"),
 )
 
 mysql_only = pytest.mark.skipif(
@@ -99,20 +133,50 @@ def _build(url: str, revision: str) -> None:
     _execute(url, *missing)
 
 
+def _columns(url: str) -> dict[str, set[str]]:
+    engine = create_engine(_sync(url))
+    try:
+        inspector = inspect(engine)
+        return {
+            table: {column["name"] for column in inspector.get_columns(table)} for table in inspector.get_table_names()
+        }
+    finally:
+        engine.dispose()
+
+
 def _absent(url: str, revision: str) -> bool:
-    tables, indexes = OBJECTS[revision]
+    tables, indexes = OBJECTS.get(revision, ((), ()))
     objects = _objects(url)
-    return not any(table in objects for table in tables) and not any(
-        name in objects.get(table, set()) for table, name, _columns in indexes
+    columns = _columns(url)
+    return (
+        not any(table in objects for table in tables)
+        and not any(name in objects.get(table, set()) for table, name, _columns in indexes)
+        and not any(column in columns.get(table, set()) for table, column in COLUMNS.get(revision, ()))
     )
 
 
 def _present(url: str, revision: str) -> bool:
-    tables, indexes = OBJECTS[revision]
+    tables, indexes = OBJECTS.get(revision, ((), ()))
     objects = _objects(url)
-    return all(table in objects for table in tables) and all(
-        name in objects.get(table, set()) for table, name, _columns in indexes
+    columns = _columns(url)
+    return (
+        all(table in objects for table in tables)
+        and all(name in objects.get(table, set()) for table, name, _columns in indexes)
+        and all(column in columns.get(table, set()) for table, column in COLUMNS.get(revision, ()))
     )
+
+
+def _node_stats_indexes(url: str) -> set[str]:
+    return _objects(url)["node_stats"]
+
+
+def _cleanup_values(url: str) -> list:
+    engine = create_engine(_sync(url))
+    try:
+        with engine.connect() as connection:
+            return connection.execute(text("SELECT cleanup FROM settings")).scalars().all()
+    finally:
+        engine.dispose()
 
 
 def _lock_names(url: str) -> list[str]:
@@ -144,6 +208,26 @@ def test_every_table_and_index_created_above_production_is_owned_by_a_migration_
             observed[revision] = (tables, indexes)
         before = after
     assert observed == _guarded_objects()
+
+
+def test_every_column_added_above_production_is_owned_by_a_migration_guard(tmp_path):
+    url = f"sqlite+aiosqlite:///{tmp_path / 'columns.sqlite3'}"
+    config = _config(url)
+    _quiet(upgrade, config, PROD_REVISION)
+    observed = {}
+    before = _columns(url)
+    for revision in _upgrade_order():
+        _quiet(upgrade, config, revision)
+        after = _columns(url)
+        added = {
+            (table, column) for table, names in after.items() if table in before for column in names - before[table]
+        }
+        if added:
+            observed[revision] = added
+        before = after
+    guarded = {revision: set(columns) for revision, columns in REVISION_COLUMNS}
+    guarded[SORT_ORDER_REVISION] = {(table, "sort_order") for table in SORT_ORDER_TABLES}
+    assert observed == guarded
 
 
 @mysql_only
@@ -228,3 +312,57 @@ def test_an_upgrade_after_a_rollback_cut_rebuilds_the_dropped_object(tmp_path, r
         _assert_clean_head(url)
         assert _present(url, revision)
         assert _lock_names(url) == ["proxy_secrets"]
+
+
+@mysql_only
+@pytest.mark.parametrize(("revision", "statements"), COLUMN_UPGRADE_CUTS)
+def test_an_upgrade_cut_after_some_added_columns_is_finished_by_the_next_upgrade(tmp_path, revision, statements):
+    with _scratch_database(tmp_path, f"column_upgrade_cut_{revision}_{len(statements)}") as url:
+        parent = _parent(revision)
+        _quiet(upgrade, _config(url), parent)
+        _execute(url, *statements)
+        assert _versions(url) == [parent]
+        _quiet(upgrade, _config(url), "head")
+        _assert_clean_head(url)
+        assert _present(url, revision)
+        assert _cleanup_values(url) == [{}]
+
+
+@mysql_only
+@pytest.mark.parametrize(("revision", "statements"), COLUMN_DOWNGRADE_CUTS)
+def test_a_rollback_cut_after_some_dropped_columns_completes(tmp_path, revision, statements):
+    with _scratch_database(tmp_path, f"column_downgrade_cut_{revision}_{len(statements)}") as url:
+        parent = _parent(revision)
+        _quiet(upgrade, _config(url), revision)
+        _execute(url, *statements)
+        _rollback(_config(url), parent)
+        assert _versions(url) == [parent]
+        assert _absent(url, revision)
+
+
+@mysql_only
+@pytest.mark.parametrize(("revision", "statements"), COLUMN_DOWNGRADE_CUTS)
+def test_an_upgrade_after_a_rollback_cut_restores_the_dropped_columns(tmp_path, revision, statements):
+    with _scratch_database(tmp_path, f"column_rebuild_{revision}_{len(statements)}") as url:
+        _quiet(upgrade, _config(url), revision)
+        _execute(url, *statements)
+        _quiet(upgrade, _config(url), "head")
+        _assert_clean_head(url)
+        assert _present(url, revision)
+        assert _cleanup_values(url) == [{}]
+        assert "fk_node_stats_node_id_nodes" not in _node_stats_indexes(url)
+
+
+@mysql_only
+def test_a_rollback_removes_a_stray_node_stats_index_pair_without_losing_the_foreign_key_index(tmp_path):
+    with _scratch_database(tmp_path, "node_stats_pair") as url:
+        parent = _parent("f0420da90ff1")
+        _quiet(upgrade, _config(url), parent)
+        _build(url, "f0420da90ff1")
+        assert "fk_node_stats_node_id_nodes" not in _node_stats_indexes(url)
+        _rollback(_config(url), _parent(parent))
+        assert _absent(url, "f0420da90ff1")
+        assert "fk_node_stats_node_id_nodes" in _node_stats_indexes(url)
+        _quiet(upgrade, _config(url), "head")
+        _assert_clean_head(url)
+        assert "fk_node_stats_node_id_nodes" not in _node_stats_indexes(url)
