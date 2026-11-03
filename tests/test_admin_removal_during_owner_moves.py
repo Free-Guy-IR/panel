@@ -1,0 +1,139 @@
+from __future__ import annotations
+
+import asyncio
+import itertools
+from datetime import UTC, datetime, timedelta
+
+import pytest
+from sqlalchemy import select, update
+
+from app.db.crud import user as user_crud
+from app.db.models import Admin, User, UserStatus
+from app.fork.models.connection import ConnectionRestriction
+from app.models.admin import BulkAdminSelection
+from app.operation import OperatorType, admin as admin_operation
+from app.operation.admin import AdminOperation
+from tests.test_admin_wide_owner_moves_interleavings import (  # noqa: F401
+    ACTIONS,
+    BOUND,
+    OWNER,
+    STAGGER_SECONDS,
+    _admin_wide,
+    _hold_after,
+    _mover,
+    _run,
+    first_commits_fixture,
+    pushes_fixture,
+    quiet,
+)
+from tests.test_recorder_harness import _database_url, recorder_db_fixture, seed_users_and_nodes  # noqa: F401
+from tests.test_status_lock_order_interleavings import _deadlocks
+
+pytestmark = pytest.mark.skipif(_database_url().startswith("sqlite"), reason="needs a server database")
+
+ORDERS = [list(order) for order in itertools.permutations(["admin-wide", "mover", "remover"])]
+
+
+def _remover(recorder_db, admin_id: int):
+    async def run():
+        async with recorder_db() as db:
+            db.info["label"] = "remover"
+            await AdminOperation(OperatorType.API).bulk_remove_admins(db, BulkAdminSelection(ids={admin_id}), OWNER)
+
+    return run
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("order", ORDERS, ids=["-".join(order) for order in ORDERS])
+@pytest.mark.parametrize("action", list(ACTIONS))
+async def test_bulk_owner_move_of_many_users_while_admin_wide_change_and_admin_removal_run(
+    monkeypatch: pytest.MonkeyPatch, recorder_db, pushes, first_commits, action, order
+):
+    method, before, after = ACTIONS[action]
+    home, stay_ids, _ = await seed_users_and_nodes(recorder_db, user_count=4, node_count=0)
+    away, away_ids, _ = await seed_users_and_nodes(recorder_db, user_count=30, node_count=0)
+    gone, gone_ids, _ = await seed_users_and_nodes(recorder_db, user_count=6, node_count=0)
+    everyone = [*stay_ids, *away_ids, *gone_ids]
+    moved_ids = (*away_ids, *gone_ids)
+    async with recorder_db() as session:
+        await session.execute(
+            update(User)
+            .where(User.id.in_(everyone))
+            .values(status=before, used_traffic=1000, last_status_change=datetime.now(UTC) - timedelta(minutes=40))
+        )
+        await session.execute(update(Admin).where(Admin.id.in_([home, away, gone])).values(used_traffic=0))
+        if before == UserStatus.disabled:
+            session.add_all(
+                ConnectionRestriction(
+                    user_id=user_id,
+                    created_at=datetime.now(UTC) - timedelta(minutes=30),
+                    previous_status=UserStatus.active.value,
+                    disable_minutes=30,
+                    restore_at=datetime.now(UTC) + timedelta(minutes=30),
+                    active=True,
+                )
+                for user_id in everyone
+            )
+        await session.commit()
+        home_name = (await session.execute(select(Admin.username).where(Admin.id == home))).scalar_one()
+
+    _hold_after(monkeypatch, admin_operation, "close_visible_restrictions")
+    _hold_after(monkeypatch, user_crud, "lock_owner_rows")
+
+    steps = {
+        "admin-wide": _admin_wide(recorder_db, home, method),
+        "mover": _mover(recorder_db, "mover", "bulk_set_owner", moved_ids, home_name),
+        "remover": _remover(recorder_db, gone),
+    }
+    outcomes: dict[str, str] = {}
+    deadlocks_before = await _deadlocks()
+    tasks = []
+    for label in order:
+        tasks.append(asyncio.create_task(_run(label, steps[label], outcomes)))
+        await asyncio.sleep(STAGGER_SECONDS)
+    await asyncio.wait_for(asyncio.gather(*tasks), timeout=BOUND)
+    await asyncio.sleep(1)
+    deadlocks_after = await _deadlocks()
+
+    assert all(not outcome.startswith("aborted") for outcome in outcomes.values()), outcomes
+    if deadlocks_before is not None:
+        assert deadlocks_after - deadlocks_before == 0, outcomes
+
+    async with recorder_db() as session:
+        rows = {
+            user_id: (admin_id, status)
+            for user_id, admin_id, status in (
+                await session.execute(select(User.id, User.admin_id, User.status).where(User.id.in_(everyone)))
+            ).all()
+        }
+        traffic = dict(
+            (await session.execute(select(Admin.id, Admin.used_traffic).where(Admin.id.in_([home, away, gone])))).all()
+        )
+        open_restrictions = set(
+            (
+                await session.execute(
+                    select(ConnectionRestriction.user_id).where(
+                        ConnectionRestriction.user_id.in_(everyone), ConnectionRestriction.active.is_(True)
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    if outcomes.get("admin-wide") == "committed":
+        for user_id in stay_ids:
+            assert rows[user_id] == (home, after), (user_id, rows[user_id], outcomes)
+            assert user_id not in open_restrictions, (user_id, outcomes)
+    if outcomes.get("mover") == "committed":
+        for user_id in moved_ids:
+            assert rows[user_id][0] == home, (user_id, rows[user_id], outcomes)
+        statuses = {(rows[user_id][1], user_id in open_restrictions) for user_id in moved_ids}
+        assert len(statuses) == 1, ("moved users were changed by part of the admin-wide change", statuses, outcomes)
+        assert traffic[home] == 1000 * len(moved_ids), (traffic, outcomes)
+        assert traffic[away] == -1000 * len(away_ids), (traffic, outcomes)
+    if outcomes.get("remover") == "committed":
+        assert gone not in traffic, (traffic, outcomes)
+    for user_id, (_admin_id, status) in rows.items():
+        if status != before:
+            assert (user_id, status) in pushes, (user_id, status, outcomes)
