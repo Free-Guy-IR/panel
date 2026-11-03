@@ -247,9 +247,7 @@ async def remove_admin(db: AsyncSession, dbadmin: Admin) -> None:
         db (AsyncSession): Database session.
         dbadmin (Admin): The admin object to be removed.
     """
-    await db.execute(delete(APIKey).where(APIKey.admin_id == dbadmin.id))
-    await db.delete(dbadmin)
-    await db.commit()
+    await remove_admins(db, [dbadmin.id])
 
 
 async def get_admin_by_id(
