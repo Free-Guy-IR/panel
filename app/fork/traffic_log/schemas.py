@@ -79,7 +79,7 @@ class Summary(BaseModel):
     top_destinations: list[TopDestination] = Field(default_factory=list)
 
 
-class NodeStatus(BaseModel):
+class TrafficLogNodeStatus(BaseModel):
     node_id: int
     node: str | None = None
     state: str
@@ -108,7 +108,7 @@ class Status(BaseModel):
     last_purge_at: OptionalUtcDatetime = None
     purged_expired: int = 0
     purged_over_ceiling: int = 0
-    nodes: list[NodeStatus] = Field(default_factory=list)
+    nodes: list[TrafficLogNodeStatus] = Field(default_factory=list)
 
 
 class SettingsUpdate(BaseModel):
