@@ -242,7 +242,7 @@ def setup_format_variables(user: UsersResponseWithInbounds, custom_variables: li
                     year=expire_date_obj.year, month=expire_date_obj.month, day=expire_date_obj.day
                 ).strftime("%Y-%m-%d")
             except ValueError:
-                jalali_expire_date = "-"
+                jalali_expire_date = "∞"
             if now < expire:
                 days_left = (expire - now).days + 1
                 time_left = format_time_left(seconds_left)
