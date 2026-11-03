@@ -28,6 +28,7 @@ import { getChartRenderFlags } from '@/utils/chart-performance'
 import useDirDetection from '@/hooks/use-dir-detection'
 
 import PeriodSelector from './period-selector'
+import { capUsagePeriod } from '@/fork/charts/usage-bucket-cap'
 
 type DataPoint = {
   time: string
@@ -102,7 +103,11 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats, realtime
     })
   }, [PERIOD_OPTIONS])
 
-  const activePeriod = resolvePeriodOverride(periodOverride) ?? periodOption.period
+  const cappedPeriod = useMemo(() => {
+    const range = getDateRangeForPeriodOption(periodOption)
+    return capUsagePeriod(resolvePeriodOverride(periodOverride), periodOption.period, range.startDate, toChartQueryEndDate(range.endDate))
+  }, [periodOption, periodOverride])
+  const activePeriod = cappedPeriod.period
   const labelPeriodOption = useMemo<PeriodOption>(
     () => ({
       ...periodOption,
@@ -358,7 +363,7 @@ export function AreaCostumeChart({ nodeId, currentStats, realtimeStats, realtime
                   ))}
                 </SelectContent>
               </Select>
-              <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} />
+              <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} cappedFrom={cappedPeriod.cappedFrom} />
             </div>
           </div>
         </div>

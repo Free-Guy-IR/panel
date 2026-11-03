@@ -619,7 +619,7 @@ const UsageModal = ({ open, onClose, userId }: UsageModalProps) => {
                   className="w-full sm:w-auto"
                 />
                 <div className="flex w-full items-center justify-center gap-2">
-                  <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} />
+                  <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} cappedFrom={queryRange.cappedFrom} />
                   <Button
                     variant="ghost"
                     size="icon"

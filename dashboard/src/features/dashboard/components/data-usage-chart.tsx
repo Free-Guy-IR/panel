@@ -254,7 +254,7 @@ const DataUsageChart = ({ adminUsername }: { adminUsername?: string }) => {
               ))}
             </SelectContent>
           </Select>
-          <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} />
+          <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} cappedFrom={queryRange.cappedFrom} />
         </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col justify-center overflow-hidden p-2 sm:p-6">
