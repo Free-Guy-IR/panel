@@ -1,8 +1,7 @@
-from concurrent.futures import ThreadPoolExecutor
-
 from fastapi import status
 
 from tests.api import client
+from tests.api.concurrent_requests import send_concurrently
 from tests.api.test_api_key_sibling_update import _create_key, _create_owner, _drop, _session
 
 KEY_DELETER = {"api_keys": {"read": True, "delete": True}}
@@ -149,26 +148,22 @@ def test_concurrent_sibling_deletes_by_a_narrow_key_all_fail_while_the_session_s
         broad = _create_key(session, BROAD)
         bulk_broad = _create_key(session, BROAD)
 
-        def _delete(headers: dict[str, str]) -> int:
-            return client.delete(f"/api/api_key/{broad['id']}", headers=headers).status_code
-
-        def _bulk(headers: dict[str, str]) -> int:
-            return _bulk_delete(headers, [bulk_broad["id"]]).status_code
-
-        with ThreadPoolExecutor(max_workers=6) as pool:
-            narrow_futures = [pool.submit(_delete, {"X-Api-Key": narrow["api_key"]}) for _ in range(3)]
-            narrow_futures += [pool.submit(_bulk, {"X-Api-Key": narrow["api_key"]}) for _ in range(2)]
-            narrow_codes = [future.result() for future in narrow_futures]
+        url = f"/api/api_key/{broad['id']}"
+        narrow_headers = {"X-Api-Key": narrow["api_key"]}
+        bulk_call = (
+            "POST",
+            "/api/api_keys/bulk/delete",
+            {"headers": narrow_headers, "json": {"ids": [bulk_broad["id"]]}},
+        )
+        calls = [("DELETE", url, {"headers": narrow_headers})] * 3 + [bulk_call] * 2
+        narrow_codes = [response.status_code for response in send_concurrently(calls)]
 
         assert narrow_codes == [status.HTTP_403_FORBIDDEN] * 5
         assert _exists(session, broad["id"])
         assert _exists(session, bulk_broad["id"])
 
-        with ThreadPoolExecutor(max_workers=3) as pool:
-            session_future = pool.submit(_delete, session)
-            late_narrow = [pool.submit(_delete, {"X-Api-Key": narrow["api_key"]}) for _ in range(2)]
-            session_code = session_future.result()
-            late_codes = [future.result() for future in late_narrow]
+        calls = [("DELETE", url, {"headers": session})] + [("DELETE", url, {"headers": narrow_headers})] * 2
+        session_code, *late_codes = [response.status_code for response in send_concurrently(calls)]
 
         assert session_code == status.HTTP_204_NO_CONTENT
         assert all(code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND) for code in late_codes)

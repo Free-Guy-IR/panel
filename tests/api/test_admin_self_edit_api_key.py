@@ -1,5 +1,4 @@
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import status
 from sqlalchemy import select
@@ -7,6 +6,7 @@ from sqlalchemy import select
 from app.db.models import Admin
 from app.models.admin import hash_password
 from tests.api import TestSession, client
+from tests.api.concurrent_requests import send_concurrently
 from tests.api.helpers import auth_headers, strong_password, unique_name
 
 ADMIN_EDITOR = {"admins": {"read": True, "update": True}}
@@ -172,16 +172,10 @@ def test_concurrent_api_key_password_changes_never_land_beside_a_session_change(
         session_password = strong_password("SessionRace")
         key_passwords = [strong_password(f"KeyRace{i}") for i in range(4)]
 
-        def _put(headers: dict[str, str], password: str) -> int:
-            return client.put(
-                f"/api/admin/by-id/{owner['id']}", headers=headers, json={"password": password}
-            ).status_code
-
-        with ThreadPoolExecutor(max_workers=5) as pool:
-            key_futures = [pool.submit(_put, key_headers, password) for password in key_passwords]
-            session_future = pool.submit(_put, session, session_password)
-            key_codes = [future.result() for future in key_futures]
-            session_code = session_future.result()
+        url = f"/api/admin/by-id/{owner['id']}"
+        calls = [("PUT", url, {"headers": key_headers, "json": {"password": password}}) for password in key_passwords]
+        calls.append(("PUT", url, {"headers": session, "json": {"password": session_password}}))
+        *key_codes, session_code = [response.status_code for response in send_concurrently(calls)]
 
         assert key_codes == [status.HTTP_403_FORBIDDEN] * len(key_passwords)
         assert session_code == status.HTTP_200_OK

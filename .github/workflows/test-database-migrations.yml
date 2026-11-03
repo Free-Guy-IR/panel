@@ -16,6 +16,7 @@ on:
 jobs:
     test-sqlite:
         runs-on: ubuntu-latest
+        timeout-minutes: 60
         steps:
             - uses: actions/checkout@v7
             - uses: actions/setup-python@v7
@@ -42,6 +43,7 @@ jobs:
 
     test-postgres:
         runs-on: ubuntu-latest
+        timeout-minutes: 60
         services:
             postgres:
                 image: postgres:latest
@@ -81,6 +83,7 @@ jobs:
 
     test-timescaledb:
         runs-on: ubuntu-latest
+        timeout-minutes: 60
         services:
             timescaledb:
                 image: timescale/timescaledb:latest-pg17
@@ -160,6 +163,7 @@ jobs:
 
     test-mysql:
         runs-on: ubuntu-latest
+        timeout-minutes: 60
         services:
             mysql:
                 image: mysql:latest
@@ -199,6 +203,7 @@ jobs:
 
     test-mariadb:
         runs-on: ubuntu-latest
+        timeout-minutes: 60
         services:
             mariadb:
                 image: mariadb:10.6

@@ -1,5 +1,4 @@
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import status
 from sqlalchemy import select
@@ -7,6 +6,7 @@ from sqlalchemy import select
 from app.db.models import Admin
 from app.models.admin import hash_password
 from tests.api import TestSession, client
+from tests.api.concurrent_requests import send_concurrently
 from tests.api.helpers import auth_headers, strong_password, unique_name
 
 KEY_EDITOR = {"api_keys": {"read": True, "update": True}}
@@ -156,17 +156,14 @@ def test_concurrent_sibling_updates_by_a_narrow_key_all_fail_while_the_session_s
         broad = _create_key(session, BROAD)
         session_name = unique_name("session_wins")
 
-        def _patch(headers: dict[str, str], body: dict) -> int:
-            return client.patch(f"/api/api_key/{broad['id']}", headers=headers, json=body).status_code
-
+        url = f"/api/api_key/{broad['id']}"
         narrow_names = [unique_name(f"race{i}") for i in range(4)]
-        with ThreadPoolExecutor(max_workers=5) as pool:
-            narrow_futures = [
-                pool.submit(_patch, {"X-Api-Key": narrow["api_key"]}, {"name": name}) for name in narrow_names
-            ]
-            session_future = pool.submit(_patch, session, {"name": session_name})
-            narrow_codes = [future.result() for future in narrow_futures]
-            session_code = session_future.result()
+        calls = [
+            ("PATCH", url, {"headers": {"X-Api-Key": narrow["api_key"]}, "json": {"name": name}})
+            for name in narrow_names
+        ]
+        calls.append(("PATCH", url, {"headers": session, "json": {"name": session_name}}))
+        *narrow_codes, session_code = [response.status_code for response in send_concurrently(calls)]
 
         assert narrow_codes == [status.HTTP_403_FORBIDDEN] * 4
         assert session_code == status.HTTP_200_OK
