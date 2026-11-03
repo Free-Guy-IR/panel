@@ -11,6 +11,10 @@ def is_plain_field(field: str, conversion: str | None) -> bool:
     return bool(field) and not field.isdigit() and "." not in field and "[" not in field and conversion in _CONVERT
 
 
+def is_character_spec(spec: str) -> bool:
+    return spec.endswith("c")
+
+
 def is_unparseable(value: str) -> bool:
     try:
         for _ in Formatter().parse(value):
@@ -30,6 +34,8 @@ def check_template_value(value: str) -> str:
     fields = [(field, spec, conversion) for _, field, spec, conversion in Formatter().parse(value) if field is not None]
     if not all(is_plain_field(field, conversion) for field, _, conversion in fields):
         raise ValueError("Invalid formatting variables: use plain variable names such as {USERNAME}")
+    if any(is_character_spec(spec) for _, spec, _ in fields):
+        raise ValueError("Invalid formatting variables")
     for _, spec, conversion in fields:
         for sample in ("",) if conversion else ("", 0, 0.0):
             try:
@@ -53,7 +59,7 @@ def format_bounded(template: str, variables) -> str:
         length += len(literal)
         if field is None:
             continue
-        if not is_plain_field(field, conversion):
+        if not is_plain_field(field, conversion) or is_character_spec(spec):
             return template
         piece = format(_CONVERT[conversion](variables[field]), spec)
         length += len(piece)

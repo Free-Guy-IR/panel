@@ -206,7 +206,7 @@ def _format_dynamic_value(value, format_variables: dict):
             return value
         try:
             return format_bounded(value, format_variables)
-        except ValueError, KeyError, AttributeError, IndexError, TypeError:
+        except ValueError, KeyError, AttributeError, IndexError, TypeError, OverflowError:
             # A value the variables cannot fill (stray brace, {0}, {X.y}) is kept as it is
             return value
     if isinstance(value, list):
