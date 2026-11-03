@@ -2,12 +2,13 @@ from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 
 from sqlalchemy import case, inspect, literal, select, update
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.sql import Select
 
 from app.db.models import NextPlan, User, UserStatus
-from app.fork.proxy_secrets.locks import MYSQL_FAMILY
+from app.fork.proxy_secrets.locks import MYSQL_FAMILY, mark_nowait_refusal
 
 USER_STATE_KEYS = (
     "status",
@@ -54,11 +55,17 @@ async def refresh_user_state_for_update(db: AsyncSession, db_user: User, keys: S
     return True
 
 
-async def lock_user_rows(db: AsyncSession, user_ids: Iterable[int]) -> None:
+async def lock_user_rows(db: AsyncSession, user_ids: Iterable[int], *, nowait: bool = False) -> None:
     ordered_ids = sorted({int(user_id) for user_id in user_ids if user_id is not None})
     for start in range(0, len(ordered_ids), USER_LOCK_BATCH_SIZE):
         chunk = ordered_ids[start : start + USER_LOCK_BATCH_SIZE]
-        await db.execute(on_primary_key(select(User.id)).where(User.id.in_(chunk)).order_by(User.id).with_for_update())
+        statement = on_primary_key(select(User.id)).where(User.id.in_(chunk)).order_by(User.id)
+        try:
+            await db.execute(statement.with_for_update(nowait=nowait))
+        except DBAPIError as exc:
+            if nowait:
+                mark_nowait_refusal(exc)
+            raise
 
 
 async def refresh_users_state_for_update(

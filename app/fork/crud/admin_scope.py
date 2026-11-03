@@ -35,10 +35,10 @@ async def lock_admin_users(db: AsyncSession, admin_id: int, allowed_group_ids: l
     return sorted(locked)
 
 
-async def _detach_committed_owners(db: AsyncSession, admin_ids: list[int]) -> None:
+async def _detach_committed_owners(db: AsyncSession, admin_ids: list[int], *, nowait: bool = False) -> None:
     owned = select(User.id).where(User.admin_id.in_(admin_ids))
     candidates = [user_id for (user_id,) in await read_committed_rows(db, owned)]
-    await lock_user_rows(db, candidates)
+    await lock_user_rows(db, candidates, nowait=nowait)
     for statement in locked_targets(update(User).where(User.admin_id.in_(admin_ids)), candidates):
         await db.execute(statement.values(admin_id=None))
 
@@ -46,7 +46,7 @@ async def _detach_committed_owners(db: AsyncSession, admin_ids: list[int]) -> No
 async def detach_admin_users(db: AsyncSession, admin_ids: list[int]) -> None:
     await _detach_committed_owners(db, admin_ids)
     await db.execute(select(Admin.id).where(Admin.id.in_(admin_ids)).order_by(Admin.id).with_for_update())
-    await _detach_committed_owners(db, admin_ids)
+    await _detach_committed_owners(db, admin_ids, nowait=True)
 
 
 async def count_visible_admin_users(db: AsyncSession, admin_id: int, allowed_group_ids: list[int]) -> int:

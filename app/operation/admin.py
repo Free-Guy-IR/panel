@@ -32,6 +32,7 @@ from app.fork.operation.admin_scope import (
 )
 from app.fork.operation.admin_self_edit import self_edit_refusal, self_enable_refusal, self_reset_refusal
 from app.fork.operation.admin_transition import admin_transition_lock, status_blocks_user_sync
+from app.fork.operation.row_lock_retry import ADMIN_REMOVAL_LOCK_UNAVAILABLE_DETAIL, retry_on_row_lock_conflict
 from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import (
     AdminCreate,
@@ -215,6 +216,14 @@ class AdminOperation(BaseOperation):
             asyncio.create_task(notification.remove_admin(db_admin.username, current_admin.username))
 
     async def remove_admin_by_id(self, db: AsyncSession, admin_id: int, current_admin: AdminDetails | None = None):
+        return await retry_on_row_lock_conflict(
+            self,
+            db,
+            lambda: self._remove_admin_by_id_once(db, admin_id, current_admin),
+            ADMIN_REMOVAL_LOCK_UNAVAILABLE_DETAIL,
+        )
+
+    async def _remove_admin_by_id_once(self, db: AsyncSession, admin_id: int, current_admin: AdminDetails | None):
         db_admin = await self.get_validated_admin_by_id(db, admin_id)
         if current_admin is not None:
             await self._ensure_owner_target_access(db_admin, current_admin)
@@ -478,6 +487,16 @@ class AdminOperation(BaseOperation):
         self, db: AsyncSession, bulk_admins: BulkAdminSelection, admin: AdminDetails
     ) -> RemoveAdminsResponse:
         """Remove multiple admins by ID."""
+        return await retry_on_row_lock_conflict(
+            self,
+            db,
+            lambda: self._bulk_remove_admins_once(db, bulk_admins, admin),
+            ADMIN_REMOVAL_LOCK_UNAVAILABLE_DETAIL,
+        )
+
+    async def _bulk_remove_admins_once(
+        self, db: AsyncSession, bulk_admins: BulkAdminSelection, admin: AdminDetails
+    ) -> RemoveAdminsResponse:
         db_admins = await self._get_validated_bulk_admins(db, bulk_admins.ids, admin)
         if any(self._is_owner_admin(db_admin) for db_admin in db_admins):
             await self.raise_error(message="Owner cannot be deleted via this endpoint. Use the setup flow.", code=403)

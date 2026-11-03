@@ -6,6 +6,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.db.crud import bulk as bulk_crud
 from app.db.models import User
+from app.fork.operation import row_lock_retry
 from app.fork.proxy_secrets import locks
 from app.operation import user as user_operation
 from tests.api import client
@@ -58,9 +59,9 @@ def _force_conflicts(
 
     monkeypatch.setattr(user_operation, "update_users_datalimit", conflicting_update)
     monkeypatch.setattr(
-        user_operation, "is_row_lock_conflict", lambda exc, _dialect: locks.is_row_lock_conflict(exc, dialect)
+        row_lock_retry, "is_row_lock_conflict", lambda exc, _dialect: locks.is_row_lock_conflict(exc, dialect)
     )
-    monkeypatch.setattr(user_operation.random, "uniform", lambda low, high: 0)
+    monkeypatch.setattr(row_lock_retry.random, "uniform", lambda low, high: 0)
     return calls
 
 
@@ -77,9 +78,9 @@ def _conflict_after_commit(monkeypatch: pytest.MonkeyPatch, code: int) -> list[i
 
     monkeypatch.setattr(user_operation, "update_users_datalimit", update_then_conflict)
     monkeypatch.setattr(
-        user_operation, "is_row_lock_conflict", lambda exc, _dialect: locks.is_row_lock_conflict(exc, MYSQL_DIALECT)
+        row_lock_retry, "is_row_lock_conflict", lambda exc, _dialect: locks.is_row_lock_conflict(exc, MYSQL_DIALECT)
     )
-    monkeypatch.setattr(user_operation.random, "uniform", lambda low, high: 0)
+    monkeypatch.setattr(row_lock_retry.random, "uniform", lambda low, high: 0)
     return calls
 
 
