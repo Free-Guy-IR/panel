@@ -2,6 +2,7 @@ import re
 
 _TOKEN_WITH_AT = re.compile(r"(?<!\S)[^\s@]*@\S*")
 _BARE_USER_PREFIX = re.compile(r"(?:^|(?<=['\"(\[<=,;]))[^\s:/@'\"=,;()\[\]<>]+:(?!//)")
+_TELEGRAM_BOT_TOKEN = re.compile(r"(?<=/bot)\d+:[A-Za-z0-9_-]+")
 _SCHEME_SEPARATOR = "://"
 _MASK = "***@"
 
@@ -21,7 +22,7 @@ def _scrub_token(match: re.Match) -> str:
 
 
 def scrub_credentials(text: object) -> str:
-    return _TOKEN_WITH_AT.sub(_scrub_token, str(text))
+    return _TELEGRAM_BOT_TOKEN.sub("***", _TOKEN_WITH_AT.sub(_scrub_token, str(text)))
 
 
 def scrub_and_truncate(text: object, limit: int, suffix: str = "") -> str:

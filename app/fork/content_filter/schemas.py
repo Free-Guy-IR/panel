@@ -4,6 +4,7 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.fork.content_filter.catalog import normalise
+from app.fork.operation.node_messages import scrub_credentials
 
 MAX_LIST_ENTRIES = 512
 DOMAIN_MAX = 253
@@ -227,6 +228,11 @@ class AssignmentResponse(BaseModel):
     reaches_nodes: list[int]
     advisories: list[str] = Field(default_factory=list)
     advisory_note: str = ""
+
+    @field_validator("last_error")
+    @classmethod
+    def stored_error_hides_credentials(cls, value: str | None) -> str | None:
+        return None if value is None else scrub_credentials(value)
 
 
 class TargetInbound(BaseModel):

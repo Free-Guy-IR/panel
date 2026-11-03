@@ -7,6 +7,7 @@ from cryptography.x509 import load_pem_x509_certificate
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from app.db.models import DataLimitResetStrategy, NodeConnectionType, NodeStatus
+from app.fork.operation.node_messages import scrub_credentials
 from app.models.stats import Period
 
 from .validators import ListValidator, OptionalAwareDatetime, ProxyValidator
@@ -219,6 +220,11 @@ class NodeResponse(Node):
     lifetime_downlink: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("message")
+    @classmethod
+    def stored_message_hides_credentials(cls, value: str | None) -> str | None:
+        return None if value is None else scrub_credentials(value)
 
     @computed_field
     @property
