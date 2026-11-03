@@ -279,3 +279,55 @@ async def test_a_dying_connection_loses_and_replays_no_revision(jetstream, monke
             await nc.close()
         await proxy.close()
         await jetstream.js.delete_key_value(bucket)
+
+
+def drop_once_as_slow_consumer(subscription, revision):
+    queue = subscription._sub._pending_queue
+    put_nowait = queue.put_nowait
+    dropped = asyncio.Event()
+
+    def put_or_drop(msg):
+        if not dropped.is_set() and msg.metadata.sequence.stream == revision:
+            dropped.set()
+            raise asyncio.QueueFull
+        put_nowait(msg)
+
+    queue.put_nowait = put_or_drop
+    return dropped
+
+
+@pytest.mark.parametrize("writers", ["sequential", "concurrent"])
+async def test_a_slow_consumer_drop_loses_no_revision(jetstream, writers):  # noqa: F811
+    bucket = "watch_" + uuid4().hex
+    writer = await jetstream.js.create_key_value(bucket=bucket, history=64)
+    await writer.put("p.1.seed", b"seed")
+    nc = await nats.connect(jetstream.url)
+    nc._error_cb = lambda error: asyncio.sleep(0)
+    watermark = await last_revision(jetstream.js, bucket)
+    reader = Reader(await watch_kv(await nc.jetstream().key_value(bucket), ">"))
+    try:
+        async with asyncio.timeout(10):
+            await reader.ready.wait()
+        dropped = drop_once_as_slow_consumer(reader.watcher._live, watermark + 3)
+
+        async def stream(numbers):
+            for number in numbers:
+                await writer.put(f"p.1.key{number % 5}", str(number).encode())
+
+        if writers == "sequential":
+            await stream(range(10))
+        else:
+            await asyncio.gather(*(stream(range(start, 30, 3)) for start in (0, 1, 2)))
+        async with asyncio.timeout(10):
+            await dropped.wait()
+        final = await last_revision(jetstream.js, bucket)
+        await reader.reached(final)
+        sentinel = await writer.put("p.1.sentinel", b"after")
+        await reader.reached(sentinel)
+        assert reader.revisions == [*range(watermark + 1, final + 1), sentinel]
+        assert len(nc._subs) <= 2
+    finally:
+        await reader.close()
+        with contextlib.suppress(Exception):
+            await nc.close()
+        await jetstream.js.delete_key_value(bucket)
