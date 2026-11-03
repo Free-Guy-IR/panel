@@ -1585,7 +1585,11 @@ async def test_billed_user_drops_out_of_limiter_window(session_factory):
         await session.execute(
             update(User)
             .where(User.id == uid)
-            .values(online_at=datetime.now(UTC) - timedelta(seconds=58), status=UserStatus.active)
+            .values(
+                created_at=datetime.now(UTC) - timedelta(days=1),
+                online_at=datetime.now(UTC) - timedelta(seconds=58),
+                status=UserStatus.active,
+            )
         )
         await session.commit()
     epochs = await _read_usage_epochs(session_factory, user_ids)
