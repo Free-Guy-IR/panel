@@ -1,7 +1,7 @@
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import User
+from app.db.models import Admin, User
 from app.fork.crud.group_scope import user_in_allowed_groups
 from app.fork.crud.user_locks import USER_LOCK_BATCH_SIZE, lock_user_rows, on_primary_key
 from app.fork.proxy_secrets.locks import read_committed_rows
@@ -35,12 +35,18 @@ async def lock_admin_users(db: AsyncSession, admin_id: int, allowed_group_ids: l
     return sorted(locked)
 
 
-async def detach_admin_users(db: AsyncSession, admin_ids: list[int]) -> None:
+async def _detach_committed_owners(db: AsyncSession, admin_ids: list[int]) -> None:
     owned = select(User.id).where(User.admin_id.in_(admin_ids))
     candidates = [user_id for (user_id,) in await read_committed_rows(db, owned)]
     await lock_user_rows(db, candidates)
     for statement in locked_targets(update(User).where(User.admin_id.in_(admin_ids)), candidates):
         await db.execute(statement.values(admin_id=None))
+
+
+async def detach_admin_users(db: AsyncSession, admin_ids: list[int]) -> None:
+    await _detach_committed_owners(db, admin_ids)
+    await db.execute(select(Admin.id).where(Admin.id.in_(admin_ids)).order_by(Admin.id).with_for_update())
+    await _detach_committed_owners(db, admin_ids)
 
 
 async def count_visible_admin_users(db: AsyncSession, admin_id: int, allowed_group_ids: list[int]) -> int:
