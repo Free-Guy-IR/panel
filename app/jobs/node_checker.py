@@ -11,6 +11,7 @@ from app.db.models import Node, NodeStatus
 from app.fork.jobs import after_healthy_node_check
 from app.fork.node_health import hold_for_usage_collection
 from app.fork.operation.node_extras import resync_while_a_start_may_land
+from app.fork.operation.node_messages import scrub_credentials
 from app.fork.operation.node_snapshots import drain_node_usage, flush_drained_usage
 from app.models.node import NodeListQuery, NodeNotification
 from app.nats import is_multi_worker, needs_shared_bridge_memory
@@ -374,7 +375,7 @@ async def _interval_loop(coro, seconds: float, name: str):
         try:
             await coro()
         except Exception as exc:
-            logger.error("Node loop %s failed: %s", name, exc)
+            logger.error("Node loop %s failed: %s", name, scrub_credentials(exc))
         await asyncio.sleep(seconds)
 
 
