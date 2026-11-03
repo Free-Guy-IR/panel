@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select, update
 
 from app.db.models import Admin, AdminStatus
-from app.models.admin import BulkAdminSelection, hash_password
+from app.models.admin import AdminModify, BulkAdminSelection, hash_password
 from app.operation import OperatorType
 from app.operation.admin import AdminOperation
 from app.routers.authentication import get_admin
@@ -186,6 +186,20 @@ def test_an_admin_limited_after_authenticating_cannot_bulk_enable_itself(manager
     assert refusal.detail == SELF_ENABLE_REFUSAL
     assert _state(me["id"]) == (20 * GIB, AdminStatus.limited)
     assert _state(other["id"]) == (0, AdminStatus.disabled)
+
+
+def test_an_admin_limited_after_authenticating_cannot_edit_itself_back_to_active(managers):
+    me = managers["me"]
+
+    async def _edit(operation, db, caller):
+        await operation.modify_admin_by_id(db, me["id"], AdminModify(status="active"), caller)
+
+    act = _refusal_with_stale_session(managers["token"], _edit)
+    _limit(me["id"])
+    refusal = asyncio.run(act())
+
+    assert refusal is not None and refusal.status_code == status.HTTP_403_FORBIDDEN, refusal
+    assert _state(me["id"]) == (20 * GIB, AdminStatus.limited)
 
 
 @pytest.mark.parametrize("bulk", [False, True])
