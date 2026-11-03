@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import Column, event, select, update
+from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import visitors
 from sqlalchemy.sql.util import find_tables
@@ -157,6 +158,34 @@ async def test_an_admin_wide_change_locks_and_updates_its_users_by_primary_key_o
     assert all("id" in columns and ("admin_id" in columns) == owner_checked for columns in writes), user_targets
     after = UserStatus.active if action == "activate_all" else UserStatus.disabled
     assert await _final(recorder_db, user_ids) == [(after, 0)] * USERS
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("action", list(ADMIN_WIDE))
+async def test_an_admin_wide_change_makes_the_mysql_family_reach_only_its_locked_users_through_the_primary_key(
+    recorder_db, action
+):
+    before = UserStatus.disabled if action == "activate_all" else UserStatus.active
+    admin_id, _user_ids = await _seed(recorder_db, before)
+    writes = []
+
+    def on_orm(state):
+        if state.is_update and state.statement.table.name == "users":
+            writes.append(state.statement)
+
+    event.listen(Session, "do_orm_execute", on_orm)
+    try:
+        await _admin_wide(recorder_db, admin_id, action)
+    finally:
+        event.remove(Session, "do_orm_execute", on_orm)
+
+    assert writes
+    for statement in writes:
+        for dialect in (mysql.dialect(), mysql.dialect(is_mariadb=True)):
+            assert str(statement.compile(dialect=dialect)).startswith("UPDATE users FORCE INDEX (PRIMARY) SET "), (
+                "an admin-wide UPDATE may scan past the users it locked and wait on a mover that waits on the admin row",
+                str(statement.compile(dialect=dialect)),
+            )
 
 
 def _hold_once(monkeypatch, module, name: str, started: list[asyncio.Task], start) -> None:

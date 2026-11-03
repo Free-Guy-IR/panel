@@ -4,7 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import User
 from app.fork.crud.group_scope import user_in_allowed_groups
 from app.fork.crud.user_locks import USER_LOCK_BATCH_SIZE, lock_user_rows
-from app.fork.proxy_secrets.locks import read_committed_rows
+from app.fork.proxy_secrets.locks import MYSQL_FAMILY, read_committed_rows
+
+PRIMARY_KEY_HINT = "FORCE INDEX (PRIMARY)"
 
 
 def _admin_users(admin_id: int, allowed_group_ids: list[int] | None):
@@ -19,10 +21,16 @@ def id_batches(user_ids: list[int]) -> list[list[int]]:
     return [ordered[start : start + USER_LOCK_BATCH_SIZE] for start in range(0, len(ordered), USER_LOCK_BATCH_SIZE)]
 
 
+def on_primary_key(statement):
+    for dialect_name in MYSQL_FAMILY:
+        statement = statement.with_hint(PRIMARY_KEY_HINT, dialect_name=dialect_name)
+    return statement
+
+
 def locked_targets(statement, user_ids: list[int] | None) -> list:
     if user_ids is None:
         return [statement]
-    return [statement.where(User.id.in_(batch)) for batch in id_batches(user_ids)]
+    return [on_primary_key(statement).where(User.id.in_(batch)) for batch in id_batches(user_ids)]
 
 
 async def lock_admin_users(db: AsyncSession, admin_id: int, allowed_group_ids: list[int] | None) -> list[int]:
