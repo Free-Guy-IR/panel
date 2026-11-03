@@ -3,8 +3,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import sqlalchemy as sa
+import sqlalchemy.ext.asyncio
+from alembic import command
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.sql.dml import Update
+
+from app.fork.db_rollback import default_config
 
 VERSIONS = Path(__file__).resolve().parents[1] / "app" / "db" / "migrations" / "versions"
 MARIADB = create_async_engine("mariadb+asyncmy://user:secret@localhost/panel").dialect.name
@@ -98,3 +103,25 @@ def test_mariadb_issues_exactly_what_mysql_issues(monkeypatch, filename, stored,
         issued[dialect_name] = (bind.statements, bind.written)
     assert issued[MARIADB] == issued[MYSQL]
     assert issued[MARIADB][1]
+
+
+class _EngineCaptured(Exception):
+    pass
+
+
+def test_migrations_run_a_mariadb_url_under_a_dialect_the_upstream_masque_revision_supports(monkeypatch):
+    dialects = []
+
+    def capture(section, prefix, **kwargs):
+        dialects.append(create_async_engine(section[f"{prefix}url"]).dialect.name)
+        raise _EngineCaptured
+
+    monkeypatch.setattr(sqlalchemy.ext.asyncio, "async_engine_from_config", capture)
+    with pytest.raises(_EngineCaptured):
+        command.upgrade(default_config("mariadb+asyncmy://user:secret@localhost/panel"), "head")
+
+    users = sa.table("users", sa.column("id", sa.Integer), sa.column("proxy_settings", sa.JSON))
+    masque = _load("c8d2e4f6a1b3_add_masque_settings_to_proxy_settings.py")
+    for dialect in dialects:
+        masque._masque_password(users, dialect)
+    assert dialects == [MYSQL]

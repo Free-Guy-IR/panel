@@ -12,7 +12,7 @@ from alembic import context
 from app.db.base import Base
 import app.db.models
 from app.db.compiles_types import SqliteCompatibleBigInteger, WebAuthnBinary, WebAuthnChallenge, WebAuthnCredentialId
-from app.fork.migration_guards import SqliteIdHighWater
+from app.fork.migration_guards import SqliteIdHighWater, migration_url
 from config import database_settings
 
 # this is the Alembic Config object, which provides
@@ -146,8 +146,10 @@ async def run_async_migrations() -> None:
 
     """
 
+    section = config.get_section(config.config_ini_section, {})
+    section["sqlalchemy.url"] = migration_url(section["sqlalchemy.url"])
     connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        section,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )

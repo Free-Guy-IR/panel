@@ -1,8 +1,15 @@
 from alembic.operations import Operations
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, make_url
 
 ID_GUARDED_TABLES = ("users", "nodes")
 AUTOINCREMENT_OWNER = "fd192e9628a5"
+
+
+def migration_url(url: str) -> str:
+    parsed = make_url(url)
+    if parsed.get_backend_name() != "mariadb":
+        return url
+    return parsed.set(drivername="mysql" + parsed.drivername[len("mariadb") :]).render_as_string(hide_password=False)
 
 
 def _sqlite_definition(connection: Connection, name: str) -> str | None:
