@@ -1,3 +1,4 @@
+from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
 from typing import Any
@@ -244,6 +245,24 @@ class FeatureSettings(EnvSettings):
     stop_nodes_on_shutdown: bool = Field(default=True, validation_alias="STOP_NODES_ON_SHUTDOWN")
 
 
+class SubmittedSecretCollision(StrEnum):
+    replace = "replace"
+    refuse = "refuse"
+
+
+class ProxySecretSettings(EnvSettings):
+    submitted_collision: SubmittedSecretCollision = Field(
+        default=SubmittedSecretCollision.replace, validation_alias="PROXY_SECRET_SUBMITTED_COLLISION"
+    )
+
+    @field_validator("submitted_collision", mode="before")
+    @classmethod
+    def normalize_submitted_collision(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            value = value.strip().lower()
+        return value
+
+
 class SecuritySettings(EnvSettings):
     allowed_certificate_dirs: str = Field(
         default="/var/lib/pasarguard/certs", validation_alias="ALLOWED_CERTIFICATE_DIRS"
@@ -274,6 +293,7 @@ usage_settings = UsageSettings()
 job_settings = JobSettings()
 feature_settings = FeatureSettings()
 security_settings = SecuritySettings()
+proxy_secret_settings = ProxySecretSettings()
 
 if database_settings.is_sqlite:
     usage_settings.enable_recording_nodes_stats = False

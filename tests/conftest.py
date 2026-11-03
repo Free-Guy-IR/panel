@@ -42,3 +42,17 @@ def loop_bound_node_state_per_test_loop(monkeypatch):
         for name in ("_nc", "_user_sync_kv", "_lifecycle_kv", "_user_sync_store", "_lifecycle_coordinator"):
             monkeypatch.setattr(bridge_memory, name, None)
         monkeypatch.setattr(bridge_memory, "_init_lock", asyncio.Lock())
+
+
+@pytest.fixture
+def refuse_submitted_collisions(monkeypatch):
+    from config import SubmittedSecretCollision, proxy_secret_settings
+
+    monkeypatch.setattr(proxy_secret_settings, "submitted_collision", SubmittedSecretCollision.refuse)
+
+
+@pytest.fixture
+def replace_submitted_collisions(monkeypatch):
+    from config import SubmittedSecretCollision, proxy_secret_settings
+
+    monkeypatch.setattr(proxy_secret_settings, "submitted_collision", SubmittedSecretCollision.replace)

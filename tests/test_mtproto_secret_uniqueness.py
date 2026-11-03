@@ -122,7 +122,9 @@ async def test_a_supplied_mtproto_secret_held_by_another_user_is_replaced_on_cre
 
 
 @pytest.mark.asyncio
-async def test_a_supplied_mtproto_secret_held_by_another_user_is_refused_on_modify(engine, db, warnings_seen):
+async def test_a_supplied_mtproto_secret_held_by_another_user_is_refused_on_modify(
+    engine, db, warnings_seen, refuse_submitted_collisions
+):
     seed = await _seed(db)
     db_user = await get_user_by_id(db, seed.ids["other"], load_admin_role=True)
     modified = UserModify(proxy_settings={"mtproto": {"secret": HELD}})
@@ -134,6 +136,25 @@ async def test_a_supplied_mtproto_secret_held_by_another_user_is_refused_on_modi
     assert await _stored_secret(engine, "other") == "fedcba9876543210fedcba9876543210"
     assert await _stored_secret(engine, "holder") == HELD
     assert _collision_warnings(warnings_seen)
+
+
+@pytest.mark.asyncio
+async def test_a_supplied_mtproto_secret_held_by_another_user_is_replaced_on_modify(
+    engine, db, warnings_seen, replace_submitted_collisions
+):
+    seed = await _seed(db)
+    db_user = await get_user_by_id(db, seed.ids["other"], load_admin_role=True)
+    modified = UserModify(proxy_settings={"mtproto": {"secret": HELD}})
+
+    await _operation()._prepare_modified_user(db, db_user, modified, OWNER, skip_role_limits=True)
+
+    assert modified.proxy_settings.mtproto.secret != HELD
+    assert HEX32.fullmatch(modified.proxy_settings.mtproto.secret)
+    assert await _stored_secret(engine, "holder") == HELD
+    assert any(
+        "submitted for this user is already stored by 1 other user(s)" in line
+        for line in _collision_warnings(warnings_seen)
+    )
 
 
 @pytest.mark.asyncio

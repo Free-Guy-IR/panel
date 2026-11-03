@@ -1,5 +1,6 @@
 import asyncio
 import os
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -15,7 +16,7 @@ from app.fork.models.proxy_secret_claim import ProxySecretClaim
 from app.fork.proxy_secrets import ProxySecretClaimConflict, supplied_secret_fields
 from app.fork.proxy_secrets.locks import PROXY_SECRETS_LOCK, is_deadlock, named_lock_seed_statement
 from app.models.proxy import ProxyTable
-from app.models.user import UserCreate
+from app.models.user import UserCreate, UserModify
 from app.operation import OperatorType
 from app.operation.user import UserOperation
 from config import database_settings
@@ -129,7 +130,7 @@ def _refusals(outcomes):
 
 
 @pytest.mark.asyncio
-async def test_two_concurrent_creates_submitting_one_auth_store_it_once(sessions):
+async def test_two_concurrent_creates_submitting_one_auth_store_it_once(sessions, refuse_submitted_collisions):
     admin_id = await _admin(sessions)
     auth = f"race-{uuid4().hex}"
 
@@ -142,7 +143,9 @@ async def test_two_concurrent_creates_submitting_one_auth_store_it_once(sessions
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("order", ["rotation-first", "submission-first", "together"])
-async def test_a_rotation_racing_a_submission_of_the_old_auth_never_hands_it_on(sessions, order):
+async def test_a_rotation_racing_a_submission_of_the_old_auth_never_hands_it_on(
+    sessions, refuse_submitted_collisions, order
+):
     admin_id = await _admin(sessions)
     auth = f"old-{uuid4().hex}"
     holder_id = await _holder(sessions, admin_id, auth)
@@ -213,7 +216,10 @@ async def test_a_stale_whole_document_write_cannot_bring_back_a_rotated_auth(ses
 
         await _revoke(sessions, user_id)
 
-        stale_user.proxy_settings = {**stale_copy, "shadowsocks": {**stale_copy["shadowsocks"], "method": "aes-128-gcm"}}
+        stale_user.proxy_settings = {
+            **stale_copy,
+            "shadowsocks": {**stale_copy["shadowsocks"], "method": "aes-128-gcm"},
+        }
         with pytest.raises(ProxySecretClaimConflict):
             await stale.commit()
 
@@ -268,3 +274,151 @@ async def test_the_duplicate_repair_works_from_the_rows_it_locked(sessions):
 async def _stored(sessions, user_id):
     async with sessions() as db:
         return await db.scalar(select(User.proxy_settings).where(User.id == user_id))
+
+
+OWNER = SimpleNamespace(username="owner", is_owner=True, role=None, id=None)
+
+
+@pytest.fixture
+def replace_submitted(monkeypatch, replace_submitted_collisions):
+    from app import notification
+
+    async def nothing(*args, **kwargs):
+        return None
+
+    for name in ("modify_user", "user_status_change", "user_subscription_revoked"):
+        if hasattr(notification, name):
+            monkeypatch.setattr(notification, name, nothing)
+
+
+def _quiet_operation():
+    operation = _operation()
+
+    async def no_push(db_user, include_subscription_url=True):
+        return SimpleNamespace(username=db_user.username, status=db_user.status)
+
+    operation.update_user = no_push
+    operation.validate_user = no_push
+    return operation
+
+
+async def _modify(sessions, user_id, proxy_settings):
+    async with sessions() as db:
+        db_user = await get_user_by_id(db, user_id, load_admin_role=True)
+        await _quiet_operation()._modify_user(
+            db, db_user, UserModify(proxy_settings=proxy_settings), OWNER, skip_role_limits=True
+        )
+
+
+async def _create_with(sessions, admin_id, proxy_settings):
+    async with sessions() as db:
+        db_admin = await db.get(Admin, admin_id)
+        new_user = UserCreate(username=f"{PREFIX}{uuid4().hex[:8]}", proxy_settings=proxy_settings)
+        new_user.proxy_settings = await _operation()._prepare_user_proxy_settings(
+            db, [], new_user.proxy_settings, explicit_fields=supplied_secret_fields(new_user.proxy_settings)
+        )
+        created = await create_user(db, new_user, [], db_admin)
+        return created.id
+
+
+async def _all_settings(sessions):
+    async with sessions() as db:
+        rows = (await db.execute(select(User.id, User.proxy_settings).where(User.username.like(f"{PREFIX}%")))).all()
+    return dict(rows)
+
+
+def _assert_no_shared_credential(settings_by_user):
+    for protocol, attribute in (
+        ("hysteria", "auth"),
+        ("hysteria2", "password"),
+        ("tuic", "uuid"),
+        ("tuic", "password"),
+    ):
+        values = [
+            str(value)
+            for settings in settings_by_user.values()
+            if (value := (settings.get(protocol) or {}).get(attribute))
+        ]
+        assert len(values) == len(set(values)), (protocol, attribute, values)
+
+
+def _held_template(auth, hy2, tuic_uuid, tuic_password):
+    return {
+        "hysteria": {"auth": auth},
+        "hysteria2": {"password": hy2},
+        "tuic": {"uuid": tuic_uuid, "password": tuic_password},
+    }
+
+
+@pytest.mark.asyncio
+async def test_concurrent_creates_and_modifies_submitting_held_credentials_never_share_one(sessions, replace_submitted):
+    admin_id = await _admin(sessions)
+    template = _held_template(f"held-{uuid4().hex}", f"hy2-{uuid4().hex}", str(uuid4()), f"tuic-{uuid4().hex}")
+    holder_id = await _create_with(sessions, admin_id, template)
+    edited_ids = [await _holder(sessions, admin_id, f"own-{uuid4().hex}") for _ in range(3)]
+    edited_before = await _all_settings(sessions)
+
+    outcomes = await asyncio.gather(
+        *(_create_with(sessions, admin_id, template) for _ in range(4)),
+        *(_modify(sessions, user_id, {**edited_before[user_id], **template}) for user_id in edited_ids),
+        return_exceptions=True,
+    )
+
+    assert not [outcome for outcome in outcomes if isinstance(outcome, BaseException)], outcomes
+    stored = await _all_settings(sessions)
+    _assert_no_shared_credential(stored)
+    assert stored[holder_id]["hysteria"]["auth"] == template["hysteria"]["auth"]
+    for user_id in edited_ids:
+        assert stored[user_id]["hysteria"]["auth"] != edited_before[user_id]["hysteria"]["auth"]
+        assert stored[user_id]["vless"] == edited_before[user_id]["vless"]
+    assert await _holders_of(sessions, template["hysteria"]["auth"]) == [holder_id]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_creates_submitting_one_unheld_auth_store_it_exactly_once(sessions, replace_submitted):
+    admin_id = await _admin(sessions)
+    auth = f"fresh-{uuid4().hex}"
+
+    outcomes = await asyncio.gather(
+        *(_create_with(sessions, admin_id, {"hysteria": {"auth": auth}}) for _ in range(5)), return_exceptions=True
+    )
+
+    assert not [outcome for outcome in outcomes if isinstance(outcome, BaseException)], outcomes
+    assert len(await _holders_of(sessions, auth)) == 1
+    _assert_no_shared_credential(await _all_settings(sessions))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("order", ["rotation-first", "stale-write-first", "together"])
+async def test_a_stale_edit_racing_a_rotation_never_brings_the_old_credential_back(sessions, replace_submitted, order):
+    admin_id = await _admin(sessions)
+    old_auth = f"old-{uuid4().hex}"
+    user_id = await _holder(sessions, admin_id, old_auth)
+    other_id = await _holder(sessions, admin_id, f"other-{uuid4().hex}")
+    stale_copy = (await _all_settings(sessions))[user_id]
+    other_before = (await _all_settings(sessions))[other_id]
+
+    stale_writes = (
+        _modify(sessions, user_id, stale_copy),
+        _modify(sessions, other_id, {**other_before, "hysteria": {"auth": old_auth}}),
+    )
+    if order == "rotation-first":
+        await _revoke(sessions, user_id)
+        outcomes = await asyncio.gather(*stale_writes, return_exceptions=True)
+    elif order == "stale-write-first":
+        outcomes = await asyncio.gather(*stale_writes, return_exceptions=True)
+        await _revoke(sessions, user_id)
+    else:
+        outcomes = (await asyncio.gather(_revoke(sessions, user_id), *stale_writes, return_exceptions=True))[1:]
+
+    unexpected = [
+        outcome
+        for outcome in outcomes
+        if isinstance(outcome, BaseException)
+        and not (isinstance(outcome, HTTPException) and outcome.status_code == 409)
+    ]
+    assert not unexpected, outcomes
+    stored = await _all_settings(sessions)
+    assert await _holders_of(sessions, old_auth) == []
+    assert stored[user_id]["hysteria"]["auth"] != old_auth
+    _assert_no_shared_credential(stored)

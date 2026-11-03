@@ -141,7 +141,9 @@ async def test_without_a_shared_reservation_the_database_only_check_lets_both_th
 
 
 @pytest.mark.asyncio
-async def test_a_bulk_create_that_submits_one_secret_for_two_users_is_refused_whole(db, monkeypatch):
+async def test_a_bulk_create_that_submits_one_secret_for_two_users_is_refused_whole(
+    db, monkeypatch, refuse_submitted_collisions
+):
     from app.operation import user as user_module
 
     admin = await _admin(db)
@@ -207,7 +209,9 @@ async def test_a_bulk_create_regenerates_generated_secrets_that_collide_inside_t
 
 
 @pytest.mark.asyncio
-async def test_a_bulk_create_refuses_a_submitted_secret_a_stored_user_holds(db, monkeypatch):
+async def test_a_bulk_create_refuses_a_submitted_secret_a_stored_user_holds(
+    db, monkeypatch, refuse_submitted_collisions
+):
     from app.operation import user as user_module
 
     admin = await _admin(db)
@@ -237,3 +241,54 @@ async def test_a_bulk_create_refuses_a_submitted_secret_a_stored_user_holds(db, 
     stored = (await db.execute(select(User.username))).scalars().all()
     assert stored == ["existing"]
     assert "users" not in captured
+
+
+async def _bulk_create_capturing(db, monkeypatch, admin, users):
+    from app.operation import user as user_module
+
+    captured = {}
+
+    async def fake_create_users_bulk(session, users_to_create, groups, db_admin, commit=True):
+        captured["users"] = list(users_to_create)
+        return []
+
+    monkeypatch.setattr(user_module, "create_users_bulk", fake_create_users_bulk)
+    await _operation()._persist_bulk_users(
+        db,
+        SimpleNamespace(is_owner=True),
+        admin,
+        users,
+        [],
+        skip_per_user_limits=True,
+        sync=False,
+    )
+    return [user.proxy_settings.hysteria2.password for user in captured["users"]]
+
+
+@pytest.mark.asyncio
+async def test_a_bulk_create_gives_the_second_user_of_one_submitted_secret_a_fresh_one(
+    db, monkeypatch, replace_submitted_collisions
+):
+    admin = await _admin(db)
+    users = [
+        UserCreate(username="bulk-one", proxy_settings={"hysteria2": {"password": TAKEN}}),
+        UserCreate(username="bulk-two", proxy_settings={"hysteria2": {"password": TAKEN}}),
+    ]
+
+    passwords = await _bulk_create_capturing(db, monkeypatch, admin, users)
+
+    assert passwords[0] == TAKEN
+    assert passwords[1] and passwords[1] != TAKEN
+
+
+@pytest.mark.asyncio
+async def test_a_bulk_create_replaces_a_submitted_secret_a_stored_user_holds(
+    db, monkeypatch, replace_submitted_collisions
+):
+    admin = await _admin(db)
+    await _add_user(db, admin, "existing", {HY2: TAKEN})
+    users = [UserCreate(username="bulk-one", proxy_settings={"hysteria2": {"password": TAKEN}})]
+
+    passwords = await _bulk_create_capturing(db, monkeypatch, admin, users)
+
+    assert passwords[0] and passwords[0] != TAKEN

@@ -23,6 +23,11 @@ from tests.api.sample_data import XRAY_CONFIG
 HYSTERIA_TAGS = [inbound["tag"] for inbound in XRAY_CONFIG["inbounds"] if inbound.get("protocol") == "hysteria"]
 
 
+@pytest.fixture(autouse=True)
+def strict_mode(refuse_submitted_collisions):
+    return refuse_submitted_collisions
+
+
 def _post_user(access_token, username, proxy_settings, group_ids=None):
     body = {
         "username": username,

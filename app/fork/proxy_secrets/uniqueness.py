@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from sqlalchemy import or_, select
 
 from app.db import AsyncSession
@@ -8,6 +10,7 @@ from app.fork.proxy_secrets.fields import SPEC_BY_FIELD, ProxySecretField, Secre
 from app.fork.proxy_secrets.locks import acquire_proxy_secrets_lock, read_committed_rows
 from app.models.proxy import ProxyTable
 from app.utils.logger import get_logger
+from config import SubmittedSecretCollision, proxy_secret_settings
 
 logger = get_logger("proxy-secret-uniqueness")
 
@@ -144,18 +147,52 @@ def supplied_secret_fields(proxy_settings) -> frozenset[ProxySecretField]:
     return frozenset(supplied)
 
 
-async def colliding_secret_fields(
+@dataclass(frozen=True)
+class SecretCollisions:
+    stored: dict[ProxySecretField, int]
+    claimed: frozenset[ProxySecretField]
+    retired_own: frozenset[ProxySecretField]
+    batch: frozenset[ProxySecretField]
+
+    @property
+    def fields(self) -> set[ProxySecretField]:
+        return {*self.stored, *self.claimed, *self.retired_own, *self.batch}
+
+
+async def secret_collisions(
     db: AsyncSession,
     pending: dict[ProxySecretField, str],
     *,
     exclude_user_id: int | None = None,
     reserved: ReservedSecrets | None = None,
-) -> set[ProxySecretField]:
-    from app.fork.proxy_secrets.claims import foreign_claims
+) -> SecretCollisions:
+    from app.fork.proxy_secrets.claims import claim_collisions
 
     stored_holders = await secret_holder_counts(db, pending, exclude_user_id=exclude_user_id)
-    claimed = await foreign_claims(db, pending, user_id=exclude_user_id)
-    return {*stored_holders, *claimed, *reserved_secret_collisions(pending, reserved)}
+    claims = await claim_collisions(db, pending, user_id=exclude_user_id)
+    return SecretCollisions(
+        stored=stored_holders,
+        claimed=claims.foreign,
+        retired_own=claims.retired_own,
+        batch=frozenset(reserved_secret_collisions(pending, reserved)),
+    )
+
+
+def refuses_submitted_collisions() -> bool:
+    return proxy_secret_settings.submitted_collision == SubmittedSecretCollision.refuse
+
+
+def _log_replaced_submission(field: ProxySecretField, collisions: SecretCollisions) -> None:
+    if field in collisions.stored:
+        reason = f"is already stored by {collisions.stored[field]} other user(s)"
+    elif field in collisions.batch:
+        reason = "was already taken by an earlier user in the same request"
+    else:
+        reason = "was held by another user before"
+    logger.warning(
+        f"proxy secret {field.value} submitted for this user {reason}; "
+        "replacing it with a freshly generated unique value"
+    )
 
 
 async def enforce_unique_proxy_secrets(
@@ -174,19 +211,23 @@ async def enforce_unique_proxy_secrets(
         if value:
             pending[spec.field] = value
 
+    submitted_unchecked = frozenset(explicit_fields)
     for regenerations_done in range(MAX_REGENERATION_ATTEMPTS + 1):
-        colliding = await colliding_secret_fields(db, pending, exclude_user_id=exclude_user_id, reserved=reserved)
+        collisions = await secret_collisions(db, pending, exclude_user_id=exclude_user_id, reserved=reserved)
+        colliding = collisions.fields
         if not colliding:
             reserve_secret_values(proxy_settings, reserved, fields=fields)
             return proxy_settings
 
-        refused = colliding & explicit_fields
+        submitted = colliding & submitted_unchecked
+        refused = submitted if refuses_submitted_collisions() else submitted & collisions.retired_own
         if refused:
             logger.warning(
                 f"refusing submitted proxy secret(s) {sorted(field.value for field in refused)}: the value is held "
-                "or was used by another user"
+                "or was used by another user, or was retired from this user"
             )
             raise ProxySecretConflictError(refused)
+        submitted_unchecked = submitted_unchecked - colliding
 
         if regenerations_done == MAX_REGENERATION_ATTEMPTS:
             break
@@ -194,7 +235,12 @@ async def enforce_unique_proxy_secrets(
         pending = {}
         for field in sorted(colliding):
             spec = SPEC_BY_FIELD[field]
-            logger.warning(f"generated proxy secret {field.value} collided with a held or used value; regenerating it")
+            if field in submitted:
+                _log_replaced_submission(field, collisions)
+            else:
+                logger.warning(
+                    f"generated proxy secret {field.value} collided with a held or used value; regenerating it"
+                )
             replacement = spec.generate()
             write_secret(proxy_settings, spec, replacement)
             pending[field] = str(replacement)
