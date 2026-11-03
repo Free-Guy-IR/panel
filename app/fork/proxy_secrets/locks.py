@@ -21,6 +21,7 @@ SEEN_LOCK_ROWS_KEY = "fork_named_lock_rows_seen"
 MYSQL_LOCK_WAIT_TIMEOUT = 1205
 MYSQL_DEADLOCK = 1213
 MYSQL_LOCK_NOWAIT = 3572
+NOWAIT_REFUSAL_ATTRIBUTE = "fork_nowait_refusal"
 POSTGRES_LOCK_NOT_AVAILABLE = "55P03"
 POSTGRES_DEADLOCK = "40P01"
 SQLITE_LOCKED = "database is locked"
@@ -194,11 +195,17 @@ def is_lock_wait_timeout(exc: BaseException) -> bool:
     return SQLITE_LOCKED in str(exc.orig)
 
 
+def mark_nowait_refusal(exc: BaseException) -> None:
+    setattr(exc, NOWAIT_REFUSAL_ATTRIBUTE, True)
+
+
 def is_row_lock_conflict(exc: BaseException, dialect) -> bool:
     if not isinstance(exc, DBAPIError) or dialect.name == "sqlite":
         return False
-    if is_deadlock(exc) or driver_code(exc) == MYSQL_LOCK_NOWAIT:
+    if is_deadlock(exc):
         return True
-    if POSTGRES_LOCK_NOT_AVAILABLE in _driver_sqlstate(exc):
+    if not getattr(exc, NOWAIT_REFUSAL_ATTRIBUTE, False):
+        return False
+    if driver_code(exc) == MYSQL_LOCK_NOWAIT or POSTGRES_LOCK_NOT_AVAILABLE in _driver_sqlstate(exc):
         return True
     return bool(getattr(dialect, "is_mariadb", False)) and driver_code(exc) == MYSQL_LOCK_WAIT_TIMEOUT

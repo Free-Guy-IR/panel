@@ -4,6 +4,7 @@ from typing import Literal
 
 from sqlalchemy import and_, case, cast, delete, false, func, literal, or_, select, text, true, update
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
@@ -27,7 +28,7 @@ from app.fork.crud.bulk_result_bounds import (
 )
 from app.fork.crud.group_scope import user_in_allowed_groups
 from app.fork.crud.user_locks import USER_LOCK_BATCH_SIZE, on_primary_key
-from app.fork.proxy_secrets.locks import holds_row_locks, read_committed_rows
+from app.fork.proxy_secrets.locks import holds_row_locks, mark_nowait_refusal, read_committed_rows
 from app.models.group import BulkGroup
 from app.models.user import BulkUser, BulkUserFilter, BulkUsersProxy
 
@@ -425,12 +426,18 @@ async def _lock_rows_by_id(
 ) -> dict[int, tuple]:
     locked: dict[int, tuple] = {}
     for chunk in _id_chunks(sorted(user_ids)):
-        rows = await db.execute(
+        statement = (
             on_primary_key(select(*columns))
             .where(condition, User.id.in_(chunk))
             .order_by(User.id)
             .with_for_update(nowait=nowait)
         )
+        try:
+            rows = await db.execute(statement)
+        except DBAPIError as exc:
+            if nowait:
+                mark_nowait_refusal(exc)
+            raise
         locked.update({row[0]: tuple(row) for row in rows.all()})
     return locked
 

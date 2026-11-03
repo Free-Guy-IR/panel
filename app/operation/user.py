@@ -9,6 +9,7 @@ from typing import Literal
 
 from fastapi import HTTPException
 from pydantic import ValidationError
+from sqlalchemy import event
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app import notification
@@ -2154,16 +2155,25 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         return {"target_ids": [user_id for user_id, _ in targets], "minimum": minimum, "maximum": maximum}
 
     async def _retry_bulk_on_row_lock_conflict(self, db: AsyncSession, attempt_once):
-        for attempt in range(1, BULK_ROW_LOCK_ATTEMPTS + 1):
-            try:
-                return await attempt_once()
-            except DBAPIError as exc:
-                if not is_row_lock_conflict(exc, db.get_bind().dialect):
-                    raise
-                await db.rollback()
-                if attempt == BULK_ROW_LOCK_ATTEMPTS:
-                    await self.raise_error(message=BULK_LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
-                await asyncio.sleep(random.uniform(BULK_ROW_LOCK_JITTER_MIN, BULK_ROW_LOCK_JITTER_MAX) * attempt)
+        commits: list[object] = []
+
+        def record_commit(session) -> None:
+            commits.append(session)
+
+        event.listen(db.sync_session, "after_commit", record_commit)
+        try:
+            for attempt in range(1, BULK_ROW_LOCK_ATTEMPTS + 1):
+                try:
+                    return await attempt_once()
+                except DBAPIError as exc:
+                    if commits or not is_row_lock_conflict(exc, db.get_bind().dialect):
+                        raise
+                    await db.rollback()
+                    if attempt == BULK_ROW_LOCK_ATTEMPTS:
+                        await self.raise_error(message=BULK_LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
+                    await asyncio.sleep(random.uniform(BULK_ROW_LOCK_JITTER_MIN, BULK_ROW_LOCK_JITTER_MAX) * attempt)
+        finally:
+            event.remove(db.sync_session, "after_commit", record_commit)
 
     async def bulk_modify_expire(self, db: AsyncSession, bulk_model: BulkUser, admin: AdminDetails):
         return await self._retry_bulk_on_row_lock_conflict(
