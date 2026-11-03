@@ -27,12 +27,17 @@ def test_the_installed_bridge_carries_the_reliable_user_sync():
         (bridge_grpclib.Node, "_probe_capabilities"),
         (bridge_grpclib, "RetirableChannel"),
         (bridge_log_stream, "deliver_stream_error"),
+        (bridge_controller, "MAINTENANCE_TIMEOUTS"),
     ],
 )
 def test_a_bridge_without_the_reliable_user_sync_refuses_to_start(monkeypatch, owner, name):
     monkeypatch.delattr(owner, name)
     with pytest.raises(RuntimeError, match=name):
         node_bridge_guard.require_reliable_bridge()
+
+
+def test_the_guard_requires_the_maintenance_timeouts_the_panel_relies_on():
+    assert (bridge_controller, "MAINTENANCE_TIMEOUTS") in node_bridge_guard.REQUIRED_BRIDGE_API
 
 
 @pytest.mark.parametrize("version", ["0.8.1", "0.9.1+singbox", "garbage", ""])
