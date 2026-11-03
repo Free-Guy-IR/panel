@@ -25,5 +25,9 @@ async def test_failed_flushes_keep_a_bounded_number_of_pending_buckets(monkeypat
             await record_usages.record_user_stats(rows)
         except RuntimeError:
             pass
-    buckets = {key[0] for key in record_usages._pending_user_usage_history}
+    all_buckets = [start + timedelta(minutes=10 * index) for index in range(30)]
+    buckets = sorted({key[0] for key in record_usages._pending_user_usage_history})
     assert len(buckets) <= 7, (len(buckets), len(record_usages._pending_user_usage_history))
+    assert buckets == all_buckets[-len(buckets) :]
+    assert all_buckets[-1] in buckets
+    assert set(record_usages._pending_user_usage_history.values()) == {5}
