@@ -13,7 +13,6 @@ REQUIRED_BRIDGE_API = (
     (storage.InMemoryUserSyncStore, "fence_state"),
     (storage.InMemoryUserSyncStore, "has_pending"),
     (storage, "HeldRetryUserSyncStoreProtocol"),
-    (storage.HeldRetryUserSyncStoreProtocol, "retire_held"),
     (storage.InMemoryUserSyncStore, "hold_users"),
     (storage.InMemoryUserSyncStore, "retire_held"),
     (grpclib.Node, "_probe_capabilities"),
@@ -21,10 +20,23 @@ REQUIRED_BRIDGE_API = (
     (log_stream, "deliver_stream_error"),
     (controller, "MAINTENANCE_TIMEOUTS"),
 )
+REQUIRED_HELD_RETRY_PROTOCOL_API = ("retire_held",)
+
+
+def _missing_bridge_api() -> list[str]:
+    missing = [f"{owner.__name__}.{name}" for owner, name in REQUIRED_BRIDGE_API if not hasattr(owner, name)]
+    protocol = getattr(storage, "HeldRetryUserSyncStoreProtocol", None)
+    if protocol is not None:
+        missing.extend(
+            f"HeldRetryUserSyncStoreProtocol.{name}"
+            for name in REQUIRED_HELD_RETRY_PROTOCOL_API
+            if not hasattr(protocol, name)
+        )
+    return missing
 
 
 def require_reliable_bridge() -> None:
-    missing = [f"{owner.__name__}.{name}" for owner, name in REQUIRED_BRIDGE_API if not hasattr(owner, name)]
+    missing = _missing_bridge_api()
     if missing:
         raise RuntimeError(
             "The installed PasarGuardNodeBridge lacks the reliable user sync this panel needs "

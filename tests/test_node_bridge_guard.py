@@ -1,3 +1,5 @@
+import importlib
+
 import pytest
 from PasarGuardNodeBridge import (
     controller as bridge_controller,
@@ -67,7 +69,7 @@ def test_a_bridge_without_the_held_retry_api_refuses_to_start(monkeypatch, owner
 def test_the_guard_requires_the_held_retry_api():
     required = {(getattr(owner, "__name__", owner), name) for owner, name in node_bridge_guard.REQUIRED_BRIDGE_API}
     assert ("PasarGuardNodeBridge.storage", "HeldRetryUserSyncStoreProtocol") in required
-    assert ("HeldRetryUserSyncStoreProtocol", "retire_held") in required
+    assert "retire_held" in node_bridge_guard.REQUIRED_HELD_RETRY_PROTOCOL_API
     assert ("InMemoryUserSyncStore", "hold_users") in required
     assert ("InMemoryUserSyncStore", "retire_held") in required
 
@@ -92,3 +94,16 @@ def test_the_node_manager_checks_the_bridge_when_it_is_imported():
     import app.node
 
     assert "require_reliable_bridge()" in inspect.getsource(app.node)
+
+
+def test_a_bridge_without_the_held_retry_protocol_refuses_at_the_guard_not_at_import(monkeypatch):
+    try:
+        with monkeypatch.context() as patched:
+            patched.delattr(bridge_storage, "HeldRetryUserSyncStoreProtocol")
+            reloaded = importlib.reload(node_bridge_guard)
+            with pytest.raises(RuntimeError) as refused:
+                reloaded.require_reliable_bridge()
+        assert "HeldRetryUserSyncStoreProtocol" in str(refused.value)
+        assert "install bridge 0.9.2+singbox.3 or newer" in str(refused.value)
+    finally:
+        importlib.reload(node_bridge_guard)
