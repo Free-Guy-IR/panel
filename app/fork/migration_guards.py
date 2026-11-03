@@ -214,9 +214,9 @@ class _MigrationLockHolder(threading.Thread):
         if not self.held:
             raise self.error
         raise MigrationLockError(
-                f"the rollback lost the database migration lock ({self.error!r}); another migrator may have run, "
-                "read alembic_version before going on"
-            ) from self.error
+            f"the rollback lost the database migration lock ({self.error!r}); another migrator may have run, "
+            "read alembic_version before going on"
+        ) from self.error
 
 
 @contextlib.contextmanager
