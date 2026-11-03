@@ -88,7 +88,17 @@ async def get_node(db: AsyncSession, name: str, *, load_usage_logs: bool = True)
     return node
 
 
-async def get_node_by_id(db: AsyncSession, node_id: int, *, load_usage_logs: bool = True) -> Node | None:
+async def get_nodes_in_fresh_view(db: AsyncSession, node_ids: list[int]) -> dict[int, Node]:
+    if not node_ids:
+        return {}
+    async with AsyncSession(bind=db.bind, expire_on_commit=False) as fresh:
+        loaded = (await fresh.execute(select(Node).where(Node.id.in_(node_ids)))).unique().scalars().all()
+    return {node.id: await db.merge(node, load=False) for node in loaded}
+
+
+async def get_node_by_id(
+    db: AsyncSession, node_id: int, *, load_usage_logs: bool = True, fresh_view: bool = False
+) -> Node | None:
     """
     Retrieves a node by its ID.
 
@@ -99,7 +109,10 @@ async def get_node_by_id(db: AsyncSession, node_id: int, *, load_usage_logs: boo
     Returns:
         Optional[Node]: The Node object if found, None otherwise.
     """
-    node = (await db.execute(select(Node).where(Node.id == node_id))).unique().scalar_one_or_none()
+    if fresh_view:
+        node = (await get_nodes_in_fresh_view(db, [node_id])).get(node_id)
+    else:
+        node = (await db.execute(select(Node).where(Node.id == node_id))).unique().scalar_one_or_none()
     if node:
         await load_node_attrs(node, load_usage_logs=load_usage_logs)
     return node

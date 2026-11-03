@@ -20,6 +20,7 @@ from app.db.crud.node import (
     get_node_by_id,
     get_node_stats,
     get_nodes,
+    get_nodes_in_fresh_view,
     get_nodes_simple,
     get_nodes_usage,
     modify_node,
@@ -1074,7 +1075,11 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         if not nodes:
             return
 
-        snapshot = connect_snapshot()
+        snapshot = current_connect_snapshot()
+        fresh = await get_nodes_in_fresh_view(db, [node.id for node in nodes if node is not None])
+        nodes = [fresh[node.id] for node in nodes if node is not None and node.id in fresh]
+        if not nodes:
+            return
         core_ids = {core_id for node in nodes for core_id in self._node_core_ids(node)}
         cores_by_id, users_by_core = await self._get_core_users_map(db, core_ids, lazy=True)
         sem = asyncio.Semaphore(CONNECT_CONCURRENCY)
@@ -1168,7 +1173,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
 
     async def _connect_single_node_local(self, db: AsyncSession, node_id: int, *, force_start: bool = False) -> bool:
         snapshot = connect_snapshot()
-        db_node = await get_node_by_id(db, node_id, load_usage_logs=False)
+        db_node = await get_node_by_id(db, node_id, load_usage_logs=False, fresh_view=True)
         if db_node is None or db_node.status in (NodeStatus.disabled, NodeStatus.limited):
             return False
 
