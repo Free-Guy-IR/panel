@@ -2,15 +2,18 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 
 import jwt
+import pytest
 from fastapi import status
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.db.crud.admin import get_admin as get_admin_by_username
 from app.db.models import Admin
 from app.models.admin import hash_password
 from app.routers.authentication import get_admin
 from app.utils.jwt import get_secret_key
-from tests.api import GetTestDB, TestSession, client
+from tests.api import DATABASE_URL, IS_SQLITE, TestSession, client
 from tests.api.helpers import auth_headers, create_admin, delete_admin, strong_password, unique_name
 
 
@@ -123,54 +126,70 @@ def test_an_env_sudoer_token_still_authenticates(access_token):
     assert response.json()["username"] == "testadmin"
 
 
+def _own_connection_sessions():
+    connect_args = {"timeout": 30} if IS_SQLITE else {}
+    engine = create_async_engine(DATABASE_URL, poolclass=NullPool, connect_args=connect_args)
+    return engine, async_sessionmaker(engine, expire_on_commit=False)
+
+
+@pytest.mark.skipif(":memory:" in DATABASE_URL, reason="needs a database shared by several connections")
 def test_old_token_never_authenticates_as_the_replacement_while_it_is_replaced(access_token):
     admin = create_admin(access_token, role_id=2)
     old_token = _login(admin["username"], admin["password"])
-    old_id = admin["id"]
     username = admin["username"]
 
     async def _scenario() -> tuple[list, int]:
+        engine, sessions = _own_connection_sessions()
         replaced = asyncio.Event()
+        writer_done = asyncio.Event()
+        new_hash = await hash_password(strong_password("Replaced"))
 
         async def _reader() -> list:
             seen = []
             reads_after_replacement = 0
-            while reads_after_replacement < 5:
+            for _ in range(5000):
+                if reads_after_replacement >= 5 or (writer_done.is_set() and not replaced.is_set()):
+                    break
                 was_replaced = replaced.is_set()
-                async with GetTestDB() as db:
+                async with sessions() as db:
                     result = await get_admin(db, old_token)
+                    await db.rollback()
                 seen.append((was_replaced, result.id if result is not None else None))
                 reads_after_replacement += was_replaced
                 await asyncio.sleep(0.001)
             return seen
 
         async def _replace() -> int:
-            await asyncio.sleep(0)
-            async with GetTestDB() as db:
-                db_admin = await get_admin_by_username(db, username, load_users=False)
-                await db.delete(db_admin)
-                await db.commit()
-            await asyncio.sleep(0)
-            async with GetTestDB() as db:
-                new_admin = Admin(
-                    username=username, hashed_password=await hash_password(strong_password("Replaced")), role_id=2
-                )
-                db.add(new_admin)
-                await db.commit()
-                await db.refresh(new_admin)
-                new_id = new_admin.id
-            replaced.set()
-            return new_id
+            try:
+                await asyncio.sleep(0.005)
+                async with sessions() as db:
+                    db_admin = await get_admin_by_username(db, username, load_users=False)
+                    await db.delete(db_admin)
+                    await db.commit()
+                await asyncio.sleep(0.005)
+                async with sessions() as db:
+                    new_admin = Admin(username=username, hashed_password=new_hash, role_id=2)
+                    db.add(new_admin)
+                    await db.commit()
+                    new_id = new_admin.id
+                replaced.set()
+                return new_id
+            finally:
+                writer_done.set()
 
-        results = await asyncio.gather(_reader(), _reader(), _reader(), _replace())
+        try:
+            results = await asyncio.gather(_reader(), _reader(), _reader(), _replace())
+        finally:
+            await engine.dispose()
         return [entry for reader in results[:3] for entry in reader], results[3]
 
-    seen, _ = asyncio.run(_scenario())
     try:
-        assert all(admin_id in (None, old_id) for _, admin_id in seen)
+        seen, new_id = asyncio.run(_scenario())
         after = [admin_id for was_replaced, admin_id in seen if was_replaced]
         assert after
         assert all(admin_id is None for admin_id in after)
+        assert all(admin_id in (None, admin["id"]) for was_replaced, admin_id in seen if not was_replaced)
+        assert new_id is not None
         response = client.get("/api/admin", headers=auth_headers(old_token))
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
     finally:
