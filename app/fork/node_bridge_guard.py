@@ -2,7 +2,7 @@ import PasarGuardNodeBridge
 from packaging.version import InvalidVersion, Version
 from PasarGuardNodeBridge import controller, grpclib, log_stream, storage
 
-MINIMUM_BRIDGE_VERSION = Version("0.9.2+singbox.2")
+MINIMUM_BRIDGE_VERSION = Version("0.9.2+singbox.3")
 REQUIRED_BRIDGE_API = (
     (controller.Controller, "_deliver_claimed_users"),
     (controller.Controller, "full_sync_fence"),
@@ -12,6 +12,10 @@ REQUIRED_BRIDGE_API = (
     (storage.InMemoryUserSyncStore, "retire_captured"),
     (storage.InMemoryUserSyncStore, "fence_state"),
     (storage.InMemoryUserSyncStore, "has_pending"),
+    (storage, "HeldRetryUserSyncStoreProtocol"),
+    (storage.HeldRetryUserSyncStoreProtocol, "retire_held"),
+    (storage.InMemoryUserSyncStore, "hold_users"),
+    (storage.InMemoryUserSyncStore, "retire_held"),
     (grpclib.Node, "_probe_capabilities"),
     (grpclib, "RetirableChannel"),
     (log_stream, "deliver_stream_error"),
