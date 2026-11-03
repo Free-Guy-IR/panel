@@ -124,8 +124,7 @@ SCOPED_COVER_RE = re.compile(
     r"(?<![0-9a-f])([0-9a-f]{40})(?![0-9a-f])\s+touching\s+only\s+([^\s,;]+(?:(?:\s*,\s*|\s+and\s+)[^\s,;]+)*)",
     re.IGNORECASE,
 )
-C_LIKE_SUFFIXES = frozenset((".go", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"))
-TEMPLATE_SUFFIXES = C_LIKE_SUFFIXES - {".go"}
+TOKENIZE_ERRORS = (tokenize.TokenError, IndentationError, SyntaxError)
 DIRECTIVE_PREFIXES = (
     "//go:",
     "//nolint",
@@ -155,15 +154,52 @@ DIRECTIVE_PREFIXES = (
     "# mypy:",
     "# isort:",
 )
-CGO_IMPORT_RE = re.compile(r'^\s*import\s+"C"\s*$', re.MULTILINE)
-FUNCTION_SIGNATURE_RE = re.compile(
-    r"^\s*(?:func\b|(?:async\s+)?def\s|(?:export\s+)?(?:default\s+)?(?:async\s+)?function\b|class\s)"
+CGO_IMPORT_RE = re.compile(r'(?:^\s*|\bimport\s*\(?\s*)(?:[\w.]+\s+)?["`]C["`]', re.MULTILINE)
+GO_CONSTRAINT_RE = re.compile(r"^\s*//\s*(?:go:build|\+build)\b(.*)$", re.MULTILINE)
+GO_KNOWN_TAGS = frozenset(
+    [
+        "aix",
+        "android",
+        "darwin",
+        "dragonfly",
+        "freebsd",
+        "hurd",
+        "illumos",
+        "ios",
+        "js",
+        "linux",
+        "nacl",
+        "netbsd",
+        "openbsd",
+        "plan9",
+        "solaris",
+        "wasip1",
+        "windows",
+        "zos",
+        "386",
+        "amd64",
+        "arm",
+        "arm64",
+        "loong64",
+        "mips",
+        "mipsle",
+        "mips64",
+        "mips64le",
+        "ppc64",
+        "ppc64le",
+        "riscv64",
+        "s390x",
+        "wasm",
+        "cgo",
+        "gc",
+        "gccgo",
+        "unix",
+    ]
 )
 NAMED_BRANCH_RE = re.compile(
-    r"\bbranch(?:es)?\s+`?[\w.-][\w./-]*`?|`[\w./-]+`\s+branch\b|\bfork/[\w.-][\w./-]*", re.IGNORECASE
+    r"\bbranch(?:es)?\s+`?([\w.-][\w./-]*[\w-])`?|`([\w./-]+)`\s+branch\b|\bfork/([\w.-][\w./-]*[\w-])", re.IGNORECASE
 )
 MOVED_TO_RE = re.compile(r"\bmoved\s+(?:it\s+)?(?:to|into)\s+`?([^`\s;,]*[^`\s;,.])`?", re.IGNORECASE)
-FORK_CITE_RE = re.compile(r"\bfork\s+commits?\s+(?:[0-9a-f]{9,40}\s*(?:,|and)\s*)*$", re.IGNORECASE)
 MISSING_LINE_RE = re.compile(r"\bmissing\s+`?([^`\s]+:[+-]\d+)`?\s+because\b([^;]*)", re.IGNORECASE)
 SCOPED_PATH_SPLIT_RE = re.compile(r"\s*,\s*|\s+and\s+", re.IGNORECASE)
 SECURITY_NO_REASON_RE = re.compile(r"\bsecurity:\s*no\s*,\s*[^\W_]", re.IGNORECASE)
@@ -984,7 +1020,7 @@ def python_comment_lines(content):
             number, column = token.start
             if number <= len(lines) and not lines[number - 1][:column].strip():
                 found.add(number)
-    except tokenize.TokenError, IndentationError, SyntaxError:
+    except TOKENIZE_ERRORS:
         return frozenset()
     return frozenset(found)
 
@@ -1076,10 +1112,10 @@ def comment_line_numbers(path, content):
     suffix = os.path.splitext(path)[1].lower()
     if suffix == ".py":
         found = python_comment_lines(content)
-    elif suffix in C_LIKE_SUFFIXES:
-        if suffix == ".go" and CGO_IMPORT_RE.search(content):
+    elif suffix == ".go":
+        if CGO_IMPORT_RE.search(content):
             return frozenset()
-        found = c_like_comment_lines(content, suffix in TEMPLATE_SUFFIXES)
+        found = c_like_comment_lines(content, False)
     else:
         return frozenset()
     lines = content.splitlines()
@@ -1487,29 +1523,14 @@ def upstream_release_dropped(upstream_sha, carrier, hunk):
     return not any(block_in_place(normalised_file(tag, hunk["new"]), post) for tag in tags)
 
 
-def enclosing_signature(sha, path, hunk):
-    content = head_blob(sha, path)
-    first = hunk["first_added"]
-    if content is None or not first:
-        return None
-    rows = content.splitlines()
-    for number in range(min(first, len(rows)), 0, -1):
-        if FUNCTION_SIGNATURE_RE.match(rows[number - 1]):
-            return normalise_line(path, rows[number - 1])
-    return None
-
-
-def block_under_signature(lines, core, signature, path):
-    if lines is None or signature is None:
-        return False
-    for i in range(len(lines) - len(core) + 1):
-        if lines[i : i + len(core)] != core:
-            continue
-        for j in range(i - 1, -1, -1):
-            if FUNCTION_SIGNATURE_RE.match(lines[j]):
-                if lines[j] == signature:
-                    return True
-                break
+def go_build_excluded(path, content):
+    parts = Path(path).parts
+    if any(part == "testdata" or part.startswith(("_", ".")) for part in parts):
+        return True
+    for match in GO_CONSTRAINT_RE.finditer(content):
+        for tag in re.findall(r"[\w.]+", match.group(1)):
+            if tag not in GO_KNOWN_TAGS and not re.fullmatch(r"go1\.\d+", tag):
+                return True
     return False
 
 
@@ -1531,10 +1552,11 @@ def moved_hunk_problem(ident, why, target, head, upstream_sha, hunks, carriers):
     here = normalised_file(head, target)
     if post is None:
         return f"{label}, but its non-comment lines are not in place in {target} on {head}"
-    in_context = (post[0] or post[2]) and block_in_place(here, post)
-    signature = enclosing_signature(upstream_sha, hunk["new"], hunk)
-    if not (in_context or block_under_signature(here, post[1], signature, target)):
+    if not ((post[0] or post[2]) and block_in_place(here, post)):
         return f"{label}, but its non-comment lines are not in place in {target} on {head}"
+    content = head_blob(head, target)
+    if target.endswith(".go") and (content is None or go_build_excluded(target, content)):
+        return f"{label}, but {target} is excluded from the build on {head}"
     return None
 
 
@@ -1552,6 +1574,20 @@ def clause_around(text, start, end):
     return text[left + 1 : right]
 
 
+def fork_branch_refs(name):
+    candidates = (f"refs/heads/{name}", f"refs/remotes/origin/{name}", f"refs/remotes/fork/{name}")
+    upstream = tuple(namespace.rstrip("/") + "/" for namespace in UPSTREAM_NAMESPACES)
+    return [ref for ref in candidates if not ref.startswith(upstream) and ref_exists(ref)]
+
+
+def on_named_fork_branch(sha, clause):
+    for match in NAMED_BRANCH_RE.finditer(clause):
+        name = next(group for group in match.groups() if group)
+        if any(is_ancestor(sha, ref) for ref in fork_branch_refs(name)):
+            return True
+    return False
+
+
 def cited_history_problems(entry, head, ledger_tokens=frozenset()):
     text = SECURITY_FLAG_RE.sub("", entry["reason"])
     tips = upstream_ref_tips(str(Path.cwd()))
@@ -1560,17 +1596,15 @@ def cited_history_problems(entry, head, ledger_tokens=frozenset()):
     seen = set()
     for match in FORK_COMMIT_RE.finditer(text):
         token = match.group(0)
-        if not FORK_CITE_RE.search(text[: match.start()]):
-            continue
         if any(other.startswith(token) or token.startswith(other) for other in known | tips):
-            continue
-        if NAMED_BRANCH_RE.search(clause_around(text, match.start(), match.end())):
             continue
         sha = resolve_commit(token)
         key = sha or token
         if key in seen:
             continue
         if sha is not None and (sha in known or is_ancestor(sha, head) or on_upstream_ref(sha)):
+            continue
+        if sha is not None and on_named_fork_branch(sha, clause_around(text, match.start(), match.end())):
             continue
         seen.add(key)
         problems.append(

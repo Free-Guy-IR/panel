@@ -43,14 +43,21 @@ def test_an_entry_citing_its_own_upstream_sha_is_not_a_fork_cite(inventory):
 
 
 @pytest.mark.parametrize(
-    ("reason", "flagged"),
+    ("reason", "branch_exists", "flagged"),
     [
-        (f"ported in fork commit {SIDE[:12]} on branch `fork/hy2-rework`, not on main yet", False),
-        (f"ported in fork commit {SIDE[:12]}, not on main yet", True),
+        (f"ported in fork commit {SIDE[:12]} on branch `fork/hy2-rework`, not on main yet", True, False),
+        (f"ported in fork commit {SIDE[:12]} on branch `fork/hy2-rework`, not on main yet", False, True),
+        (f"ported in fork commit {SIDE[:12]}, not on main yet", True, True),
     ],
-    ids=["branch-named", "branch-unnamed"],
+    ids=["branch-named", "branch-named-but-absent", "branch-unnamed"],
 )
-def test_a_side_branch_fork_commit_is_excused_only_when_its_branch_is_named(inventory, reason, flagged):
+def test_a_side_branch_fork_commit_is_excused_only_when_its_branch_is_named(
+    inventory, monkeypatch, reason, branch_exists, flagged
+):
+    ref = "refs/heads/fork/hy2-rework"
+    monkeypatch.setattr(inventory, "resolve_commit", lambda token: SIDE if SIDE.startswith(token) else None)
+    monkeypatch.setattr(inventory, "ref_exists", lambda name: branch_exists and name == ref)
+    monkeypatch.setattr(inventory, "is_ancestor", lambda ancestor, descendant: ancestor == SIDE and descendant == ref)
     cite = entry(SELF, f"{reason} security: no")
     problems = inventory.cited_history_problems(cite, "main", frozenset({SELF}))
     assert bool(problems) is flagged, problems
