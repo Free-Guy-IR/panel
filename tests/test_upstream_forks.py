@@ -468,3 +468,93 @@ def test_one_run_over_several_side_forks_reads_each_fork_head_from_its_own_mirro
     assert result.returncode == 1, result.stdout + result.stderr
     second = result.stdout.split("=== bkit:", 1)[1]
     assert f"{fix[:12]}: merged into refs/remotes/fork/main, but 1 of 1 hunk(s)" in second
+
+
+FILLER = "".join(f"step_{index}() {{\n    run {index}\n}}\n\n" for index in range(8))
+RESTORE = (
+    'extract() {\n    check_size "$1"\n    tar -xf "$1"\n}\n\n'
+    + FILLER
+    + 'restore() {\n    extract "$1"\n    load_db\n    report\n}\n'
+)
+RESTORE_SAFE = (
+    'extract() {\n    check_size "$1"\n    reject_link_members "$1" || return 1\n    tar -xf "$1"\n}\n\n'
+    + FILLER
+    + 'restore() {\n    extract "$1"\n    safety_copy || return 1\n    load_db\n    report\n}\n'
+)
+DOC = "# Restore\n\nA restore loads the backup.\n"
+DOC_FIRST = "# Restore\n\nA restore refuses link members.\n"
+DOC_WORDED = "# Restore\n\nA restore refuses symbolic and hard link members.\n"
+
+
+def squash_world(tmp_path, carried, cite):
+    upstream = new_repo(tmp_path / "upstream")
+    base = commit(upstream, "base", {"restore.sh": RESTORE, "doc.md": DOC, "other.txt": "one\n"})
+    git(upstream, "checkout", "-q", "-b", "fix/restore-safety")
+    original = commit(
+        upstream,
+        "fix(restore): reject symbolic and hard link members of a backup archive",
+        {"restore.sh": RESTORE_SAFE, "doc.md": DOC_FIRST},
+    )
+    tip = commit(upstream, "docs: name both link kinds", {"doc.md": DOC_WORDED})
+    git(upstream, "checkout", "-q", "main")
+    unrelated = commit(upstream, "chore: tidy", {"other.txt": "two\n"})
+    squash = commit(
+        upstream,
+        "fix(restore): restore safety followups (#35)",
+        {"restore.sh": RESTORE_SAFE, "doc.md": DOC_WORDED},
+    )
+    git(upstream, "tag", "v1.1.0")
+    fork = tmp_path / "fork"
+    git(tmp_path, "clone", "-q", str(upstream), str(fork))
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(fork, "config", key, value)
+    if carried == "absent":
+        git(fork, "reset", "-q", "--hard", unrelated)
+    if carried == "undone":
+        commit(fork, "fork: drop the link check", {"restore.sh": RESTORE})
+    commit(fork, "fork feature", {"f.txt": "fork\n"})
+    carrier = {"squash": squash, "unrelated": unrelated}[cite]
+    panel = new_repo(tmp_path / "panel")
+    forks = panel / "upstream-forks"
+    forks.mkdir()
+    (forks / "forks.toml").write_text(f"""
+[[repo]]
+name = "kit"
+mode = "ledger"
+fork = "Owner/kit"
+upstream = "Up/kit"
+fork_url = "{fork}"
+upstream_url = "{upstream}"
+ported_ref = "main"
+grandfathered_base = "{base}"
+ledger = "upstream-forks/kit.md"
+reason = "no tracker of its own"
+""")
+    (forks / "kit.md").write_text(
+        "## Ported by design\n\n"
+        f"- `{original}` ALREADY-IN-FORK: pre-squash commit of the deleted branch fix/restore-safety, carried by "
+        f"upstream squash {carrier}, an ancestor of fork main security: yes, it rejects link members\n"
+        f"- `{tip}` ALREADY-IN-FORK: tip of the branch, whose tree is the tree of the squash security: no, wording\n"
+    )
+    return forks / "forks.toml", original
+
+
+@pytest.mark.parametrize(
+    ("carried", "cite", "code"),
+    [
+        ("merged", "squash", 0),
+        ("absent", "squash", 1),
+        ("undone", "squash", 1),
+        ("merged", "unrelated", 1),
+    ],
+)
+def test_an_upstream_squash_on_fork_main_carries_its_pre_squash_security_commit(tmp_path, carried, cite, code):
+    config, original = squash_world(tmp_path, carried, cite)
+    result = run(config, "--today", "2026-10-27")
+    assert result.returncode == code, result.stdout + result.stderr
+    refusal = f"`{original[:12]}` is ported by design as a security fix, but its reason names no fork commit"
+    if code == 0:
+        assert "Upstream parity gate OK" in result.stdout
+        assert refusal not in result.stdout
+    else:
+        assert refusal in result.stdout

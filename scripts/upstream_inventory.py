@@ -1132,7 +1132,7 @@ def paths_bringing_upstream_change(upstream_sha, fork_sha, paths):
     return brought
 
 
-def design_fork_commit(reason, head, in_range, upstream_sha):
+def design_fork_commit(reason, head, upstream_sha, in_range, merged):
     upstream_paths = set(commit_paths(upstream_sha))
     for token in FORK_COMMIT_RE.findall(SECURITY_FLAG_RE.sub("", reason)):
         result = subprocess.run(
@@ -1142,12 +1142,16 @@ def design_fork_commit(reason, head, in_range, upstream_sha):
             check=False,
         )
         fork_sha = result.stdout.strip()
-        if result.returncode != 0 or fork_sha in in_range or not is_ancestor(fork_sha, head):
+        if result.returncode != 0 or not is_ancestor(fork_sha, head):
+            continue
+        if fork_sha in in_range and fork_sha not in merged:
             continue
         touched = {path for path in git("show", "--format=", "--name-only", "-M", fork_sha).split("\n") if path}
         brought = paths_bringing_upstream_change(upstream_sha, fork_sha, touched & upstream_paths)
         if not brought and not picks_upstream(fork_sha, upstream_sha):
             continue
+        if fork_sha in in_range:
+            return fork_sha
         named = {path for path in touched if re.search(rf"(?<![\w./-]){re.escape(path)}(?![\w/-])", reason)}
         expected, missing = missing_pick_lines(fork_sha, fork_sha, head, named | brought if named else touched)
         if expected and not missing:
@@ -1847,7 +1851,7 @@ def parity_gate(
             )
             continue
         if entry["kind"] == "ported-by-design" and entry["security"]:
-            if not design_fork_commit(entry["reason"], head, in_range, sha):
+            if not design_fork_commit(entry["reason"], head, sha, in_range, merged):
                 del coverage[sha]
                 ledger_errors.append(
                     f"{entry['where']}: `{sha[:12]}` is ported by design as a security fix, but its reason names no "
