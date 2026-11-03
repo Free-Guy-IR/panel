@@ -61,12 +61,12 @@ async def _authorize_target_admin(target_id: int, current_admin: AdminDetails, d
     # Every admin may manage their own passkeys. Managing another admin's
     # credentials requires the dedicated admins.passkeys permission.
     if current_admin.id != target_id:
-        if target.role_id == 1 and not current_admin.is_owner:
-            raise HTTPException(status_code=403, detail="Owner account is not accessible.")
         try:
             enforce_permission(current_admin, "admins", "passkeys")
         except PermissionDenied as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
+        if target.role_id == 1 and not current_admin.is_owner:
+            raise HTTPException(status_code=403, detail="Owner account is not accessible.")
     return target
 
 

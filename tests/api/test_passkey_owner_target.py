@@ -161,3 +161,15 @@ def test_the_env_sudoer_still_manages_owner_passkeys(access_token, passkey_manag
 
     deleted = client.delete(f"/api/admin/passkey/admins/{owner['id']}/{passkey_id}", headers=auth_headers(access_token))
     assert deleted.status_code == status.HTTP_200_OK, deleted.text
+
+
+def test_an_unprivileged_admin_cannot_tell_the_owner_from_a_peer(access_token, passkey_manager):
+    plain = create_admin(access_token, role_id=3)
+    try:
+        headers = auth_headers(_login(plain["username"], plain["password"]))
+        owner = client.get(f"/api/admin/passkey/admins/{passkey_manager['owner']['id']}", headers=headers)
+        peer = client.get(f"/api/admin/passkey/admins/{passkey_manager['peer']['id']}", headers=headers)
+        assert owner.status_code == peer.status_code == status.HTTP_403_FORBIDDEN
+        assert owner.json() == peer.json()
+    finally:
+        delete_admin(access_token, plain["username"])
