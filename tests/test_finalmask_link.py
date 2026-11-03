@@ -61,3 +61,21 @@ def test_finalmask_link_does_not_mutate_doh_input():
     _normalize_finalmask_link(settings)
 
     assert settings == _xdns_finalmask("https://dns.example/dns-query")
+
+
+def test_xhttp_share_link_extra_download_settings_keeps_doh_tls_config():
+    from app.models.subscription import XHTTPTransportConfig
+    from app.subscription.links import StandardLinks
+
+    download = {"address": "d.example.com", "finalmask": _xdns_finalmask("https://dns.example/dns-query")}
+    payload = {}
+
+    StandardLinks()._transport_xhttp(
+        payload, "vless", XHTTPTransportConfig(path="/x", download_settings=download), "/x"
+    )
+
+    extra = json.loads(payload["extra"])
+    assert extra["downloadSettings"]["finalmask"]["udp"][0]["settings"]["resolvers"] == [
+        {"addrs": ["https://dns.example/dns-query"], "tlsConfig": {}}
+    ]
+    assert download["finalmask"] == _xdns_finalmask("https://dns.example/dns-query")
