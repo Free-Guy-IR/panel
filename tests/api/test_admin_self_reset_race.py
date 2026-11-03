@@ -61,39 +61,21 @@ def test_a_refused_self_reset_never_lifts_a_concurrent_limit_or_loses_the_owner_
     access_token, admins, monkeypatch, ordering
 ):
     operation = AdminOperation(operator_type=OperatorType.API)
-    real_transition_lock = admin_operation_module.admin_transition_lock
     real_reset = admin_operation_module.reset_admin_usage
     me_id, other_id = admins["me"], admins["other"]
 
     async def _scenario():
         engine, sessions = _sessions()
+        refused_paused: set[str] = set()
         reached = asyncio.Event()
         competitors_done = asyncio.Event()
         refused_done = asyncio.Event()
         resets: list[tuple[str, int]] = []
 
-        class _PausedTransitionLock:
-            def __init__(self):
-                self.lock = real_transition_lock()
-
-            async def __aenter__(self):
-                if asyncio.current_task().get_name().startswith("refused"):
-                    reached.set()
-                    if ordering == "competitors_first":
-                        try:
-                            await asyncio.wait_for(competitors_done.wait(), timeout=PAUSE_SECONDS)
-                        except TimeoutError:
-                            pass
-                return await self.lock.__aenter__()
-
-            async def __aexit__(self, *exc_info):
-                return await self.lock.__aexit__(*exc_info)
-
         async def _recording_reset(db, db_admin):
             resets.append((asyncio.current_task().get_name(), db_admin.id))
             return await real_reset(db, db_admin=db_admin)
 
-        monkeypatch.setattr(admin_operation_module, "admin_transition_lock", _PausedTransitionLock)
         monkeypatch.setattr(admin_operation_module, "reset_admin_usage", _recording_reset)
 
         async with sessions() as db:
@@ -114,6 +96,11 @@ def test_a_refused_self_reset_never_lifts_a_concurrent_limit_or_loses_the_owner_
         assert myself is not None and not myself.is_limited
 
         async def _refused(call):
+            if ordering == "competitors_first":
+                refused_paused.add(asyncio.current_task().get_name())
+                if len(refused_paused) == 2:
+                    reached.set()
+                await asyncio.wait_for(competitors_done.wait(), timeout=PAUSE_SECONDS)
             async with sessions() as db:
                 try:
                     await call(db)
@@ -141,10 +128,7 @@ def test_a_refused_self_reset_never_lifts_a_concurrent_limit_or_loses_the_owner_
 
         async def _competitors():
             gate = reached if ordering == "competitors_first" else refused_done
-            try:
-                await asyncio.wait_for(gate.wait(), timeout=PAUSE_SECONDS)
-            except TimeoutError:
-                pass
+            await asyncio.wait_for(gate.wait(), timeout=PAUSE_SECONDS)
             async with sessions() as db:
                 await operation.reset_admin_usage_by_id(db, other_id, owner)
             async with sessions() as db:
