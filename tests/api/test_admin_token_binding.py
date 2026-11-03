@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 from app.db.crud.admin import get_admin as get_admin_by_username
 from app.db.models import Admin
 from app.models.admin import hash_password
-from app.routers.authentication import get_admin
+from app.routers.authentication import get_admin, get_admin_with_metrics
 from app.utils.jwt import get_secret_key
 from tests.api import DATABASE_URL, IS_SQLITE, TestSession, client
 from tests.api.helpers import auth_headers, create_admin, delete_admin, strong_password, unique_name
@@ -133,7 +133,8 @@ def _own_connection_sessions():
 
 
 @pytest.mark.skipif(":memory:" in DATABASE_URL, reason="needs a database shared by several connections")
-def test_old_token_never_authenticates_as_the_replacement_while_it_is_replaced(access_token):
+@pytest.mark.parametrize("authenticate", [get_admin, get_admin_with_metrics], ids=["plain", "with_metrics"])
+def test_old_token_never_authenticates_as_the_replacement_while_it_is_replaced(access_token, authenticate):
     admin = create_admin(access_token, role_id=2)
     old_token = _login(admin["username"], admin["password"])
     username = admin["username"]
@@ -152,7 +153,7 @@ def test_old_token_never_authenticates_as_the_replacement_while_it_is_replaced(a
                     break
                 was_replaced = replaced.is_set()
                 async with sessions() as db:
-                    result = await get_admin(db, old_token)
+                    result = await authenticate(db, old_token)
                     await db.rollback()
                 seen.append((was_replaced, result.id if result is not None else None))
                 reads_after_replacement += was_replaced
