@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSIONS = ROOT / "app" / "db" / "migrations" / "versions"
 HEAD = "2e045b99a67e"
 FORK_HEAD = "e79833e2a0b2"
-UPSTREAM_TIP = "c8d2e4f6a1b3"
+UPSTREAM_V551_TIP = "c8d2e4f6a1b3"
+UPSTREAM_TIP = "1a2b3c4d5e6f"
 LOOPBACK_UPSTREAM = "a8c2d491e705"
 PROD_REVISION = "d8b2c4f60a17"
 JSONB_CONVERSION = "f7c63e209a37"
@@ -31,6 +32,13 @@ UPSTREAM_V551_BLOBS = {
     "a8c2d491e705_bind_xray_client_inbounds_to_loopback.py": "3e1a14f6fc4c5213ad25c6f1744417d9d59f1491",
     "c8d2e4f6a1b3_add_masque_settings_to_proxy_settings.py": "47a904d4cd19ec6f67e9443f74a11c1c0c6eba3d",
 }
+UPSTREAM_V560_BLOBS = {
+    "b849540d85bb_move_runtime_env_vars_to_settings.py": "33c963056749a9d84b90d1c2162abe59444b8bbb",
+    "e5a7c3f9b214_add_node_outbound_usages.py": "237de1e6ca8976acd6cdcbfadcdffcb5724700ad",
+    "f0420da90ff1_add_cleanup_retention_settings.py": "a94abd93da28cbe378a5f2689c0dfaeda138d11c",
+    "1a2b3c4d5e6f_api_key_request_limit.py": "34247848db1b8c0d98bf4855d7501e166648a335",
+}
+UPSTREAM_V560_CHAIN = ["b849540d85bb", "e5a7c3f9b214", "f0420da90ff1", UPSTREAM_TIP]
 SYNC_DRIVERS = {
     "sqlite": "sqlite",
     "mysql": "mysql+pymysql",
@@ -174,16 +182,25 @@ def _git_blob(path: Path) -> str:
     return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 
 
-def test_the_graph_has_one_head_that_merges_the_fork_head_with_the_upstream_v551_tip():
+def test_the_graph_has_one_head_that_merges_the_fork_head_with_the_upstream_v560_tip():
     script = ScriptDirectory.from_config(default_config())
 
     assert script.get_heads() == [HEAD]
     assert script.get_revision(HEAD).down_revision == (FORK_HEAD, UPSTREAM_TIP)
     assert script.get_revision("b7e2c4d91f60").down_revision == "b4c7e8f1a2d3"
+    parents = [UPSTREAM_V551_TIP, *UPSTREAM_V560_CHAIN[:-1]]
+    for revision, parent in zip(UPSTREAM_V560_CHAIN, parents, strict=True):
+        assert script.get_revision(revision).down_revision == parent, revision
 
 
 def test_the_six_upstream_v551_revisions_are_byte_identical():
     for name, blob in UPSTREAM_V551_BLOBS.items():
+        assert _git_blob(VERSIONS / name) == blob, name
+
+
+def test_the_four_upstream_v560_revisions_are_byte_identical():
+    for name, blob in UPSTREAM_V560_BLOBS.items():
+        assert (VERSIONS / name).is_file(), name
         assert _git_blob(VERSIONS / name) == blob, name
 
 
@@ -194,9 +211,32 @@ def test_a_fresh_install_and_the_production_upgrade_path_reach_the_same_schema(t
             _quiet(upgrade, _config(path), revision)
 
         assert _versions(fresh) == _versions(path) == [HEAD]
-        assert _schema(fresh) == _schema(path)
+        fresh_schema = _schema(fresh)
+        assert fresh_schema == _schema(path)
         _quiet(check, _config(fresh))
         _quiet(check, _config(path))
+
+    outbound_columns, outbound_indexes, outbound_keys, outbound_unique = fresh_schema["node_outbound_usages"]
+    assert {column[0] for column in outbound_columns} == {
+        "id",
+        "created_at",
+        "node_id",
+        "outbound_tag",
+        "uplink",
+        "downlink",
+    }
+    assert ("ix_node_outbound_usages_node_id_created_at", ("node_id", "created_at"), False) in outbound_indexes
+    assert outbound_keys == [(("node_id",), "nodes", ("id",))]
+    assert (("created_at", "node_id", "outbound_tag"),) in outbound_unique
+    node_stats_indexes = fresh_schema["node_stats"][1]
+    assert ("ix_node_stats_created_at", ("created_at",), False) in node_stats_indexes
+    assert ("ix_node_stats_node_id_created_at", ("node_id", "created_at"), False) in node_stats_indexes
+    settings_columns = {column[0]: column for column in fresh_schema["settings"][0]}
+    assert settings_columns["cleanup"][2] is False
+    api_key_columns = {column[0]: column for column in fresh_schema["api_keys"][0]}
+    assert api_key_columns["max_requests"][2] is True
+    assert api_key_columns["request_count"][2] is False
+    assert api_key_columns["delete_on_limit"][2] is False
 
 
 @pytest.mark.parametrize("masque_first", [True, False], ids=["masque-before-jsonb", "masque-after-jsonb"])
@@ -211,7 +251,7 @@ def test_masque_passwords_survive_either_order_of_the_two_branches(tmp_path, mas
         _quiet(upgrade, config, first)
         _seed_user(url, "masque_order", settings)
         if masque_first:
-            _quiet(upgrade, config, UPSTREAM_TIP)
+            _quiet(upgrade, config, UPSTREAM_V551_TIP)
             generated = _user_settings(url, "masque_order")["masque"]["password"]
         _quiet(upgrade, config, "head")
 
