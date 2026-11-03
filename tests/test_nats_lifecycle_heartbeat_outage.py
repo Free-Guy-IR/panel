@@ -56,7 +56,7 @@ async def test_a_heartbeat_for_a_lease_another_worker_took_still_reports_it_lost
     assert await coordinator.heartbeat(stale) is False
 
 
-async def test_a_write_outage_longer_than_the_lease_does_not_hand_a_running_update_to_a_second_worker():
+async def test_a_lease_whose_writes_fail_for_longer_than_the_lease_is_renewed_again_once_writes_recover():
     kv = WriteOutageKv()
     coordinator = NatsNodeLifecycleCoordinator(kv)
     node = QueuedGrpcNode(
