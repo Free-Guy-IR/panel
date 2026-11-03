@@ -44,6 +44,7 @@ class KvWatcher:
         self._snapshot = None
         self._live = None
         self._delivered = 0
+        self._gap = False
         self._updates = asyncio.Queue(maxsize=self.BATCH_SIZE)
         self._iterator = self._iterate()
 
@@ -139,8 +140,9 @@ class KvWatcher:
             self._live = await self._subscribe_live()
             yield None
             while True:
-                if nc.stats["reconnects"] != reconnects:
+                if self._gap or nc.stats["reconnects"] != reconnects:
                     reconnects = nc.stats["reconnects"]
+                    self._gap = False
                     live, self._live = self._live, None
                     await self._close_subscription(live)
                     self._live = await self._subscribe_live()
@@ -158,7 +160,19 @@ class KvWatcher:
             await self._close_subscription(self._live)
 
     async def _subscribe_live(self):
+        consumer_sequence = 0
+
         async def receive(msg):
+            nonlocal consumer_sequence
+            if consumer_sequence is None:
+                return
+            if msg.metadata.sequence.consumer != consumer_sequence + 1:
+                consumer_sequence = None
+                self._gap = True
+                with contextlib.suppress(asyncio.QueueFull):
+                    self._updates.put_nowait((0, None))
+                return
+            consumer_sequence += 1
             await self._updates.put((msg.metadata.sequence.stream, self._entry(msg)))
 
         return await self._js.subscribe(
