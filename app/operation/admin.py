@@ -30,6 +30,7 @@ from app.fork.operation.admin_scope import (
     close_visible_restrictions,
     visible_users_query,
 )
+from app.fork.operation.admin_self_edit import self_edit_refusal
 from app.fork.operation.admin_transition import admin_transition_lock, status_blocks_user_sync
 from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import (
@@ -168,6 +169,9 @@ class AdminOperation(BaseOperation):
         password_hash = await hash_password(modified_admin.password) if modified_admin.password is not None else None
         async with admin_transition_lock():
             await lock_admin_row(db, db_admin)
+            refusal = self_edit_refusal(db_admin, modified_admin, current_admin)
+            if refusal is not None:
+                await self.raise_error(message=refusal, code=403, db=db)
             old_users_sync_blocked = await admin_users_sync_blocked(db_admin)
             db_admin = await update_admin(db, db_admin, modified_admin, hashed_password=password_hash)
 

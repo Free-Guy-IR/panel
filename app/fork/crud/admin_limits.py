@@ -17,7 +17,11 @@ async def get_active_to_limited_admin_ids(db: AsyncSession) -> list[int]:
 
 
 async def lock_admin_row(db: AsyncSession, db_admin: Admin) -> Admin:
-    await db.refresh(db_admin, attribute_names=["status", "used_traffic", "data_limit"], with_for_update=True)
+    await db.refresh(
+        db_admin,
+        attribute_names=["status", "used_traffic", "data_limit", "role_id", "permission_overrides"],
+        with_for_update=True,
+    )
     return db_admin
 
 
