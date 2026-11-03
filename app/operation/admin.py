@@ -198,6 +198,14 @@ class AdminOperation(BaseOperation):
             DeprecationWarning,
             stacklevel=2,
         )
+        return await retry_on_row_lock_conflict(
+            self,
+            db,
+            lambda: self._remove_admin_by_username_once(db, username, current_admin),
+            ADMIN_REMOVAL_LOCK_UNAVAILABLE_DETAIL,
+        )
+
+    async def _remove_admin_by_username_once(self, db: AsyncSession, username: str, current_admin: AdminDetails | None):
         db_admin = await self.get_validated_admin(db, username=username)
         if current_admin is not None:
             await self._ensure_owner_target_access(db_admin, current_admin)
