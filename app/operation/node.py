@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import ClassVar
 
+import nats.errors
 from fastapi import HTTPException
 from PasarGuardNodeBridge import Health, NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.common import service_pb2 as service
@@ -1461,13 +1462,20 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             await self.raise_error(message=e.detail, code=e.code)
         return response.json()
 
-    async def _update_node_api_remote(self, node_id: int) -> dict:
+    async def _maintenance_request(self, action: str, payload: dict) -> dict:
         try:
-            return await node_nats_client.request(
-                "update_node_api", {"node_id": node_id}, timeout=_maintenance_rpc_timeout()
-            )
+            return await node_nats_client.request(action, payload, timeout=_maintenance_rpc_timeout())
+        except nats.errors.TimeoutError:
+            await self.raise_error(message=f"Node {action} timed out", code=504)
+        except nats.errors.Error as exc:
+            await self.raise_error(message=f"Node {action} unavailable: {exc}", code=503)
         except RuntimeError as exc:
+            if not hasattr(exc, "code"):
+                await self.raise_error(message=str(exc), code=503)
             await self.handle_rpc_error(exc)
+
+    async def _update_node_api_remote(self, node_id: int) -> dict:
+        return await self._maintenance_request("update_node_api", {"node_id": node_id})
 
     async def _update_core_local(self, node_id: int, node_core_update: NodeCoreUpdate) -> dict:
         node = await node_manager.get_node(node_id)
@@ -1480,10 +1488,8 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         return response.json()
 
     async def _update_core_remote(self, node_id: int, node_core_update: NodeCoreUpdate) -> dict:
-        return await node_nats_client.request(
-            "update_core",
-            {"node_id": node_id, "core_update": node_core_update.model_dump(mode="json")},
-            timeout=_maintenance_rpc_timeout(),
+        return await self._maintenance_request(
+            "update_core", {"node_id": node_id, "core_update": node_core_update.model_dump(mode="json")}
         )
 
     async def _update_geofiles_local(self, node_id: int, node_geofiles_update: NodeGeoFilesUpdate) -> dict:
@@ -1497,10 +1503,8 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         return response.json()
 
     async def _update_geofiles_remote(self, node_id: int, node_geofiles_update: NodeGeoFilesUpdate) -> dict:
-        return await node_nats_client.request(
-            "update_geofiles",
-            {"node_id": node_id, "geofiles_update": node_geofiles_update.model_dump(mode="json")},
-            timeout=_maintenance_rpc_timeout(),
+        return await self._maintenance_request(
+            "update_geofiles", {"node_id": node_id, "geofiles_update": node_geofiles_update.model_dump(mode="json")}
         )
 
     async def bulk_remove_nodes(

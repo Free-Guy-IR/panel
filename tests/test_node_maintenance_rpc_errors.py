@@ -69,7 +69,9 @@ def _bulk_operation(monkeypatch, fail_ids):
 async def test_bulk_update_continues_after_one_node_times_out(monkeypatch):
     operation = _bulk_operation(monkeypatch, fail_ids={1})
 
-    response = await operation.bulk_update_nodes(None, BulkNodeSelection(ids={1, 2, 3}), SimpleNamespace(username="root"))
+    response = await operation.bulk_update_nodes(
+        None, BulkNodeSelection(ids={1, 2, 3}), SimpleNamespace(username="root")
+    )
 
     assert response.nodes == ["n2", "n3"]
     assert response.count == 2
