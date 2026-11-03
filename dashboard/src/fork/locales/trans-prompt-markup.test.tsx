@@ -11,6 +11,8 @@ const dashboardRoot = join(import.meta.dir, '..', '..', '..')
 const srcRoot = join(dashboardRoot, 'src')
 const appI18nSource = readFileSync(join(srcRoot, 'locales', 'i18n.ts'), 'utf8')
 const appEscapeValue = /interpolation:\s*\{[^}]*escapeValue:\s*true/.test(appI18nSource)
+const appKeepBasicHtmlNodes = appI18nSource.match(/react:\s*\{[^}]*transKeepBasicHtmlNodesFor:\s*\[([^\]]*)\]/)?.[1]
+const appReactOptions = appKeepBasicHtmlNodes === undefined ? {} : { transKeepBasicHtmlNodesFor: [...appKeepBasicHtmlNodes.matchAll(/'([^']+)'/g)].map(match => match[1]) }
 const languages = ['en', 'fa', 'ru', 'zh'] as const
 
 const loadLocale = (lng: string) => mergeForkLocale(JSON.parse(readFileSync(join(dashboardRoot, 'public', 'statics', 'locales', `${lng}.json`), 'utf8')), lng)
@@ -22,6 +24,7 @@ const makeI18n = async (lng: string) => {
     fallbackLng: 'en',
     resources: { [lng]: { translation: loadLocale(lng) }, en: { translation: loadLocale('en') } },
     interpolation: { escapeValue: appEscapeValue },
+    react: appReactOptions,
   })
   return instance
 }
@@ -89,6 +92,27 @@ describe('name prompts rendered through <Trans>', () => {
   }
 
   for (const key of ['deleteNode.prompt', 'deleteHost.prompt']) {
+    for (const lng of ['fa', 'ru', 'zh']) {
+      it(`${key} [${lng}] renders the <b> of its translation as a bold element with no components prop`, async () => {
+        const i18n = await makeI18n(lng)
+        const markup = renderToStaticMarkup(<Trans i18n={i18n} i18nKey={key} values={{ name: 'node-1' }} shouldUnescape />)
+        expect(markup).toContain('<b>node-1</b>')
+        expect(markup).not.toContain('&lt;')
+        expect(markup).not.toContain('&gt;')
+      })
+
+      it(`${key} [${lng}] with no components prop renders a hostile name as text`, async () => {
+        const hostile = '<img src=x onerror=alert(1)><b>owned</b></b><script>alert(2)</script>'
+        const i18n = await makeI18n(lng)
+        const markup = renderToStaticMarkup(<Trans i18n={i18n} i18nKey={key} values={{ name: hostile }} shouldUnescape />)
+        expect(markup).not.toContain('<img')
+        expect(markup).not.toContain('<script')
+        expect(markup).not.toContain('<b>owned</b>')
+        expect(markup).toContain('&lt;img src=x onerror=alert(1)&gt;&lt;b&gt;owned&lt;/b&gt;&lt;/b&gt;&lt;script&gt;alert(2)&lt;/script&gt;')
+        expect((markup.match(/<\/?b>/g) ?? []).length).toBe(2)
+      })
+    }
+
     it(`${key} [fa] wraps the name in a bold element`, async () => {
       const markup = await renderPrompt('fa', siteFor(key), key, 'node-1')
       expect(markup).toMatch(/<(b|strong)>node-1<\/(b|strong)>/)
