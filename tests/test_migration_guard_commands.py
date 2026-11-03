@@ -18,8 +18,12 @@ from tests.test_upstream_v551_migration_splice import (
     FORK_HEAD,
     HEAD,
     PROD_REVISION,
+    V551_MERGE,
     _config,
+    _execute,
+    _insert,
     _quiet,
+    _scalar_rows,
     _scratch_database,
     _sync,
     _versions,
@@ -387,3 +391,29 @@ def test_an_interrupt_while_waiting_for_a_busy_lock_returns_at_once(tmp_path, mo
         for holder in _lock_holders():
             holder.join(10)
     assert _lock_holders() == []
+
+
+def test_a_database_stamped_by_the_repointed_v551_merge_is_refused_without_change(tmp_path):
+    with _scratch_database(tmp_path, "repointed") as url:
+        config = _config(url)
+        _quiet(upgrade, config, "head")
+        _insert(url, "admins", {"id": 7, "username": "repointed_admin", "hashed_password": "repointed_hash"})
+        _insert(
+            url,
+            "api_keys",
+            {
+                "id": 5,
+                "admin_id": 7,
+                "name": "repointed_key",
+                "key_hash": "repointed_hash",
+                "max_requests": 40,
+                "request_count": 3,
+            },
+        )
+        _execute(url, f"UPDATE alembic_version SET version_num = '{V551_MERGE}'")
+
+        with pytest.raises(migration_guards.StrayMigrationObjectError, match=f"alembic stamp --purge {HEAD}"):
+            _quiet(upgrade, config, "head")
+
+        assert _versions(url) == [V551_MERGE]
+        assert _scalar_rows(url, "SELECT max_requests, request_count FROM api_keys WHERE id = 5") == [(40, 3)]
