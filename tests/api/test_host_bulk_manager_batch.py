@@ -51,6 +51,7 @@ def test_bulk_toggle_refreshes_the_host_manager_once(access_token, monkeypatch, 
         for host_id in host_ids:
             stored = client.get(f"/api/host/{host_id}", headers=auth_headers(access_token))
             assert stored.json()["is_disabled"] is disabled
+            assert (host_id in host_manager._hosts) is not disabled
     finally:
         monkeypatch.undo()
         client.post("/api/hosts/bulk/delete", headers=auth_headers(access_token), json={"ids": host_ids})
