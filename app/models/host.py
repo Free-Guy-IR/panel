@@ -14,7 +14,7 @@ from app.fork.config_text import (
     check_single_line,
 )
 from app.fork.format_template import is_unparseable
-from app.utils.helpers import MAX_FORMAT_SPEC_NUMBER, has_oversized_format_spec
+from app.utils.helpers import MAX_FORMAT_SPEC_NUMBER, has_markup_unsafe_chars, has_oversized_format_spec
 
 from .validators import ListValidator, StringArrayValidator
 
@@ -935,6 +935,8 @@ class CreateHost(BaseHost):
     @field_validator("address", mode="after")
     def validate_address(cls, v):
         v = check_host_addresses(StringArrayValidator.len_check(v, 256))
+        if v and any(has_markup_unsafe_chars(address) for address in v):
+            raise ValueError("Address cannot contain quotes, angle brackets, backticks, backslashes or whitespace")
         for address in v or ():
             validate_format_variables(address, allow_quoting=False)
         return v

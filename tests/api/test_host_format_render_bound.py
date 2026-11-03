@@ -72,7 +72,7 @@ def test_a_stored_oversized_format_width_is_never_padded_on_render(access_token,
             config_cache.clear_sub_config_cache()
             response = client.get(f"{user['subscription_url']}/{client_type}")
             assert response.status_code == status.HTTP_200_OK, (client_type, response.text[:200])
-            assert marker in response.text, (client_type, response.text[:400])
+            assert (marker in response.text) is ("address" not in fields), (client_type, response.text[:400])
             assert " " * 1000 not in response.text, client_type
             assert len(response.content) < WIDTH, (client_type, len(response.content))
     finally:
