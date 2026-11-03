@@ -55,8 +55,10 @@ async def get_api_key_by_raw_key(db: AsyncSession, raw_api_key: str) -> APIKey |
     return db_key
 
 
-async def get_api_key_by_id(db: AsyncSession, key_id: int) -> APIKey | None:
+async def get_api_key_by_id(db: AsyncSession, key_id: int, *, for_update: bool = False) -> APIKey | None:
     stmt = select(APIKey).where(APIKey.id == key_id).options(selectinload(APIKey.admin))
+    if for_update:
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
     return (await db.execute(stmt)).scalar_one_or_none()
 
 

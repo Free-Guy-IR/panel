@@ -13,6 +13,7 @@ from app.db.crud.api_key import (
     revoke_api_key as revoke_api_key_crud,
     update_api_key,
 )
+from app.db.models import APIKey
 from app.models.admin import AdminDetails
 from app.models.admin_role import PermissionScope, RolePermissions
 from app.models.api_key import (
@@ -164,12 +165,12 @@ class APIKeyOperation(BaseOperation):
     async def modify_api_key(
         self, db: AsyncSession, *, admin: AdminDetails, key_id: int, model: APIKeyUpdate
     ) -> APIKeyResponse:
-        db_key = await get_api_key_by_id(db, key_id)
+        db_key = await get_api_key_by_id(db, key_id, for_update=True)
         if db_key is None:
-            await self.raise_error(message="API key not found", code=404)
+            await self.raise_error(message="API key not found", code=404, db=db)
 
         if not admin.is_owner and db_key.admin_id != admin.id:
-            await self.raise_error(message="Permission denied", code=403)
+            await self.raise_error(message="Permission denied", code=403, db=db)
 
         target_admin_id = model.admin_id or db_key.admin_id
         if target_admin_id != db_key.admin_id and not admin.is_owner:
@@ -235,25 +236,30 @@ class APIKeyOperation(BaseOperation):
 
         return api_key_resp
 
+    async def _ensure_rotation_within_custom_key(self, db: AsyncSession, admin: AdminDetails, db_key: APIKey) -> None:
+        if admin.custom_api_key_id is None or db_key.id == admin.custom_api_key_id:
+            return
+        if db_key.inherit_permissions:
+            await self.raise_error(message=_CUSTOM_KEY_INHERIT_DENIED, code=403, db=db)
+        try:
+            _check_permissions_not_exceed_admin(admin, RolePermissions.model_validate(db_key.permissions))
+        except ValueError as exc:
+            await self.raise_error(message=str(exc), code=403, db=db)
+
     async def revoke_api_key(self, db: AsyncSession, *, admin: AdminDetails, key_id: int) -> APIKeyCreateResponse:
-        db_key = await get_api_key_by_id(db, key_id)
+        db_key = await get_api_key_by_id(db, key_id, for_update=True)
         if db_key is None:
-            await self.raise_error(message="API key not found", code=404)
+            await self.raise_error(message="API key not found", code=404, db=db)
 
         if not admin.is_owner and db_key.admin_id != admin.id:
-            await self.raise_error(message="Permission denied", code=403)
+            await self.raise_error(message="Permission denied", code=403, db=db)
 
         # Rotating returns the key's new secret, so a custom-permission key may only rotate itself or
         # keys that stay within its own permissions.
-        if admin.custom_api_key_id is not None and db_key.id != admin.custom_api_key_id:
-            if db_key.inherit_permissions:
-                await self.raise_error(message=_CUSTOM_KEY_INHERIT_DENIED, code=403)
-            try:
-                _check_permissions_not_exceed_admin(admin, RolePermissions.model_validate(db_key.permissions))
-            except ValueError as exc:
-                await self.raise_error(message=str(exc), code=403)
+        await self._ensure_rotation_within_custom_key(db, admin, db_key)
 
         raw_key, db_key = await revoke_api_key_crud(db, db_key)
+        await self._ensure_rotation_within_custom_key(db, admin, db_key)
         await db.commit()
 
         api_key_resp = APIKeyResponse.model_validate(db_key)
