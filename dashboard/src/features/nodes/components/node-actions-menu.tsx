@@ -169,7 +169,7 @@ const DeleteAlertDialog = ({ node, isOpen, onClose, onConfirm }: { node: NodeRes
           <AlertDialogTitle>{t('nodes.deleteNode')}</AlertDialogTitle>
           <AlertDialogDescription>
             <span dir={dir}>
-              <Trans i18nKey="deleteNode.prompt" values={{ name: node.name }} shouldUnescape />
+              <Trans i18nKey="deleteNode.prompt" values={{ name: node.name }} components={{ b: <b /> }} shouldUnescape />
             </span>
           </AlertDialogDescription>
         </AlertDialogHeader>

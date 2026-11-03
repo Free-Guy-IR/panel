@@ -30,7 +30,7 @@ const DeleteAlertDialog = ({ host, isOpen, onClose, onConfirm }: { host: BaseHos
           <AlertDialogTitle>{t('deleteHost.title')}</AlertDialogTitle>
           <AlertDialogDescription>
             <span dir={dir}>
-              <Trans i18nKey="deleteHost.prompt" values={{ name: host.remark ?? '' }} shouldUnescape />
+              <Trans i18nKey="deleteHost.prompt" values={{ name: host.remark ?? '' }} components={{ b: <b /> }} shouldUnescape />
             </span>
           </AlertDialogDescription>
         </AlertDialogHeader>
