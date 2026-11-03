@@ -42,7 +42,12 @@ from app.fork.operation.node_extras import (
     _known_node_version,
     _l2tp_unsupported_message,
     _node_lacks_l2tp,
+    connect_snapshot,
+    connect_snapshot_superseded,
+    current_connect_snapshot,
     note_ambiguous_start,
+    note_connect_push,
+    with_connect_snapshot,
 )
 from app.fork.operation.node_snapshots import (
     NO_ATTACH_PUSH,
@@ -495,9 +500,13 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             dict: {node_id, status, message, xray_version, node_version, old_status}
             None: if connection should be skipped
         """
+        snapshot = current_connect_snapshot()
         async with _connect_lock(db_node.id):
+            if connect_snapshot_superseded(db_node.id, snapshot):
+                logger.debug(f'Dropping a stale connect of "{db_node.name}" node, a newer config already reached it')
+                return None
             return await NodeOperation._connect_node_inner(
-                db_node, core, users, extra_cores, force_start, push_on_attach
+                db_node, core, users, extra_cores, force_start, push_on_attach, snapshot
             )
 
     @staticmethod
@@ -508,6 +517,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         extra_cores: list[tuple] | None,
         force_start: bool,
         push_on_attach: bool = True,
+        snapshot: int = 0,
     ) -> dict | None:
         pg_node: PasarGuardNode | None = await node_manager.get_node(db_node.id)
         if pg_node is None:
@@ -575,6 +585,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                     "node_version": known_version,
                     "old_status": old_status,
                 }
+        note_connect_push(db_node.id, snapshot)
         NodeOperation._in_flight_connects.add(db_node.id)
 
         try:
@@ -1061,6 +1072,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         if not nodes:
             return
 
+        snapshot = connect_snapshot()
         core_ids = {core_id for node in nodes for core_id in self._node_core_ids(node)}
         cores_by_id, users_by_core = await self._get_core_users_map(db, core_ids, lazy=True)
         sem = asyncio.Semaphore(CONNECT_CONCURRENCY)
@@ -1084,12 +1096,15 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                     }
 
                 core_id = node.core_config_id or 1
-                return await self.connect_node(
-                    node,
-                    cores_by_id.get(core_id),
-                    users_by_core.get(core_id, []),
-                    self._extra_cores_for(node, cores_by_id, users_by_core),
-                    force_start=force_start,
+                return await with_connect_snapshot(
+                    snapshot,
+                    self.connect_node(
+                        node,
+                        cores_by_id.get(core_id),
+                        users_by_core.get(core_id, []),
+                        self._extra_cores_for(node, cores_by_id, users_by_core),
+                        force_start=force_start,
+                    ),
                 )
 
         results = await asyncio.gather(*[connect_single(node) for node in nodes])
@@ -1150,6 +1165,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         )
 
     async def _connect_single_node_local(self, db: AsyncSession, node_id: int, *, force_start: bool = False) -> bool:
+        snapshot = connect_snapshot()
         db_node = await get_node_by_id(db, node_id, load_usage_logs=False)
         if db_node is None or db_node.status in (NodeStatus.disabled, NodeStatus.limited):
             return False
@@ -1184,7 +1200,9 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             return False
 
         # Connect the node
-        result = await NodeOperation.connect_node(db_node, core, users, extra_cores, force_start=force_start)
+        result = await with_connect_snapshot(
+            snapshot, NodeOperation.connect_node(db_node, core, users, extra_cores, force_start=force_start)
+        )
 
         if not result:
             return False

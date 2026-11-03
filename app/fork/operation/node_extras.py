@@ -1,6 +1,8 @@
 import asyncio
+import itertools
 import time
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 
 from packaging.version import InvalidVersion, Version
 from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
@@ -29,6 +31,36 @@ _CONNECT_LOCKS: dict[int, asyncio.Lock] = {}
 
 def _connect_lock(node_id: int) -> asyncio.Lock:
     return _CONNECT_LOCKS.setdefault(node_id, asyncio.Lock())
+
+
+_connect_snapshots = itertools.count(1)
+_pushed_snapshots: dict[int, int] = {}
+_caller_snapshot: ContextVar[int | None] = ContextVar("connect_snapshot", default=None)
+
+
+def connect_snapshot() -> int:
+    return next(_connect_snapshots)
+
+
+def current_connect_snapshot() -> int:
+    return _caller_snapshot.get() or connect_snapshot()
+
+
+async def with_connect_snapshot[Result](snapshot: int, connect: Awaitable[Result]) -> Result:
+    token = _caller_snapshot.set(snapshot)
+    try:
+        return await connect
+    finally:
+        _caller_snapshot.reset(token)
+
+
+def connect_snapshot_superseded(node_id: int, snapshot: int) -> bool:
+    return _pushed_snapshots.get(node_id, 0) > snapshot
+
+
+def note_connect_push(node_id: int, snapshot: int) -> None:
+    if snapshot > _pushed_snapshots.get(node_id, 0):
+        _pushed_snapshots[node_id] = snapshot
 
 
 AMBIGUOUS_START_MIN_WINDOW_SECONDS = 120.0
