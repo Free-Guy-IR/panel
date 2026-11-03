@@ -12,7 +12,9 @@ from alembic.script import ScriptDirectory
 from alembic.util import CommandError
 from sqlalchemy import create_engine, inspect, text
 
+from app.fork import db_rollback
 from app.fork.db_rollback import ROLLBACK_FLAG, RollbackError, current_heads, default_config, main, rollback
+from app.fork.migration_guards import StrayMigrationObjectError
 
 ROOT = Path(__file__).resolve().parents[1]
 PROD_REVISION = "e5a9c3f1b7d2"
@@ -456,3 +458,16 @@ def test_the_production_image_starts_only_on_a_database_rolled_back_to_the_offic
     started = _prod_alembic(tree, url, "upgrade", "head")
     assert started.returncode == 0, started.stdout + started.stderr
     assert _versions(sync_url) == [OFFICIAL_REVISION]
+
+
+def test_a_rollback_refused_by_a_filled_stray_table_exits_2_with_the_refusal(monkeypatch, capsys):
+    refusal = "table named_locks holds 1 rows although revision e5a9c3f1b7d2 is not applied; nothing was changed"
+
+    def refuse(*_args, **_kwargs):
+        raise StrayMigrationObjectError(refusal)
+
+    monkeypatch.setattr(db_rollback, "rollback", refuse)
+
+    assert main(["--to", PROD_REVISION, "--url", "sqlite:///unused.db"]) == 2
+
+    assert capsys.readouterr().err == f"rollback refused: {refusal}\n"

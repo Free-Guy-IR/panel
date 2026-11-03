@@ -10,7 +10,7 @@ from alembic.runtime.environment import EnvironmentContext
 from alembic.script import ScriptDirectory
 from alembic.util import CommandError
 
-from app.fork.migration_guards import MIGRATION_LOCK_HELD, held_migration_lock
+from app.fork.migration_guards import MIGRATION_LOCK_HELD, StrayMigrationObjectError, held_migration_lock
 
 ROOT = Path(__file__).resolve().parents[2]
 ROLLBACK_FLAG = "fork_db_rollback"
@@ -145,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         rollback(default_config(args.url, args.x_arguments), args.target, dry_run=args.dry_run)
-    except RollbackError as exc:
+    except (RollbackError, StrayMigrationObjectError) as exc:
         print(f"rollback refused: {exc}", file=sys.stderr)
         return 2
     return 0
