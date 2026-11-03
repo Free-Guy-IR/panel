@@ -28,12 +28,12 @@ import {
   formatPeriodLabelForPeriod,
   formatTooltipDate,
   getChartQueryRangeFromDateRange,
-  getChartQueryRangeFromShortcut,
   getChartXAxisInterval,
   resolvePeriodOverride,
   TrafficShortcutKey,
 } from '@/utils/chart-period-utils'
 import { getChartBrushWindow, getChartRenderFlags } from '@/utils/chart-performance'
+import { getSubUpdateShortcutQueryRange } from '@/fork/charts/sub-update-query-range'
 import { numberWithCommas } from '@/utils/formatByte'
 
 import ChartBrush from './chart-brush'
@@ -239,11 +239,7 @@ function UserSubUpdatePieChart({ username, adminId }: UserSubUpdatePieChartProps
       return getChartQueryRangeFromDateRange(customRange, selectedTime, periodOptions)
     }
 
-    const range = getChartQueryRangeFromShortcut(selectedTime, new Date(), periodOptions)
-    if (!resolvedOverride && selectedTime === 'all') {
-      return { ...range, period: Period.month }
-    }
-    return range
+    return getSubUpdateShortcutQueryRange(selectedTime, new Date(), resolvedOverride)
   }, [showCustomRange, customRange, selectedTime, periodOverride])
 
   const activePeriod = activeQueryRange.period
