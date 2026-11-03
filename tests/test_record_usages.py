@@ -920,6 +920,8 @@ async def test_usage_writes_are_ordered_by_user_id(monkeypatch: pytest.MonkeyPat
             table_name = getattr(getattr(statement, "table", None), "name", "")
             if table_name == "users" and isinstance(params, list):
                 captured["users"].extend(item["uid"] for item in params)
+            elif table_name == "users" and isinstance(params, dict) and "uids" in params:
+                captured["users"].extend(params["uids"])
             elif table_name == "admins" and isinstance(params, list):
                 captured["admins"].extend(item["admin_id"] for item in params)
             if params is None:
