@@ -51,6 +51,7 @@ async def test_process_username_message_happy(monkeypatch, fake_state, admin, fa
     monkeypatch.setattr(user_h, "add_to_messages_to_delete", AsyncMock())
     monkeypatch.setattr(user_h.UserValidator, "validate_username", lambda x: x)
     monkeypatch.setattr(user_h.user_operations, "get_validated_user", AsyncMock(side_effect=ValueError("not found")))
+    monkeypatch.setattr(user_h, "get_existing_usernames", AsyncMock(return_value=set()))
 
     await user_h.process_username(event, fake_state, db=object(), admin=admin)
 
@@ -65,6 +66,7 @@ async def test_process_username_callback_duplicate(monkeypatch, fake_state, admi
     monkeypatch.setattr(user_h, "add_to_messages_to_delete", AsyncMock())
     monkeypatch.setattr(user_h.random, "choices", lambda *args, **kwargs: list("ABCDE"))
     monkeypatch.setattr(user_h.user_operations, "get_validated_user", AsyncMock(return_value=SimpleNamespace()))
+    monkeypatch.setattr(user_h, "get_existing_usernames", AsyncMock(return_value={"ABCDE"}))
 
     await user_h.process_username(event, fake_state, db=object(), admin=admin)
 
@@ -320,6 +322,7 @@ async def test_create_user_from_template_choose(monkeypatch, fake_state, admin, 
     monkeypatch.setattr(user_h.UserValidator, "validate_username", lambda x: x)
     monkeypatch.setattr(user_h.user_templates, "get_validated_user_template", AsyncMock(return_value=template))
     monkeypatch.setattr(user_h.user_operations, "get_validated_user", AsyncMock(side_effect=ValueError("missing")))
+    monkeypatch.setattr(user_h, "get_existing_usernames", AsyncMock(return_value=set()))
     monkeypatch.setattr(user_h.user_operations, "create_user_from_template", AsyncMock(return_value=fake_user))
     monkeypatch.setattr(user_h.user_operations, "validate_all_groups", AsyncMock(return_value=[]))
 
