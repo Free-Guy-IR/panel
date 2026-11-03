@@ -258,3 +258,100 @@ def test_xray_finalmask_xdns_doh_tls_config_survives_outbound_normalization():
         {"addrs": ["https://d.example/q"], "tlsConfig": {}}
     ]
     assert normalized_download["finalmask"]["udp"][0]["settings"]["resolvers"][0]["tlsConfig"] == {}
+
+
+def test_restore_doh_tls_configs_matches_upstream_lowercase_https_check():
+    from app.fork.finalmask import restore_doh_tls_configs
+
+    upper = {"udp": [{"type": "xdns", "settings": {"resolvers": [{"addrs": ["HTTPS://dns.example/q"]}]}}]}
+    lower = {"udp": [{"type": "xdns", "settings": {"resolvers": [{"addrs": ["https://dns.example/q"]}]}}]}
+
+    assert "tlsConfig" not in restore_doh_tls_configs(upper)["udp"][0]["settings"]["resolvers"][0]
+    assert restore_doh_tls_configs(lower)["udp"][0]["settings"]["resolvers"][0]["tlsConfig"] == {}
+    model_resolver = FinalMask.model_validate(upper).udp[0].settings.resolvers[0]
+    assert model_resolver.tls_config is None
+
+
+def _xdns_inbound(finalmask: dict, network: str = "tcp", download=None):
+    from app.models.subscription import SubscriptionInboundData, TCPTransportConfig, TLSConfig, XHTTPTransportConfig
+
+    transport = (
+        XHTTPTransportConfig(path="/x", download_settings=download) if network == "xhttp" else TCPTransportConfig()
+    )
+    return SubscriptionInboundData(
+        remark="t",
+        inbound_tag="T",
+        protocol="vless",
+        address="v.example.com",
+        port=443,
+        network=network,
+        tls_config=TLSConfig(tls="tls", sni="v.example.com"),
+        transport_config=transport,
+        finalmask=finalmask,
+        priority=0,
+    )
+
+
+@pytest.mark.parametrize("as_model", [False, True])
+def test_xray_full_outbound_render_keeps_doh_resolver_tls_config(as_model):
+    finalmask = {
+        "udp": [
+            {
+                "type": "xdns",
+                "settings": {
+                    "domains": [{"names": ["t.example.com"]}],
+                    "resolvers": [{"addrs": ["https://d.example/q"]}, {"addrs": ["udp://1.1.1.1"]}],
+                },
+            }
+        ]
+    }
+    source = FinalMask.model_validate(finalmask) if as_model else deepcopy(finalmask)
+    conf = XrayConfiguration(
+        xray_template_content=json.dumps({"outbounds": [{"tag": "DIRECT", "protocol": "freedom"}]})
+    )
+
+    conf.add(
+        remark="r",
+        address="v.example.com",
+        inbound=_xdns_inbound(source),
+        settings={"id": "11111111-1111-1111-1111-111111111111", "flow": ""},
+    )
+    rendered = json.loads(conf.render())
+    outbound = rendered[0]["outbounds"][0]
+
+    assert outbound["protocol"] == "vless"
+    assert outbound["streamSettings"]["finalmask"]["udp"][0]["settings"]["resolvers"] == [
+        {"addrs": ["https://d.example/q"], "tlsConfig": {}},
+        {"addrs": ["udp://1.1.1.1"]},
+    ]
+    assert finalmask["udp"][0]["settings"]["resolvers"][0] == {"addrs": ["https://d.example/q"]}
+
+
+def test_xray_full_outbound_render_keeps_doh_tls_config_in_xhttp_download_settings():
+    finalmask = {
+        "udp": [
+            {
+                "type": "xdns",
+                "settings": {
+                    "domains": [{"names": ["t.example.com"]}],
+                    "resolvers": [{"addrs": ["https://d.example/q"]}],
+                },
+            }
+        ]
+    }
+    download = _xdns_inbound(deepcopy(finalmask), network="xhttp")
+    conf = XrayConfiguration(
+        xray_template_content=json.dumps({"outbounds": [{"tag": "DIRECT", "protocol": "freedom"}]})
+    )
+
+    conf.add(
+        remark="r",
+        address="v.example.com",
+        inbound=_xdns_inbound(deepcopy(finalmask), network="xhttp", download=download),
+        settings={"id": "11111111-1111-1111-1111-111111111111", "flow": ""},
+    )
+    stream = json.loads(conf.render())[0]["outbounds"][0]["streamSettings"]
+    download_stream = stream["xhttpSettings"]["extra"]["downloadSettings"]
+
+    assert stream["finalmask"]["udp"][0]["settings"]["resolvers"][0]["tlsConfig"] == {}
+    assert download_stream["finalmask"]["udp"][0]["settings"]["resolvers"][0]["tlsConfig"] == {}

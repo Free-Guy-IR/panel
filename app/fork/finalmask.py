@@ -77,7 +77,7 @@ def _is_doh_resolver(resolver: dict[str, Any]) -> bool:
     addrs = resolver.get("addrs")
     if not isinstance(addrs, list):
         return False
-    return any(isinstance(addr, str) and addr.lower().startswith(DOH_RESOLVER_SCHEME) for addr in addrs)
+    return any(isinstance(addr, str) and addr.startswith(DOH_RESOLVER_SCHEME) for addr in addrs)
 
 
 def restore_doh_tls_configs(final_mask: Any) -> Any:
