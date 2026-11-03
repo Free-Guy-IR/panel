@@ -856,9 +856,7 @@ async def _seed_billing_fixture(
 
 
 def _install_nodes(monkeypatch: pytest.MonkeyPatch, node_ids, coefficients, stats_map):
-    nodes = [
-        (node_id, DummyNode(node_id, usage_coefficient=coeff)) for node_id, coeff in zip(node_ids, coefficients)
-    ]
+    nodes = [(node_id, DummyNode(node_id, usage_coefficient=coeff)) for node_id, coeff in zip(node_ids, coefficients)]
     monkeypatch.setattr(record_usages.node_manager, "get_healthy_nodes", AsyncMock(return_value=nodes))
 
     async def fake_get_users_stats(node: DummyNode, node_id: int | None = None):
