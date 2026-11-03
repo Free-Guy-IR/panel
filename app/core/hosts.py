@@ -6,13 +6,14 @@ import nats
 from aiocache import cached
 from nats.js.client import JetStreamContext
 from nats.js.kv import KeyValue
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import on_shutdown, on_startup
 from app.core.manager import DB_RELOAD_ATTEMPTS, core_manager
 from app.db import GetDB
 from app.db.crud.host import get_host_by_id, get_hosts, upsert_inbounds
-from app.db.models import ProxyHostSecurity
+from app.db.models import ProxyHost, ProxyHostSecurity
 from app.models.host import (
     BaseHost,
     FinalMask,
@@ -533,6 +534,8 @@ class HostManager:
         self._kv: KeyValue | None = None
         self._logger = get_logger("host-manager")
         self._generation = 0
+        self._stamp = 0
+        self._host_stamps: dict[int, int] = {}
         self._add_hosts_impl = (
             self._add_hosts_nats if (self._nats_enabled and self._multi_worker) else self._add_hosts_local
         )
@@ -627,8 +630,28 @@ class HostManager:
         await self.setup_local(db)
 
     async def setup_local(self, db: AsyncSession):
+        stamp = self._next_stamp()
         db_hosts = await get_hosts(db)
-        await self._add_hosts_local(db, db_hosts)
+        await self._add_hosts_local(db, db_hosts, stamp=stamp)
+
+    def _next_stamp(self) -> int:
+        self._stamp += 1
+        return self._stamp
+
+    def _claim_host(self, host_id: int, stamp: int | None) -> bool:
+        if stamp is None:
+            return True
+        if stamp < self._host_stamps.get(host_id, 0):
+            return False
+        self._host_stamps[host_id] = stamp
+        return True
+
+    @staticmethod
+    async def _read_hosts(db: AsyncSession, host_ids: list[int]) -> list[ProxyHost]:
+        if not host_ids:
+            return []
+        stmt = select(ProxyHost).where(ProxyHost.id.in_(host_ids)).execution_options(populate_existing=True)
+        return list((await db.execute(stmt)).scalars().all())
 
     async def _reset_cache(self):
         await self.get_hosts.cache.clear()
@@ -672,56 +695,60 @@ class HostManager:
     async def add_hosts(self, db: AsyncSession, hosts: list[BaseHost]):
         await self._add_hosts_impl(db, hosts)
 
-    async def _add_prepared_hosts_local(self, prepared_hosts: list[tuple[int, SubscriptionInboundData | dict]]):
+    async def _add_prepared_hosts_local(
+        self,
+        prepared_hosts: list[tuple[int, SubscriptionInboundData | dict]],
+        stamp: int | None = None,
+        removed_ids: list[int] | None = None,
+    ):
         async with self._lock:
             for host_id, host_data in prepared_hosts:
+                if not self._claim_host(host_id, stamp):
+                    continue
                 self._hosts.pop(host_id, None)
                 # Ensure we store SubscriptionInboundData models, not dicts
                 if isinstance(host_data, dict):
                     self._hosts[host_id] = SubscriptionInboundData.model_validate(host_data)
                 else:
                     self._hosts[host_id] = host_data
+            for host_id in removed_ids or ():
+                if self._claim_host(host_id, stamp):
+                    self._hosts.pop(host_id, None)
             self._generation += 1
             await self._reset_cache()
 
-    async def _add_hosts_local(self, db: AsyncSession, hosts: list[BaseHost]):
-        serialized_hosts = [BaseHost.model_validate(host) for host in hosts]
+    async def _prepare_hosts(
+        self, db: AsyncSession, hosts: list[BaseHost], stamp: int | None
+    ) -> tuple[list[tuple[int, SubscriptionInboundData]], list[int], int]:
         inbounds_list = await core_manager.get_inbounds()
         await upsert_inbounds(db, inbounds_list)
         await db.commit()
 
+        if stamp is None:
+            host_ids = list(dict.fromkeys(host.id for host in hosts if host.id is not None))
+            stamp = self._next_stamp()
+            fresh_hosts = {db_host.id: db_host for db_host in await self._read_hosts(db, host_ids)}
+            hosts = [fresh_hosts[host_id] for host_id in host_ids if host_id in fresh_hosts]
+            hosts_to_remove = [host_id for host_id in host_ids if host_id not in fresh_hosts]
+        else:
+            hosts_to_remove = []
+
         prepared_hosts = []
-        hosts_to_remove = []
-        for host in serialized_hosts:
+        for host in [BaseHost.model_validate(host) for host in hosts]:
             result = await self._prepare_host_entry(db, host, inbounds_list)
             if result:
                 prepared_hosts.append(result)
             else:
                 hosts_to_remove.append(host.id)
+        return prepared_hosts, hosts_to_remove, stamp
 
-        await self._add_prepared_hosts_local(prepared_hosts)
-
-        async with self._lock:
-            for host_id in hosts_to_remove:
-                self._hosts.pop(host_id, None)
-            self._generation += 1
-
+    async def _add_hosts_local(self, db: AsyncSession, hosts: list[BaseHost], stamp: int | None = None):
+        prepared_hosts, hosts_to_remove, stamp = await self._prepare_hosts(db, hosts, stamp)
+        await self._add_prepared_hosts_local(prepared_hosts, stamp, hosts_to_remove)
         await self._persist_state()
 
-    async def _add_hosts_nats(self, db: AsyncSession, hosts: list[BaseHost]):
-        serialized_hosts = [BaseHost.model_validate(host) for host in hosts]
-        inbounds_list = await core_manager.get_inbounds()
-        await upsert_inbounds(db, inbounds_list)
-        await db.commit()
-
-        prepared_hosts = []
-        hosts_to_remove = []
-        for host in serialized_hosts:
-            result = await self._prepare_host_entry(db, host, inbounds_list)
-            if result:
-                prepared_hosts.append(result)
-            else:
-                hosts_to_remove.append(host.id)
+    async def _add_hosts_nats(self, db: AsyncSession, hosts: list[BaseHost], stamp: int | None = None):
+        prepared_hosts, hosts_to_remove, stamp = await self._prepare_hosts(db, hosts, stamp)
 
         # Publish messages - all workers will process via listener
         for host_id, host_data in prepared_hosts:
@@ -732,11 +759,7 @@ class HostManager:
             await self._publish({"action": "remove", "host_id": host_id})
 
         # Keep local state in sync immediately, while still broadcasting via NATS.
-        await self._add_prepared_hosts_local(prepared_hosts)
-        async with self._lock:
-            for host_id in hosts_to_remove:
-                self._hosts.pop(host_id, None)
-            self._generation += 1
+        await self._add_prepared_hosts_local(prepared_hosts, stamp, hosts_to_remove)
 
         # Persist state to NATS KV
         await self._persist_state()
@@ -746,10 +769,7 @@ class HostManager:
         await self._remove_host_impl(id)
 
     async def _remove_host_local(self, id: int):
-        async with self._lock:
-            self._hosts.pop(id, None)
-            self._generation += 1
-            await self._reset_cache()
+        await self._add_prepared_hosts_local([], self._next_stamp(), [id])
         await self._persist_state()
 
     async def _remove_host_nats(self, id: int):
