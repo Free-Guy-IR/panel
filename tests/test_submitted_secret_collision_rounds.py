@@ -253,3 +253,51 @@ async def test_a_legacy_duplicate_rotates_the_claim_holder_that_resubmits_its_ow
     assert prepared.hysteria.auth != shared
     assert (await db.get(User, copy.id, populate_existing=True)).proxy_settings["hysteria"]["auth"] == shared
     assert [retired_at for _, retired_at in await _claims_of(db, holder)] == [None]
+
+
+@pytest.mark.asyncio
+async def test_a_kept_current_value_that_another_user_also_stores_is_regenerated(
+    db, replace_submitted_collisions, caplog
+):
+    admin = await _admin(db)
+    old, current = f"old-{uuid4().hex}", f"cur-{uuid4().hex}"
+    user = await _user(db, admin, old)
+    await _rotate(db, user, current)
+    copy = await _copy_without_claim(db, admin, current)
+
+    with caplog.at_level(logging.WARNING, logger=LOGGER):
+        prepared = await _enforce(db, old, user_id=user.id)
+
+    assert prepared.hysteria.auth not in (old, current)
+    assert (await db.get(User, copy.id, populate_existing=True)).proxy_settings["hysteria"]["auth"] == current
+    assert _warnings(caplog) == [
+        "proxy secret hysteria.auth submitted for this user was retired from this user; keeping its current value",
+        (
+            "the current value of proxy secret hysteria.auth kept for this user collided with a held or used value; "
+            "regenerating it"
+        ),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_an_own_retired_value_with_no_current_value_gets_a_fresh_one_logged_as_retired(
+    db, replace_submitted_collisions, caplog
+):
+    admin = await _admin(db)
+    old = f"old-{uuid4().hex}"
+    user = await _user(db, admin, old)
+    emptied = ProxyTable().dict()
+    emptied["hysteria"] = {}
+    user.proxy_settings = emptied
+    await db.commit()
+
+    with caplog.at_level(logging.WARNING, logger=LOGGER):
+        prepared = await _enforce(db, old, user_id=user.id)
+
+    assert prepared.hysteria.auth and prepared.hysteria.auth != old
+    assert _warnings(caplog) == [
+        (
+            "proxy secret hysteria.auth submitted for this user was retired from this user; "
+            "replacing it with a freshly generated unique value"
+        )
+    ]

@@ -189,6 +189,8 @@ def _log_replaced_submission(field: ProxySecretField, collisions: SecretCollisio
         reason = f"is already stored by {collisions.stored[field]} other user(s)"
     elif field in collisions.batch:
         reason = "was already taken by an earlier user in the same request"
+    elif field in collisions.retired_own:
+        reason = "was retired from this user"
     elif field in collisions.claimed_live:
         reason = "is held by another user"
     else:
@@ -207,11 +209,12 @@ async def current_own_secrets(
     rows = await read_committed_rows(db, select(User.proxy_settings).where(User.id == user_id))
     if not rows or not isinstance(rows[0][0], dict):
         return {}
-    current = ProxyTable.model_validate(rows[0][0])
+    stored = rows[0][0]
+    current = ProxyTable.model_validate(stored)
     kept: dict[ProxySecretField, object] = {}
     for field in fields:
         spec = SPEC_BY_FIELD[field]
-        if read_secret(current, spec):
+        if read_stored_secret(stored, spec):
             kept[field] = getattr(getattr(current, spec.protocol), spec.attribute)
     return kept
 
@@ -233,6 +236,7 @@ async def enforce_unique_proxy_secrets(
             pending[spec.field] = value
 
     submitted_unchecked = frozenset(explicit_fields)
+    kept: dict[ProxySecretField, object] = {}
     for regenerations_done in range(MAX_REGENERATION_ATTEMPTS + 1):
         collisions = await secret_collisions(db, pending, exclude_user_id=exclude_user_id, reserved=reserved)
         colliding = collisions.fields
@@ -252,6 +256,7 @@ async def enforce_unique_proxy_secrets(
         if regenerations_done == MAX_REGENERATION_ATTEMPTS:
             break
 
+        kept_before = frozenset(kept)
         kept = await current_own_secrets(db, exclude_user_id, submitted & collisions.retired_own)
         pending = {}
         for field in sorted(colliding):
@@ -265,6 +270,11 @@ async def enforce_unique_proxy_secrets(
             else:
                 if field in submitted:
                     _log_replaced_submission(field, collisions)
+                elif field in kept_before:
+                    logger.warning(
+                        f"the current value of proxy secret {field.value} kept for this user collided with a held "
+                        "or used value; regenerating it"
+                    )
                 else:
                     logger.warning(
                         f"generated proxy secret {field.value} collided with a held or used value; regenerating it"
