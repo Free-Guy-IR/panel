@@ -3,11 +3,15 @@ import re
 _TOKEN_WITH_AT = re.compile(r"(?<!\S)[^\s@]*@\S*")
 _BARE_USER_PREFIX = re.compile(r"(?:^|(?<=['\"(\[<=,;]))[^\s:/@'\"=,;()\[\]<>]+:(?!//)")
 _TELEGRAM_BOT_TOKEN = re.compile(r"(?<=/[Bb][Oo][Tt])\d+(?::|%3[Aa])[A-Za-z0-9_-]+")
-_BARE_BOT_TOKEN = re.compile(r"(?<![A-Za-z0-9_])((?:[Bb][Oo][Tt])?)\d{6,}(?::|%3[Aa])[A-Za-z0-9_-]{30,}")
+_BARE_BOT_TOKEN = re.compile(r"(?<![A-Za-z0-9])((?:[Bb][Oo][Tt])?)\d{6,}(?::|%3[Aa])[A-Za-z0-9_-]{30,}")
 _ENCODED_TOKEN = re.compile(r"(?<!\S)\S*%40\S*")
 _ENCODED_SCHEME_SEPARATOR = "%3a%2f%2f"
 _ENCODED_AT = "%40"
 _PASSWORD_PAIR = re.compile(r"(?<![A-Za-z0-9_])((?:[Pp][Aa][Ss][Ss][Ww](?:[Oo][Rr])?[Dd]|[Pp][Ww][Dd])=)[^\s&;,'\"]+")
+_PASSWORD_QUOTED = re.compile(
+    r"""(?<![A-Za-z0-9])(["']?(?i:pass(?:wor|w)d|pwd)["']?[ \t]{0,8}[:=][ \t]{0,8})(["'])(?:(?!\2)[^\\\n]|\\.)+"""
+)
+_PASSWORD_COLON = re.compile(r"(?<![A-Za-z0-9])((?i:pass(?:wor|w)d|pwd)[ \t]{0,8}:[ \t]{0,8})([^\s&;,'\"]+)")
 _SCHEME_SEPARATOR = "://"
 _MASK = "***@"
 _AUTHORITY = re.compile(r"(?<=://)[^\s/?#@]+")
@@ -75,10 +79,18 @@ def _mask_basic_auth(text: str) -> str:
     return "".join(pieces)
 
 
+def _mask_password_colon(match: re.Match) -> str:
+    value = match.group(2)
+    if value.isalpha() and value.islower():
+        return match.group()
+    return match.group(1) + "***"
+
+
 def scrub_credentials(text: object) -> str:
     scrubbed = _TOKEN_WITH_AT.sub(_scrub_token, _mask_basic_auth(str(text)))
     scrubbed = _ENCODED_TOKEN.sub(_scrub_encoded_token, _AUTHORITY.sub(_scrub_authority, scrubbed))
     scrubbed = _BARE_BOT_TOKEN.sub(r"\1***", _TELEGRAM_BOT_TOKEN.sub("***", scrubbed))
+    scrubbed = _PASSWORD_COLON.sub(_mask_password_colon, _PASSWORD_QUOTED.sub(r"\1\2***", scrubbed))
     return _PASSWORD_PAIR.sub(r"\1***", scrubbed)
 
 

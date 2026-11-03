@@ -151,12 +151,12 @@ def test_a_factory_set_before_import_is_chained_and_the_scrub_runs_once():
 
         log_scrub.scrub_credentials = counting
         node_messages.scrub_credentials = counting
+        app.utils.logger.get_logger("reinstall-probe")
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(logging.Formatter("%(tagged)s %(message)s"))
         once = logging.getLogger("once")
         once.addHandler(handler)
         once.propagate = False
-        app.utils.logger.get_logger("once")
         calls.clear()
         once.error("once %s", "http://u:{SECRET}@h:1")
         print("calls", len(calls))
@@ -278,7 +278,7 @@ def test_the_scrub_stays_linear_between_half_a_megabyte_and_a_megabyte():
         full = best(unit * 1024)
         print(json.dumps({"half": half, "full": full}))
         """,
-        stdin=("a:b@password" + ": _1234567%3A\"pwd\":\"x ") * (KILOBYTE // 34),
+        stdin=("a:b@password" + ': _1234567%3A"pwd":"x ') * (KILOBYTE // 34),
     )
     assert finished.returncode == 0, finished.stderr
     result = json.loads(finished.stdout.strip().splitlines()[-1])
