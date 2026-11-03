@@ -297,3 +297,17 @@ def test_a_rollback_that_loses_its_migration_lock_session_stops_before_the_next_
     assert not [line for line in lines if line.startswith("alembic downgrade")]
     assert _versions(url) == [HEAD]
     assert _lock_holders() == []
+
+
+def test_a_rollback_that_cannot_take_the_migration_lock_reports_the_timeout_and_changes_nothing(tmp_path, monkeypatch):
+    url = f"sqlite+aiosqlite:///{tmp_path / 'busy_lock.sqlite3'}"
+    config = _config(url)
+    _quiet(upgrade, config, "head")
+    _fake_sqlite_migration_lock(monkeypatch)
+    monkeypatch.setitem(migration_guards.LOCKS, "sqlite", (lambda _connection, _timeout: (False, {}), "SELECT 1"))
+
+    with pytest.raises(migration_guards.MigrationLockTimeout, match="held the database migration lock"):
+        _quiet(rollback, config, PROD_REVISION, echo=lambda _line: None)
+
+    assert _versions(url) == [HEAD]
+    assert _lock_holders() == []

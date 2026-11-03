@@ -157,6 +157,7 @@ class _MigrationLockHolder(threading.Thread):
         self.taken = threading.Event()
         self.finished = threading.Event()
         self.error: BaseException | None = None
+        self.held = False
 
     def run(self) -> None:
         try:
@@ -171,6 +172,7 @@ class _MigrationLockHolder(threading.Thread):
         try:
             async with engine.connect() as connection:
                 parameters = await connection.run_sync(_take_lock, self.timeout)
+                self.held = True
                 self.taken.set()
                 try:
                     await self._keep_alive(connection)
@@ -188,8 +190,11 @@ class _MigrationLockHolder(threading.Thread):
                 checked = time.monotonic()
 
     def check(self) -> None:
-        if self.error is not None:
-            raise MigrationLockError(
+        if self.error is None:
+            return
+        if not self.held:
+            raise self.error
+        raise MigrationLockError(
                 f"the rollback lost the database migration lock ({self.error!r}); another migrator may have run, "
                 "read alembic_version before going on"
             ) from self.error
