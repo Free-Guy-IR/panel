@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import event, select, update
+from sqlalchemy import event, select, text, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -52,18 +52,30 @@ CASES = [
 ]
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("strict", [False, True])
-@pytest.mark.parametrize("field,amount,seed,moved", CASES)
-async def test_a_separate_connection_writer_after_the_locked_check_never_lands_an_out_of_range_result(
-    wal_sqlite, monkeypatch, strict, field, amount, seed, moved
-):
+async def _seed(wal_sqlite, **values) -> list[int]:
     _, user_ids, _ = await seed_users_and_nodes(wal_sqlite, user_count=2, node_count=0)
     async with wal_sqlite() as session:
         await session.execute(
-            update(User).where(User.id.in_(user_ids)).values(status=UserStatus.active, used_traffic=MB, **seed)
+            update(User).where(User.id.in_(user_ids)).values(status=UserStatus.active, used_traffic=MB, **values)
         )
         await session.commit()
+    return user_ids
+
+
+async def _no_write_lock(db) -> None:
+    return None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("write_lock", [True, False])
+@pytest.mark.parametrize("strict", [False, True])
+@pytest.mark.parametrize("field,amount,seed,moved", CASES)
+async def test_a_separate_connection_writer_after_the_locked_check_never_lands_an_out_of_range_result(
+    wal_sqlite, monkeypatch, write_lock, strict, field, amount, seed, moved
+):
+    user_ids = await _seed(wal_sqlite, **seed)
+    if not write_lock:
+        monkeypatch.setattr(bulk_crud, "_hold_write_lock_without_row_locks", _no_write_lock)
     original = bulk_crud._reject_out_of_range_locked_targets
     writer: list[str] = []
 
@@ -92,7 +104,7 @@ async def test_a_separate_connection_writer_after_the_locked_check_never_lands_a
     async with wal_sqlite() as session:
         rows = dict((await session.execute(select(User.id, getattr(User, field)).where(User.id.in_(user_ids)))).all())
 
-    assert len(writer) == 1, writer
+    assert writer == (["blocked"] if write_lock else ["landed"]), (writer, outcome, rows)
     if field == "expire":
         assert all(value is not None for value in rows.values()), (writer, outcome, rows)
     else:
@@ -101,7 +113,46 @@ async def test_a_separate_connection_writer_after_the_locked_check_never_lands_a
             outcome,
             rows,
         )
-    if writer == ["landed"]:
-        assert outcome in ("rejected", "conflict"), (outcome, rows)
-    else:
+    if write_lock:
         assert outcome == "applied", (outcome, rows)
+    else:
+        assert outcome in ("rejected", "conflict"), (outcome, rows)
+        kept = {user_ids[0]: seed[field], user_ids[1]: moved[field]}
+        assert rows == {
+            user_id: value.replace(tzinfo=None) if isinstance(value, datetime) else value
+            for user_id, value in kept.items()
+        }, (outcome, rows)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("amount", [60, -60])
+async def test_a_user_already_loaded_in_the_session_does_not_break_the_bulk_expire(wal_sqlite, amount):
+    start = datetime(2030, 1, 1, tzinfo=UTC)
+    user_ids = await _seed(wal_sqlite, expire=start)
+    async with wal_sqlite() as session:
+        loaded = (await session.execute(select(User).where(User.id == user_ids[0]))).scalar_one()
+        assert loaded.id == user_ids[0]
+        _, count = await bulk_crud.update_users_expire(session, BulkUser(amount=amount, users=user_ids))
+    assert count == 2
+    async with wal_sqlite() as session:
+        stored = (await session.execute(select(User.expire).where(User.id.in_(user_ids)))).scalars().all()
+    assert stored == [(start + timedelta(seconds=amount)).replace(tzinfo=None)] * 2, stored
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_sqlite_expire_rejects_a_negative_bulk_step_instead_of_skipping_it(wal_sqlite):
+    start = datetime.now(UTC).replace(microsecond=0) + timedelta(hours=2)
+    user_ids = await _seed(wal_sqlite, expire=start)
+    async with wal_sqlite() as session:
+        await session.execute(text("UPDATE users SET expire = 'not a date' WHERE id = :id"), {"id": user_ids[1]})
+        await session.commit()
+    async with wal_sqlite() as session:
+        with pytest.raises(BulkUserResultOutOfRange):
+            await bulk_crud.update_users_expire(session, BulkUser(amount=-60, users=user_ids))
+    async with wal_sqlite() as session:
+        stored = (
+            await session.execute(
+                text("SELECT id, expire FROM users WHERE id IN (:a, :b)"), {"a": user_ids[0], "b": user_ids[1]}
+            )
+        ).all()
+    assert dict(stored)[user_ids[1]] == "not a date", stored
