@@ -234,3 +234,22 @@ async def test_bulk_quota_step_racing_a_quota_raise_and_usage_recording_never_st
         assert rows[user_ids[0]][0] == START_LIMIT and rows[user_ids[1]][0] == raised, rows
     else:
         assert rows[user_ids[0]][0] == START_LIMIT + BIG_STEP and rows[user_ids[1]][0] == raised, rows
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("amount", [60, -60])
+@pytest.mark.parametrize("strict", [False, True])
+async def test_a_user_already_loaded_in_the_bulk_session_keeps_the_expire_step_working(recorder_db, amount, strict):
+    user_ids = await _seed(recorder_db)
+    start = datetime(2030, 1, 1, tzinfo=UTC)
+    for user_id in user_ids:
+        await _set_user(recorder_db, user_id, expire=start)
+    async with recorder_db() as session:
+        loaded = (await session.execute(select(User).where(User.id == user_ids[0]))).scalar_one()
+        assert loaded.id == user_ids[0]
+        _, count = await update_users_expire(
+            session, BulkUser(amount=amount, users=user_ids), target_ids=user_ids if strict else None
+        )
+    assert count == 2
+    expected = start + timedelta(seconds=amount)
+    assert await _expires(recorder_db, user_ids) == {user_id: expected for user_id in user_ids}
