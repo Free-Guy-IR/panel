@@ -71,7 +71,11 @@ def test_owner_created_keys_still_reject_malformed_scopes(scoped):
         response = client.post(
             "/api/api_key",
             headers=auth_headers(token),
-            json={"name": unique_name("bad_scope"), "inherit_permissions": False, "permissions": {"users": {"read": scoped}}},
+            json={
+                "name": unique_name("bad_scope"),
+                "inherit_permissions": False,
+                "permissions": {"users": {"read": scoped}},
+            },
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
     finally:
