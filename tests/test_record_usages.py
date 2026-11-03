@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from collections import defaultdict
@@ -16,6 +17,7 @@ from sqlalchemy.pool import NullPool
 
 from app.db import base
 from app.db.crud.bulk import reset_all_users_data_usage
+from app.db.crud.node import remove_node
 from app.db.crud.user import bulk_reset_user_data_usage, reset_user_data_usage
 from app.db.models import (
     Admin,
@@ -1457,3 +1459,113 @@ def test_scheduler_defaults_serialize_unflagged_jobs():
     assert defaults["max_instances"] == 1
     assert defaults["coalesce"] is True
     assert defaults["misfire_grace_time"] == 30
+
+
+async def _seed_node_delete_race(session_factory):
+    async with session_factory() as session:
+        admin = Admin(username="race-admin", hashed_password="secret", role_id=3)
+        session.add(admin)
+        await session.flush()
+        users = [
+            User(username=name, admin_id=admin.id, proxy_settings=ProxyTable().dict(no_obj=True))
+            for name in ("race-user-1", "race-user-2")
+        ]
+        nodes = [
+            Node(
+                name=name,
+                address=f"10.9.0.{index}",
+                port=2000 + index,
+                api_port=3000 + index,
+                server_ca="ca",
+                api_key=f"race-key-{index}",
+                core_config_id=None,
+            )
+            for index, name in enumerate(("race-kept-node", "race-deleted-node"), start=1)
+        ]
+        session.add_all(users + nodes)
+        await session.flush()
+        ids = admin.id, [user.id for user in users], [node.id for node in nodes]
+        await session.commit()
+    return ids
+
+
+async def _delete_node(session_factory, node_id: int) -> None:
+    async with session_factory() as session:
+        node = (await session.execute(select(Node).where(Node.id == node_id))).scalar_one()
+        await remove_node(session, node)
+
+
+async def _race_totals(session_factory, admin_id, user_ids):
+    async with session_factory() as session:
+        users = dict((await session.execute(select(User.id, User.used_traffic).where(User.id.in_(user_ids)))).all())
+        admin = (await session.execute(select(Admin.used_traffic).where(Admin.id == admin_id))).scalar_one()
+        history = (
+            await session.execute(select(NodeUserUsage.node_id, NodeUserUsage.user_id, NodeUserUsage.used_traffic))
+        ).all()
+    return users, admin, history
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ordering", ["overlapping", "delete_commits_first"])
+async def test_usage_recording_survives_a_concurrent_node_delete(
+    monkeypatch: pytest.MonkeyPatch, session_factory, ordering
+):
+    admin_id, (user_one, user_two), (kept_node, deleted_node) = await _seed_node_delete_race(session_factory)
+    monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+
+    stats_map = {
+        kept_node: [{"uid": str(user_one), "value": 100}, {"uid": str(user_two), "value": 50}],
+        deleted_node: [{"uid": str(user_one), "value": 70}],
+    }
+    stats_read = asyncio.Event()
+    delete_committed = asyncio.Event()
+
+    async def fake_get_users_stats(node: DummyNode, node_id: int | None = None):
+        if node.node_id == deleted_node:
+            stats_read.set()
+            if ordering == "delete_commits_first":
+                await delete_committed.wait()
+            else:
+                await asyncio.sleep(0)
+        return stats_map[node.node_id]
+
+    monkeypatch.setattr(record_usages, "get_users_stats", fake_get_users_stats)
+    monkeypatch.setattr(
+        record_usages.node_manager,
+        "get_healthy_nodes",
+        AsyncMock(return_value=[(node_id, DummyNode(node_id)) for node_id in (kept_node, deleted_node)]),
+    )
+
+    async def delete_after_read():
+        await stats_read.wait()
+        await _delete_node(session_factory, deleted_node)
+        delete_committed.set()
+
+    await asyncio.wait_for(asyncio.gather(record_usages.record_user_usages(), delete_after_read()), timeout=30)
+
+    users, admin_used, history = await _race_totals(session_factory, admin_id, [user_one, user_two])
+    assert users == {user_one: 170, user_two: 50}
+    assert admin_used == 220
+    assert all(row.node_id != deleted_node for row in history)
+    kept_history = defaultdict(int)
+    user_history = defaultdict(int)
+    for row in history:
+        user_history[row.user_id] += row.used_traffic
+        if row.node_id == kept_node:
+            kept_history[row.user_id] += row.used_traffic
+    assert dict(kept_history) == {user_one: 100, user_two: 50}
+    assert dict(user_history) == {user_one: 170, user_two: 50}
+
+    stats_map[kept_node] = [{"uid": str(user_one), "value": 30}]
+    monkeypatch.setattr(
+        record_usages.node_manager,
+        "get_healthy_nodes",
+        AsyncMock(return_value=[(kept_node, DummyNode(kept_node))]),
+    )
+    await record_usages.record_user_usages()
+
+    users, admin_used, history = await _race_totals(session_factory, admin_id, [user_one, user_two])
+    assert users == {user_one: 200, user_two: 50}
+    assert admin_used == 250
+    assert all(row.node_id != deleted_node for row in history)
+    assert sum(row.used_traffic for row in history if row.node_id == kept_node and row.user_id == user_one) == 130
