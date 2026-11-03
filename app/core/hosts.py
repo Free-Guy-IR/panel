@@ -720,13 +720,17 @@ class HostManager:
     async def _prepare_hosts(
         self, db: AsyncSession, hosts: list[BaseHost], stamp: int | None
     ) -> tuple[list[tuple[int, SubscriptionInboundData]], list[int], int]:
+        reread = stamp is None
+        if reread:
+            host_ids = list(dict.fromkeys(host.id for host in hosts if host.id is not None))
+            await db.commit()
+            stamp = self._next_stamp()
+
         inbounds_list = await core_manager.get_inbounds()
         await upsert_inbounds(db, inbounds_list)
         await db.commit()
 
-        if stamp is None:
-            host_ids = list(dict.fromkeys(host.id for host in hosts if host.id is not None))
-            stamp = self._next_stamp()
+        if reread:
             fresh_hosts = {db_host.id: db_host for db_host in await self._read_hosts(db, host_ids)}
             hosts = [fresh_hosts[host_id] for host_id in host_ids if host_id in fresh_hosts]
             hosts_to_remove = [host_id for host_id in host_ids if host_id not in fresh_hosts]
