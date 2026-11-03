@@ -1,9 +1,11 @@
 import asyncio
+import os
 import uuid
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy import and_, func, insert, or_, select
+from sqlalchemy import and_, func, insert, or_, select, text
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -21,9 +23,17 @@ from app.db.models import (
 )
 from app.node import user as node_user
 
+PARITY_DB_URL = os.environ.get("PARITY_DB_URL")
 
-def _legacy_statement(inbound_tags):
-    inbound_agg = func.group_concat(ProxyInbound.tag.distinct()).label("inbound_tags")
+
+def _inbound_aggregate(dialect):
+    if dialect == "postgresql":
+        return func.string_agg(ProxyInbound.tag.distinct(), ",").label("inbound_tags")
+    return func.group_concat(ProxyInbound.tag.distinct()).label("inbound_tags")
+
+
+def _legacy_statement(inbound_tags, dialect="sqlite"):
+    inbound_agg = _inbound_aggregate(dialect)
     return (
         select(User.id, User.proxy_settings, User.hwid_limit, inbound_agg)
         .outerjoin(users_groups_association, User.id == users_groups_association.c.user_id)
@@ -55,7 +65,7 @@ def _legacy_statement(inbound_tags):
 
 
 async def _legacy_payload(db, inbound_tags, user_ids=None):
-    stmt = _legacy_statement(list(dict.fromkeys(inbound_tags or [])))
+    stmt = _legacy_statement(list(dict.fromkeys(inbound_tags or [])), db.bind.dialect.name)
     if user_ids is not None:
         stmt = stmt.where(User.id.in_(list(user_ids)))
     payload = []
@@ -160,10 +170,36 @@ async def _seed(db):
     return user_id
 
 
-async def _compare():
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", poolclass=StaticPool)
+def _truncate_all(sync_connection):
+    names = [table.name for table in Base.metadata.sorted_tables]
+    dialect = sync_connection.dialect.name
+    if dialect == "mysql":
+        sync_connection.execute(text("SET FOREIGN_KEY_CHECKS=0"))
+        for name in names:
+            sync_connection.execute(text(f"TRUNCATE TABLE `{name}`"))
+        sync_connection.execute(text("SET FOREIGN_KEY_CHECKS=1"))
+    elif dialect == "postgresql":
+        joined = ", ".join(f'"{name}"' for name in names)
+        sync_connection.execute(text(f"TRUNCATE TABLE {joined} RESTART IDENTITY CASCADE"))
+    else:
+        for name in reversed(names):
+            sync_connection.execute(text(f'DELETE FROM "{name}"'))
+
+
+async def _open_engine():
+    if PARITY_DB_URL:
+        engine = create_async_engine(PARITY_DB_URL)
+    else:
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:", poolclass=StaticPool)
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+        if PARITY_DB_URL:
+            await connection.run_sync(_truncate_all)
+    return engine
+
+
+async def _compare():
+    engine = await _open_engine()
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     results = []
     async with sessions() as db:
@@ -211,9 +247,7 @@ def test_inner_joins_send_the_same_users_and_inbounds_as_the_outer_join_query():
 )
 def test_membership_shapes_reach_the_node_as_before(user_groups, expected):
     async def run():
-        engine = create_async_engine("sqlite+aiosqlite:///:memory:", poolclass=StaticPool)
-        async with engine.begin() as connection:
-            await connection.run_sync(Base.metadata.create_all)
+        engine = await _open_engine()
         sessions = async_sessionmaker(engine, expire_on_commit=False)
         async with sessions() as db:
             await _seed(db)
@@ -243,3 +277,12 @@ def test_membership_shapes_reach_the_node_as_before(user_groups, expected):
         assert new == {}
     else:
         assert new[str(9999)][0] == expected
+
+
+def test_the_legacy_reference_aggregates_like_the_app_on_each_dialect():
+    pg = str(_legacy_statement(["vless-a"], "postgresql").compile(dialect=postgresql.dialect()))
+    assert "string_agg" in pg
+    assert "group_concat" not in pg
+    lite = str(_legacy_statement(["vless-a"]))
+    assert "group_concat" in lite
+    assert "string_agg" not in lite
