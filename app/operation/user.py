@@ -62,6 +62,7 @@ from app.db.crud.user import (
 from app.db.crud.wireguard import tags_from_groups  # noqa: F401
 from app.db.models import User, UserStatus, UserTemplate
 from app.fork.crud.bulk_result_bounds import BulkUserResultOutOfRange, bulk_final_value, out_of_range_detail
+from app.fork.crud.owner_traffic import DestinationAdminGone
 from app.fork.crud.user_locks import (
     MODIFY_STATUS_KEYS,
     NextPlanUnavailable,
@@ -1453,7 +1454,10 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         return await self._active_next_plan(db, db_user, admin)
 
     async def _set_owner(self, db: AsyncSession, db_user: User, new_admin, admin: AdminDetails) -> UserResponse:
-        db_user = await set_owner(db, db_user, new_admin)
+        try:
+            db_user = await set_owner(db, db_user, new_admin)
+        except DestinationAdminGone:
+            await self.raise_error(message="Admin not found", code=404, db=db)
         user = await self.validate_user(db_user)
         logger.info(
             f'User "{user.username}" owner successfully set to "{new_admin.username}" by admin "{admin.username}"'
@@ -1491,7 +1495,10 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         )
         await ensure_owner_target_allowed(self, new_admin, admin)
 
-        db_users = await bulk_set_owner(db, db_users, new_admin)
+        try:
+            db_users = await bulk_set_owner(db, db_users, new_admin)
+        except DestinationAdminGone:
+            await self.raise_error(message="Admin not found", code=404, db=db)
         users = [await self.validate_user(db_user) for db_user in db_users]
         for user in users:
             logger.info(

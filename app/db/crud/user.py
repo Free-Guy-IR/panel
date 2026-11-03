@@ -35,7 +35,7 @@ from app.db.models import (
 )
 from app.fork.crud import node_removals
 from app.fork.crud.group_scope import user_in_allowed_groups
-from app.fork.crud.owner_traffic import lock_owner_rows, shift_admin_traffic
+from app.fork.crud.owner_traffic import lock_destination_admin, lock_owner_rows, shift_admin_traffic
 from app.fork.crud.user_locks import (
     MODIFY_STATUS_KEYS,
     NextPlanUnavailable,
@@ -2147,6 +2147,7 @@ async def set_owner(db: AsyncSession, db_user: User, admin: Admin) -> User:
         User: The updated user object.
     """
     locked = await lock_owner_rows(db, [db_user])
+    await lock_destination_admin(db, admin.id, locked)
     old_admin_id, used_traffic = locked.get(db_user.id, (db_user.admin_id, int(db_user.used_traffic or 0)))
     db_user.admin = admin
 
@@ -2173,6 +2174,7 @@ async def bulk_set_owner(db: AsyncSession, users: list[User], admin: Admin) -> l
     """
     # Group users by old admin to update traffic counters
     locked = await lock_owner_rows(db, users)
+    await lock_destination_admin(db, admin.id, locked)
     admin_traffic_changes: dict[int, int] = {}
 
     for user in users:
