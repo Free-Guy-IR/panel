@@ -76,3 +76,19 @@ def test_user_batches_are_sized_without_reencoding_the_growing_batch(monkeypatch
 
     assert chunks == [users]
     assert encoded_bytes <= 2 * len(real_encode("update_users", {"users": users}))
+
+
+def test_only_users_over_the_payload_limit_are_warned_about_and_sent_alone(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(node_sync_module.nats_settings, "node_update_users_batch_size", 100)
+    monkeypatch.setattr(node_sync_module.nats_settings, "node_command_max_payload_bytes", 1024)
+    warnings = []
+    monkeypatch.setattr(node_sync_module.logger, "warning", lambda message, *args: warnings.append(args))
+    small = {"id": 1, "email": "small@x", "data": "s"}
+    big_by_email = {"id": 2, "email": "big@x", "data": "b" * 2000}
+    big_by_id = {"id": 3, "data": "c" * 2000}
+    tail = {"id": 4, "email": "tail@x", "data": "t"}
+
+    chunks = node_sync_module._chunk_serialized_users_for_nats([small, big_by_email, big_by_id, tail])
+
+    assert chunks == [[small], [big_by_email], [big_by_id], [tail]]
+    assert warnings == [("big@x",), (3,)]
