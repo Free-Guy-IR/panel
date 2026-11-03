@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import User
 
 STORABLE_EXPIRE_MIN = datetime(1000, 1, 1, tzinfo=UTC)
-STORABLE_EXPIRE_MAX = datetime(9999, 12, 31, 23, 59, 59, tzinfo=UTC)
+STORABLE_EXPIRE_MAX = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=UTC)
 STORABLE_DATA_LIMIT_MAX = 2**63 - 1
 
 
@@ -31,7 +31,7 @@ def bulk_result_out_of_range(field: Literal["expire", "data_limit"], amount: int
         if amount > 0:
             return User.expire > STORABLE_EXPIRE_MAX - timedelta(seconds=amount)
         if amount < 0:
-            return User.expire < STORABLE_EXPIRE_MIN - timedelta(seconds=amount)
+            return User.expire < STORABLE_EXPIRE_MIN - timedelta(seconds=amount, microseconds=1)
         return false()
     if amount > 0:
         return User.data_limit > STORABLE_DATA_LIMIT_MAX - amount
