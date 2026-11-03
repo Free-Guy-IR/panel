@@ -7,6 +7,7 @@ import * as api from '@/service/api'
 type CapturedRequest = { url: string; method: string; body: unknown }
 
 const realFetch = globalThis.fetch
+const realLocalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
 let captured: CapturedRequest[] = []
 
 beforeEach(() => {
@@ -30,6 +31,8 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = realFetch
+  if (realLocalStorage) Object.defineProperty(globalThis, 'localStorage', realLocalStorage)
+  else delete (globalThis as { localStorage?: Storage }).localStorage
 })
 
 const callApi = async (name: string, ...args: unknown[]) => {
@@ -72,10 +75,11 @@ describe('passkey API client', () => {
   })
 
   it('resolves to the response body the passkey screens read', async () => {
-    globalThis.fetch = (async () => new Response('[{"id":1,"name":"laptop"}]', { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch
-    expect(await (api as Record<string, (...a: unknown[]) => Promise<unknown>>).listAdminPasskeys(7)).toEqual([{ id: 1, name: 'laptop' }])
-    globalThis.fetch = (async () => new Response('{"access_token":"tok","token_type":"bearer"}', { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch
-    expect(await (api as Record<string, (...a: unknown[]) => Promise<unknown>>).passkeyLoginVerify({ credential: {} })).toEqual({ access_token: 'tok', token_type: 'bearer' })
+    const untyped = api as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>
+    globalThis.fetch = (async () => new Response('[{"id":1,"name":"laptop"}]', { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof fetch
+    expect(await untyped.listAdminPasskeys(7)).toEqual([{ id: 1, name: 'laptop' }])
+    globalThis.fetch = (async () => new Response('{"access_token":"tok","token_type":"bearer"}', { status: 200, headers: { 'content-type': 'application/json' } })) as unknown as typeof fetch
+    expect(await untyped.passkeyLoginVerify({ credential: {} })).toEqual({ access_token: 'tok', token_type: 'bearer' })
   })
 
   it('every name the dashboard imports from the API client is exported', () => {

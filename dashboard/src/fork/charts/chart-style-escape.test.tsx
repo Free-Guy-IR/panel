@@ -1,12 +1,19 @@
-import { beforeAll, describe, expect, it } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import { ChartStyle } from '@/components/ui/chart'
 
+const realCss = Object.getOwnPropertyDescriptor(globalThis, 'CSS')
+
 beforeAll(() => {
   if (typeof globalThis.CSS?.escape !== 'function') {
-    globalThis.CSS = { escape: (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, ch => `\\${ch}`) } as unknown as typeof CSS
+    Object.defineProperty(globalThis, 'CSS', { value: { escape: (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, ch => `\\${ch}`) }, configurable: true, writable: true })
   }
+})
+
+afterAll(() => {
+  if (realCss) Object.defineProperty(globalThis, 'CSS', realCss)
+  else delete (globalThis as { CSS?: unknown }).CSS
 })
 
 const hostileNodeName = 'de1: red; } body { display: none } </style><script>alert(1)</script> .x {'

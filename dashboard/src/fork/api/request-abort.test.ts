@@ -4,6 +4,7 @@ import { getHosts } from '@/service/api'
 import { orvalFetcher } from '@/service/http'
 
 const realFetch = globalThis.fetch
+const realLocalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
 let seenSignals: (AbortSignal | null | undefined)[] = []
 
 beforeEach(() => {
@@ -27,6 +28,8 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = realFetch
+  if (realLocalStorage) Object.defineProperty(globalThis, 'localStorage', realLocalStorage)
+  else delete (globalThis as { localStorage?: Storage }).localStorage
 })
 
 describe('orvalFetcher', () => {

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import i18next from 'i18next'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Trans, initReactI18next } from 'react-i18next'
+import { Trans } from 'react-i18next'
 
 const dashboardRoot = join(import.meta.dir, '..', '..', '..')
 const appI18nSource = readFileSync(join(dashboardRoot, 'src', 'locales', 'i18n.ts'), 'utf8')
@@ -13,7 +13,7 @@ const appEscapeValue = /interpolation:\s*\{[^}]*escapeValue:\s*true/.test(appI18
 
 const makeI18n = async () => {
   const instance = i18next.createInstance()
-  await instance.use(initReactI18next).init({
+  await instance.init({
     lng: 'en',
     fallbackLng: 'en',
     resources: { en: { translation: englishResources } },

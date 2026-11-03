@@ -1,13 +1,17 @@
-import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import { afterAll, afterEach, beforeAll, describe, expect, it, setSystemTime } from 'bun:test'
 
 import { buildPeriodOptions, getChartQueryRangeFromDateRange, getDateRangeForPeriodOption } from '@/utils/chart-period-utils'
 
-const originalTz = process.env.TZ
+const originalTz = Intl.DateTimeFormat().resolvedOptions().timeZone
 const offsetOf = (value: string) => value.slice(-6)
 const t = ((key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key) as never
 
 beforeAll(() => {
   process.env.TZ = 'Europe/Berlin'
+})
+
+afterEach(() => {
+  setSystemTime()
 })
 
 afterAll(() => {
@@ -23,10 +27,13 @@ describe('chart query ranges across a DST change', () => {
     expect(range.endDate).toBe('2026-04-05T23:59:59+02:00')
   })
 
-  it('every preset period sends start and end with the same UTC offset', () => {
-    for (const option of buildPeriodOptions(t)) {
-      const { startDate, endDate } = getDateRangeForPeriodOption(option)
-      expect(`${option.value}:${offsetOf(startDate)}`).toBe(`${option.value}:${offsetOf(endDate)}`)
-    }
-  })
+  for (const now of ['2026-04-10T12:00:00Z', '2026-11-03T12:00:00Z', '2027-08-15T12:00:00Z']) {
+    it(`every preset period sends start and end with the same UTC offset at ${now}`, () => {
+      setSystemTime(new Date(now))
+      for (const option of buildPeriodOptions(t)) {
+        const { startDate, endDate } = getDateRangeForPeriodOption(option)
+        expect(`${option.value}:${offsetOf(startDate)}`).toBe(`${option.value}:${offsetOf(endDate)}`)
+      }
+    })
+  }
 })
