@@ -203,3 +203,32 @@ def test_unlimited_and_unmatched_users_do_not_trip_the_result_bound(access_token
     finally:
         delete_user(access_token, unlimited["username"])
         delete_user(access_token, normal["username"])
+
+
+def test_negative_expire_step_landing_exactly_on_the_lower_edge_after_a_bulk_write_is_accepted(access_token):
+    user = _user(access_token, expire=datetime(1000, 1, 1, 0, 0, 3, tzinfo=UTC))
+    try:
+        first = _post(access_token, "expire", -1, user["id"])
+        assert first.status_code == status.HTTP_200_OK, first.text
+        assert _fetch(access_token, user["username"])["expire"].startswith("1000-01-01T00:00:02")
+        dry = _post(access_token, "expire", -2, user["id"], True)
+        assert dry.status_code == status.HTTP_200_OK, dry.text
+        response = _post(access_token, "expire", -2, user["id"])
+        assert response.status_code == status.HTTP_200_OK, response.text
+        assert _fetch(access_token, user["username"])["expire"].startswith("1000-01-01T00:00:00")
+        rejected = _post(access_token, "expire", -1, user["id"])
+        assert rejected.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rejected.text
+    finally:
+        delete_user(access_token, user["username"])
+
+
+def test_expire_step_landing_inside_the_last_second_of_9999_is_accepted(access_token):
+    user = _user(access_token, expire=datetime(9999, 12, 31, 23, 59, 58, 500000, tzinfo=UTC))
+    try:
+        response = _post(access_token, "expire", 1, user["id"])
+        assert response.status_code == status.HTTP_200_OK, response.text
+        assert _fetch(access_token, user["username"])["expire"].startswith("9999-12-31T23:59:59")
+        rejected = _post(access_token, "expire", 1, user["id"])
+        assert rejected.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rejected.text
+    finally:
+        delete_user(access_token, user["username"])
