@@ -67,3 +67,62 @@ def test_an_assignment_error_stored_before_the_scrub_is_served_without_the_passw
         }
     )
     assert PASSWORD not in (response.last_error or "")
+
+
+def _connection_key(login: str, password: str):
+    import warnings
+
+    import aiohttp
+    from aiohttp.client_reqrep import ConnectionKey
+    from yarl import URL
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        auth = aiohttp.BasicAuth(login, password)
+    return ConnectionKey("node.example.com", 443, True, True, URL("http://127.0.0.1:3128"), auth, None)
+
+
+def test_a_basic_auth_repr_never_keeps_the_password():
+    for login, password in (
+        ("user", PASSWORD),
+        ("us'er", f"p'{PASSWORD}"),
+        ("user", f'q"{PASSWORD})'),
+        ("user", f"x, encoding='latin1') {PASSWORD}"),
+        ("user", f"{PASSWORD}\\"),
+    ):
+        key = _connection_key(login, password)
+        for text in (repr(key), f"Unclosed connection: Connection<{key}>", repr(repr(key)), f"{key}\n{key}"):
+            scrubbed = scrub_credentials(text)
+            assert PASSWORD not in scrubbed, scrubbed
+            assert "BasicAuth(" in scrubbed
+    assert scrub_credentials("BasicAuth is deprecated") == "BasicAuth is deprecated"
+
+
+def test_a_url_cut_before_its_at_sign_never_keeps_the_start_of_the_password():
+    from pydantic import BaseModel, ValidationError
+
+    class _Model(BaseModel):
+        url: int
+
+    try:
+        _Model(url=f"http://someuser:{PASSWORD}rest@" + "x" * 80 + ".example.com:3128")
+    except ValidationError as refused:
+        text = str(refused)
+    assert "..." in text
+    scrubbed = scrub_credentials(text)
+    assert PASSWORD not in scrubbed
+    assert "Input should be a valid integer" in scrubbed
+    for cut in (f"cut http://user:{PASSWORD}.", f"cut (http://user:{PASSWORD})", f"cut socks5://user:{PASSWORD}"):
+        assert PASSWORD not in scrub_credentials(cut), cut
+
+
+def test_an_address_with_a_port_is_kept():
+    for text in (
+        "Cannot connect to http://1.2.3.4:3128.",
+        "detail=Connection error: http://10.0.0.5:62050)",
+        "proxy http://[::1]:8080;",
+        "see http://10.0.0.5:62050/path).",
+        "see http://example.com/docs and more",
+        "waiting... http://h.example.com:80 is up",
+    ):
+        assert scrub_credentials(text) == text
