@@ -27,6 +27,7 @@ from app.db.models import (
     UserHWID,
     UserStatus,
     UserStatusCreate,
+    UserSubscriptionAccess,
     UserSubscriptionUpdate,
     UserUsageResetLogs,
     inbounds_groups_association,
@@ -43,6 +44,9 @@ from app.fork.crud.user_locks import (
     refresh_next_plan_for_update,
     refresh_user_state_for_update,
 )
+from app.fork.models.connection import ConnectionRestriction, UserConnectionLimit, UserConnectionState
+from app.fork.models.pending_user_resync import PendingUserResync
+from app.fork.models.proxy_secret_claim import ProxySecretClaim
 from app.fork.operation.usage_guard import execute_with_statement_timeout
 from app.models.proxy import ProxyTable, VlessSettings
 from app.models.stats import (
@@ -1113,9 +1117,14 @@ _USER_DEPENDENT_MODELS = (
     NodeUserUsage,
     UserUsageResetLogs,
     UserSubscriptionUpdate,
+    UserSubscriptionAccess,
     UserHWID,
     NextPlan,
     NotificationReminder,
+    UserConnectionLimit,
+    ConnectionRestriction,
+    UserConnectionState,
+    PendingUserResync,
 )
 
 
@@ -1130,6 +1139,7 @@ async def _delete_user_dependencies(db: AsyncSession, user_ids: list[int]):
     if db.bind.dialect.name == "sqlite":
         for model in _USER_DEPENDENT_MODELS:
             await db.execute(delete(model).where(model.user_id.in_(user_ids)))
+        await db.execute(update(ProxySecretClaim).where(ProxySecretClaim.user_id.in_(user_ids)).values(user_id=None))
 
 
 async def _delete_locked_users(
