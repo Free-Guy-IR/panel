@@ -11,7 +11,7 @@ import pytest
 from alembic.command import check, downgrade, upgrade
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import JSON, create_engine, inspect, text
 from sqlalchemy.engine import make_url
 
 from app.fork.db_rollback import current_heads, default_config, rollback
@@ -244,10 +244,19 @@ def test_a_database_stamped_at_an_earlier_tip_gets_every_missing_revision(tmp_pa
         assert _schema(url) == _schema(fresh)
 
 
-def _filler(column) -> object:
+def _declared_json(table: str, name: str) -> bool:
+    from app.db.models import Base
+
+    model = Base.metadata.tables.get(table)
+    return model is not None and name in model.c and isinstance(model.c[name].type, JSON)
+
+
+def _filler(column, declared_json: bool = False) -> object:
     enums = getattr(column["type"], "enums", None)
     if enums:
         return enums[0]
+    if declared_json:
+        return "{}"
     kind = str(column["type"]).upper()
     if "INT" in kind:
         return 1
@@ -271,7 +280,7 @@ def _insert(url: str, table: str, values: dict) -> dict:
                 continue
             if column.get("autoincrement") is True or column["name"] == "id":
                 continue
-            row[column["name"]] = _filler(column)
+            row[column["name"]] = _filler(column, _declared_json(table, column["name"]))
         names = ", ".join(row)
         marks = ", ".join(f":{name}" for name in row)
         with engine.begin() as connection:
