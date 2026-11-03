@@ -104,3 +104,28 @@ def test_an_explicit_null_on_a_required_field_is_rejected_as_invalid(key_admin, 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, response.text
     assert _stored_row(key["id"]) == before
     assert client.get("/api/users", headers={"X-Api-Key": key["api_key"]}).status_code == status.HTTP_200_OK
+
+
+def test_the_update_schema_documents_the_required_fields_as_non_nullable_without_a_default():
+    schema = client.app.openapi()["components"]["schemas"]["APIKeyUpdate"]["properties"]
+
+    assert schema["status"] == {"$ref": "#/components/schemas/APIKeyStatus"}
+    assert schema["name"] == {"type": "string", "minLength": 1, "maxLength": 128, "title": "Name"}
+    assert schema["inherit_permissions"] == {"type": "boolean", "title": "Inherit Permissions"}
+
+
+@pytest.mark.parametrize(
+    "payload,location",
+    [
+        ({"name": ""}, "name"),
+        ({"status": "bogus"}, "status"),
+        ({"inherit_permissions": "x"}, "inherit_permissions"),
+    ],
+)
+def test_an_invalid_value_on_a_required_field_is_reported_at_the_field(key_admin, payload, location):
+    key = _create_custom_key(key_admin)
+
+    response = client.patch(f"/api/api_key/{key['id']}", headers=key_admin, json=payload)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, response.text
+    assert list(response.json()["detail"]) == [location]
