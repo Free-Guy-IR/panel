@@ -2,11 +2,13 @@
 import argparse
 import functools
 import hashlib
+import io
 import json
 import os
 import re
 import subprocess
 import sys
+import tokenize
 import tomllib
 import unicodedata
 import urllib.error
@@ -122,10 +124,44 @@ SCOPED_COVER_RE = re.compile(
     r"(?<![0-9a-f])([0-9a-f]{40})(?![0-9a-f])\s+touching\s+only\s+([^\s,;]+(?:(?:\s*,\s*|\s+and\s+)[^\s,;]+)*)",
     re.IGNORECASE,
 )
-COMMENT_MARKERS = {
-    **dict.fromkeys((".go", ".js", ".jsx", ".ts", ".tsx", ".rs", ".c", ".h", ".java", ".proto"), ("//",)),
-    **dict.fromkeys((".py", ".sh", ".bash", ".yml", ".yaml", ".toml"), ("#",)),
-}
+C_LIKE_SUFFIXES = frozenset((".go", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"))
+TEMPLATE_SUFFIXES = C_LIKE_SUFFIXES - {".go"}
+DIRECTIVE_PREFIXES = (
+    "//go:",
+    "//nolint",
+    "//line ",
+    "//export ",
+    "// +build",
+    "//+build",
+    "//lint:",
+    "//#",
+    "///",
+    "// @ts-",
+    "//@ts-",
+    "// eslint-",
+    "/* eslint-",
+    "/*eslint-",
+    "// prettier-ignore",
+    "/* istanbul",
+    "/* @",
+    "/*!",
+    "#!",
+    "# type:",
+    "# noqa",
+    "# pragma",
+    "# -*-",
+    "# fmt:",
+    "# pylint:",
+    "# mypy:",
+    "# isort:",
+)
+CGO_IMPORT_RE = re.compile(r'^\s*import\s+"C"\s*$', re.MULTILINE)
+FUNCTION_SIGNATURE_RE = re.compile(
+    r"^\s*(?:func\b|(?:async\s+)?def\s|(?:export\s+)?(?:default\s+)?(?:async\s+)?function\b|class\s)"
+)
+NAMED_BRANCH_RE = re.compile(
+    r"\bbranch(?:es)?\s+`?[\w.-][\w./-]*`?|`[\w./-]+`\s+branch\b|\bfork/[\w.-][\w./-]*", re.IGNORECASE
+)
 MOVED_TO_RE = re.compile(r"\bmoved\s+(?:it\s+)?(?:to|into)\s+`?([^`\s;,]*[^`\s;,.])`?", re.IGNORECASE)
 FORK_CITE_RE = re.compile(r"\bfork\s+commits?\s+(?:[0-9a-f]{9,40}\s*(?:,|and)\s*)*$", re.IGNORECASE)
 MISSING_LINE_RE = re.compile(r"\bmissing\s+`?([^`\s]+:[+-]\d+)`?\s+because\b([^;]*)", re.IGNORECASE)
@@ -862,6 +898,7 @@ def reverted_commits(head):
 HUNK_RANGE_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 HUNK_HEADER_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@")
 HUNK_CONTEXT = 3
+HUNK_OLD_RANGE_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+")
 CONTEXT_SLACK = 2
 
 
@@ -899,21 +936,35 @@ def commit_hunks(sha):
             continue
         kind, text = line[0], line[1:]
         if kind == " ":
-            current["pre"].append((text, False))
-            current["post"].append((text, False))
+            current["pre"].append((text, False, old_at))
+            current["post"].append((text, False, new_at))
             old_at += 1
             new_at += 1
         elif kind == "-":
-            current["pre"].append((text, True))
+            current["pre"].append((text, True, old_at))
             current["removed"] += 1
             current["first_removed"] = current["first_removed"] or old_at
             old_at += 1
         elif kind == "+":
-            current["post"].append((text, True))
+            current["post"].append((text, True, new_at))
             current["added"] += 1
             current["first_added"] = current["first_added"] or new_at
             new_at += 1
+    for hunk in hunks:
+        hunk["pre"] = blank_comments(f"{sha}^", hunk["old"], hunk["pre"])
+        hunk["post"] = blank_comments(sha, hunk["new"], hunk["post"])
     return hunks
+
+
+@functools.lru_cache(maxsize=4096)
+def blob_comment_lines(ref, path):
+    content = head_blob(ref, path) if path is not None else None
+    return comment_line_numbers(path, content) if content is not None else frozenset()
+
+
+def blank_comments(ref, path, side):
+    comments = blob_comment_lines(ref, path)
+    return [("" if number in comments else text, changed) for text, changed, number in side]
 
 
 def hunk_ident(hunk):
@@ -923,24 +974,138 @@ def hunk_ident(hunk):
     return f"{path}:-{hunk['first_removed']}"
 
 
-def is_comment_line(path, line):
-    markers = COMMENT_MARKERS.get(os.path.splitext(path)[1].lower())
-    if not markers:
-        return False
-    text = line.strip()
-    if text.startswith(markers):
-        return True
-    return "//" in markers and text.startswith("/*") and text.endswith("*/") and "*/" not in text[2:-2]
+def python_comment_lines(content):
+    lines = content.splitlines()
+    found = set()
+    try:
+        for token in tokenize.generate_tokens(io.StringIO(content).readline):
+            if token.type != tokenize.COMMENT:
+                continue
+            number, column = token.start
+            if number <= len(lines) and not lines[number - 1][:column].strip():
+                found.add(number)
+    except tokenize.TokenError, IndentationError, SyntaxError:
+        return frozenset()
+    return frozenset(found)
+
+
+def c_like_comment_lines(content, templates):
+    code_lines = set()
+    comment_lines = set()
+    stack = ["code"]
+    braces = [0]
+    line = 1
+    i = 0
+    size = len(content)
+    while i < size:
+        char = content[i]
+        state = stack[-1]
+        if char == "\n":
+            if state in ('"', "'") or state == "line":
+                stack.pop()
+            line += 1
+            i += 1
+            continue
+        if state == "line" or state == "block":
+            comment_lines.add(line)
+            if state == "block" and content.startswith("*/", i):
+                stack.pop()
+                i += 2
+                continue
+            i += 1
+            continue
+        if char.isspace():
+            i += 1
+            continue
+        code_lines.add(line)
+        if state in ('"', "'"):
+            if char == "\\":
+                i += 2
+                if i <= size and content[i - 1 : i] == "\n":
+                    line += 1
+                continue
+            if char == state:
+                stack.pop()
+            i += 1
+            continue
+        if state == "`":
+            if templates and char == "\\":
+                if content[i + 1 : i + 2] == "\n":
+                    line += 1
+                i += 2
+                continue
+            if char == "`":
+                stack.pop()
+            elif templates and content.startswith("${", i):
+                stack.append("code")
+                braces.append(0)
+                i += 2
+                continue
+            i += 1
+            continue
+        if content.startswith("//", i):
+            if not content[content.rfind("\n", 0, i) + 1 : i].strip():
+                code_lines.discard(line)
+            stack.append("line")
+            comment_lines.add(line)
+            i += 2
+            continue
+        if content.startswith("/*", i):
+            if not content[content.rfind("\n", 0, i) + 1 : i].strip():
+                code_lines.discard(line)
+            stack.append("block")
+            comment_lines.add(line)
+            i += 2
+            continue
+        if char in ('"', "'", "`"):
+            stack.append(char)
+        elif char == "{":
+            braces[-1] += 1
+        elif char == "}":
+            if braces[-1] == 0 and len(stack) > 1:
+                stack.pop()
+                braces.pop()
+            else:
+                braces[-1] = max(0, braces[-1] - 1)
+        i += 1
+    return frozenset(comment_lines - code_lines)
+
+
+@functools.lru_cache(maxsize=4096)
+def comment_line_numbers(path, content):
+    suffix = os.path.splitext(path)[1].lower()
+    if suffix == ".py":
+        found = python_comment_lines(content)
+    elif suffix in C_LIKE_SUFFIXES:
+        if suffix == ".go" and CGO_IMPORT_RE.search(content):
+            return frozenset()
+        found = c_like_comment_lines(content, suffix in TEMPLATE_SUFFIXES)
+    else:
+        return frozenset()
+    lines = content.splitlines()
+    return frozenset(
+        number
+        for number in found
+        if number <= len(lines) and not lines[number - 1].strip().startswith(DIRECTIVE_PREFIXES)
+    )
 
 
 def normalise_line(path, line):
-    if is_comment_line(path, line):
-        return ""
     return line.rstrip() if path.endswith(".py") else line.strip()
 
 
-def normalised(path, lines):
-    return tuple(text for text in (normalise_line(path, line) for line in lines) if text)
+def kept_line_numbers(path, content):
+    comments = comment_line_numbers(path, content)
+    return [
+        number
+        for number, line in enumerate(content.splitlines(), 1)
+        if number not in comments and normalise_line(path, line)
+    ]
+
+
+def normalised(path, content):
+    lines = content.splitlines()
+    return tuple(normalise_line(path, lines[number - 1]) for number in kept_line_numbers(path, content))
 
 
 def hunk_side(path, side):
@@ -957,7 +1122,7 @@ def hunk_side(path, side):
 @functools.lru_cache(maxsize=4096)
 def normalised_file(ref, path):
     content = head_blob(ref, path)
-    return None if content is None else normalised(path, content.splitlines())
+    return None if content is None else normalised(path, content)
 
 
 def context_follows(lines, start, step, context):
@@ -1127,7 +1292,7 @@ def normalised_positions(ref, path, numbers):
     content = head_blob(ref, path)
     if content is None or not numbers:
         return frozenset()
-    kept = [number for number, line in enumerate(content.splitlines(), 1) if normalise_line(path, line)]
+    kept = kept_line_numbers(path, content)
     return frozenset(index for index, number in enumerate(kept) if number in numbers)
 
 
@@ -1234,13 +1399,118 @@ def first_parent_changes(sha, path):
     return bool(git("show", "--format=", "--name-only", "--no-renames", sha, "--", path).strip())
 
 
-def fork_only_commit(token, head, upstream_sha, carriers=()):
+def hunk_gap(path, hunk, lines):
+    pre = hunk["pre"]
+    post = hunk["post"]
+    lead = min(
+        next((i for i, (_, changed) in enumerate(pre) if changed), len(pre)),
+        next((i for i, (_, changed) in enumerate(post) if changed), len(post)),
+    )
+    trail = min(
+        next((i for i, (_, changed) in enumerate(reversed(pre)) if changed), len(pre)),
+        next((i for i, (_, changed) in enumerate(reversed(post)) if changed), len(post)),
+    )
+    before = [normalise_line(path, text) for text, _ in pre[:lead]]
+    middle = [normalise_line(path, text) for text, _ in pre[lead : len(pre) - trail]]
+    after = [normalise_line(path, text) for text, _ in pre[len(pre) - trail :]]
+    before, middle, after = ([text for text in part if text] for part in (before, middle, after))
+    wanted = tuple(before + middle + after)
+    if not wanted or lines is None:
+        return []
+    texts, numbers, total = lines
+    gaps = []
+    for i in range(len(texts) - len(wanted) + 1):
+        if texts[i : i + len(wanted)] != wanted:
+            continue
+        low = numbers[i + len(before) - 1] if before else 0
+        high = numbers[i + len(before) + len(middle)] if after else total + 1
+        gaps.append((low, high))
+    return gaps
+
+
+def numbered_file(ref, path):
+    content = head_blob(ref, path)
+    if content is None:
+        return None
+    kept = kept_line_numbers(path, content)
+    rows = content.splitlines()
+    return tuple(normalise_line(path, rows[n - 1]) for n in kept), tuple(kept), len(rows)
+
+
+def carrier_touches_hunk(sha, hunk):
+    path = hunk["old"] or hunk["new"]
+    if not commit_exists(f"{sha}^"):
+        return False
+    gaps = hunk_gap(path, hunk, numbered_file(f"{sha}^", path))
+    if not gaps:
+        return False
+    for line in git("diff", "-U0", "--no-color", "--no-ext-diff", f"{sha}^", sha, "--", path).splitlines():
+        match = HUNK_OLD_RANGE_RE.match(line)
+        if not match:
+            continue
+        start = int(match.group(1))
+        count = 1 if match.group(2) is None else int(match.group(2))
+        for low, high in gaps:
+            if count == 0 and low <= start < high:
+                return True
+            if count and start < high and start + count - 1 > low:
+                return True
+    return False
+
+
+def fork_only_commit(token, head, upstream_sha, carriers=(), hunk=None):
     sha = resolve_commit(token)
-    if sha and sha in carriers:
+    if not sha or sha == upstream_sha or not is_ancestor(sha, head):
+        return None
+    if not on_upstream_ref(sha):
         return sha
-    if sha and sha != upstream_sha and is_ancestor(sha, head) and not on_upstream_ref(sha):
+    if (
+        sha in carriers
+        and hunk is not None
+        and (carrier_touches_hunk(sha, hunk) or upstream_release_dropped(upstream_sha, sha, hunk))
+    ):
         return sha
     return None
+
+
+def release_tags_containing(sha):
+    return git("for-each-ref", "--format=%(objectname)", f"--contains={sha}", "refs/upstream-tags/").split()
+
+
+def upstream_release_dropped(upstream_sha, carrier, hunk):
+    if hunk["new"] is None or release_tags_containing(upstream_sha):
+        return False
+    post = hunk_side(hunk["new"], hunk["post"])
+    tags = release_tags_containing(carrier)
+    if post is None or not tags:
+        return False
+    return not any(block_in_place(normalised_file(tag, hunk["new"]), post) for tag in tags)
+
+
+def enclosing_signature(sha, path, hunk):
+    content = head_blob(sha, path)
+    first = hunk["first_added"]
+    if content is None or not first:
+        return None
+    rows = content.splitlines()
+    for number in range(min(first, len(rows)), 0, -1):
+        if FUNCTION_SIGNATURE_RE.match(rows[number - 1]):
+            return normalise_line(path, rows[number - 1])
+    return None
+
+
+def block_under_signature(lines, core, signature, path):
+    if lines is None or signature is None:
+        return False
+    for i in range(len(lines) - len(core) + 1):
+        if lines[i : i + len(core)] != core:
+            continue
+        for j in range(i - 1, -1, -1):
+            if FUNCTION_SIGNATURE_RE.match(lines[j]):
+                if lines[j] == signature:
+                    return True
+                break
+    return False
 
 
 def moved_hunk_problem(ident, why, target, head, upstream_sha, hunks, carriers):
@@ -1252,35 +1522,57 @@ def moved_hunk_problem(ident, why, target, head, upstream_sha, hunks, carriers):
     if not tokens:
         return f"{label}, but its reason names no fork commit"
     for token in tokens:
-        sha = fork_only_commit(token, head, upstream_sha, carriers)
+        sha = fork_only_commit(token, head, upstream_sha, carriers, hunk)
         if sha is None:
             return f"{label}, but that commit is not a fork-only commit on {head}"
         if not first_parent_changes(sha, target):
             return f"{label}, but that commit did not change {target}"
     post = hunk_side(target, hunk["post"]) if hunk["new"] is not None else None
-    if post is None or not block_in_place(normalised_file(head, target), ((), post[1], ())):
+    here = normalised_file(head, target)
+    if post is None:
+        return f"{label}, but its non-comment lines are not in place in {target} on {head}"
+    in_context = (post[0] or post[2]) and block_in_place(here, post)
+    signature = enclosing_signature(upstream_sha, hunk["new"], hunk)
+    if not (in_context or block_under_signature(here, post[1], signature, target)):
         return f"{label}, but its non-comment lines are not in place in {target} on {head}"
     return None
 
 
-def cited_history_problems(entry, head):
+@functools.lru_cache(maxsize=16)
+def upstream_ref_tips(root):
+    listing = Path(root) / ".upstream-refs"
+    if not listing.is_file():
+        return frozenset()
+    return frozenset(line.split()[0] for line in listing.read_text().splitlines() if line.split())
+
+
+def clause_around(text, start, end):
+    left = max(text.rfind(";", 0, start), text.rfind(". ", 0, start))
+    right = min((i for i in (text.find(";", end), text.find(". ", end)) if i != -1), default=len(text))
+    return text[left + 1 : right]
+
+
+def cited_history_problems(entry, head, ledger_tokens=frozenset()):
     text = SECURITY_FLAG_RE.sub("", entry["reason"])
+    tips = upstream_ref_tips(str(Path.cwd()))
+    known = set(ledger_tokens) | {entry["token"]}
     problems = []
     seen = set()
     for match in FORK_COMMIT_RE.finditer(text):
         token = match.group(0)
+        if not FORK_CITE_RE.search(text[: match.start()]):
+            continue
+        if any(other.startswith(token) or token.startswith(other) for other in known | tips):
+            continue
+        if NAMED_BRANCH_RE.search(clause_around(text, match.start(), match.end())):
+            continue
         sha = resolve_commit(token)
-        if sha is None:
-            if token not in seen and FORK_CITE_RE.search(text[: match.start()]):
-                seen.add(token)
-                problems.append(
-                    f"{entry['where']}: `{entry['token']}` cites fork commit {token}, which is not in the history "
-                    f"of {head}"
-                )
+        key = sha or token
+        if key in seen:
             continue
-        if sha in seen or is_ancestor(sha, head) or on_upstream_ref(sha):
+        if sha is not None and (sha in known or is_ancestor(sha, head) or on_upstream_ref(sha)):
             continue
-        seen.add(sha)
+        seen.add(key)
         problems.append(
             f"{entry['where']}: `{entry['token']}` cites fork commit {token}, which is not in the history of {head}"
         )
@@ -1290,6 +1582,7 @@ def cited_history_problems(entry, head):
 def own_line_exceptions(reason, head, upstream_sha, decision_covers, hunks=(), carriers=()):
     named = {}
     problems = []
+    by_ident = {hunk_ident(hunk): hunk for hunk in hunks}
     for ident, why in MISSING_LINE_RE.findall(reason):
         why = why.strip()
         named[ident] = why
@@ -1311,7 +1604,7 @@ def own_line_exceptions(reason, head, upstream_sha, decision_covers, hunks=(), c
         path = ident.rsplit(":", 1)[0]
         explained = False
         for token in FORK_COMMIT_RE.findall(why):
-            sha = fork_only_commit(token, head, upstream_sha, carriers)
+            sha = fork_only_commit(token, head, upstream_sha, carriers, by_ident.get(ident))
             if sha and first_parent_changes(sha, path):
                 explained = True
                 break
@@ -1945,8 +2238,9 @@ def parity_gate(
     entries, ledger_errors = parse_sync_ledger(ledger_path, today)
     resolved, resolve_errors, stale, duplicates = resolve_sync_entries(entries, in_range)
     ledger_errors += resolve_errors
+    ledger_tokens = frozenset(entry["token"] for entry in entries)
     for entry in entries:
-        ledger_errors += cited_history_problems(entry, head)
+        ledger_errors += cited_history_problems(entry, head, ledger_tokens)
     for sha, entry in sorted(resolved.items()):
         if entry["decision"] and sha not in entry["covers"]:
             del resolved[sha]

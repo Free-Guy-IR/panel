@@ -634,7 +634,7 @@ def chain_world(tmp_path, steps, cited, exception="", token_length=40, covered=N
             made[step] = commit(fork, "fork: drop the token check", {"a.py": "one\ntwo\n"})
         elif step == "move-scope":
             made[step] = commit(
-                fork, "fork: move the scope check", {"b.py": "three\nfour\n", "c.py": "x\nCHECK_SCOPE\ny\n"}
+                fork, "fork: move the scope check", {"b.py": "three\nfour\n", "c.py": "three\nCHECK_SCOPE\nfour\n"}
             )
         elif step == "move-scope-lost":
             made[step] = commit(fork, "fork: move the scope file", {"b.py": "three\nfour\n", "c.py": "x\nOTHER\ny\n"})
