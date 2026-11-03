@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { l2tpDraftIssues, l2tpPskLeftToPanel } from '@/features/core-editor/kit/l2tp-adapter'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
+import { useClipboard } from '@/hooks/use-clipboard'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import type { L2TPCoreDraft, L2TPValidationIssue } from '@pasarguard/l2tp-config-kit'
@@ -24,6 +25,7 @@ export function L2TPCoreForm({ className }: { className?: string }) {
   const draft = useCoreEditorStore(s => s.l2tpDraft)
   const updateL2tpDraft = useCoreEditorStore(s => s.updateL2tpDraft)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const { copy } = useClipboard()
 
   const issues = useMemo(() => (draft ? l2tpDraftIssues(draft) : []), [draft])
 
@@ -37,12 +39,7 @@ export function L2TPCoreForm({ className }: { className?: string }) {
 
   const copyPsk = async () => {
     if (!draft.psk) return
-    try {
-      await navigator.clipboard.writeText(draft.psk)
-      setCopyState('copied')
-    } catch {
-      setCopyState('failed')
-    }
+    setCopyState((await copy(draft.psk)) ? 'copied' : 'failed')
   }
 
   const inboundTagError = issueFor(issues, 'inboundTag')

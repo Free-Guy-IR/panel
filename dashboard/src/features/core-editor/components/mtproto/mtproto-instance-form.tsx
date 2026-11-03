@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useClipboard } from '@/hooks/use-clipboard'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { cn } from '@/lib/utils'
 import type { MTProtoInstanceDraft, MTProtoValidationIssue } from '@pasarguard/mtproto-config-kit'
@@ -22,6 +23,7 @@ function RegistrationSecret({ coreId, tag }: { coreId?: number; tag: string }) {
   const { t } = useTranslation()
   const [secret, setSecret] = useState('')
   const [state, setState] = useState<'idle' | 'loading' | 'copied' | 'copyFailed' | 'error'>('idle')
+  const { copy } = useClipboard()
 
   const load = async () => {
     if (coreId === undefined || !tag.trim()) return
@@ -30,12 +32,7 @@ function RegistrationSecret({ coreId, tag }: { coreId?: number; tag: string }) {
       const body = await fetcher<{ secret?: string }>(`/api/core/${coreId}/mtproto/${encodeURIComponent(tag.trim())}/registration-secret`)
       if (!body?.secret) throw new Error('empty')
       setSecret(body.secret)
-      try {
-        await navigator.clipboard.writeText(body.secret)
-        setState('copied')
-      } catch {
-        setState('copyFailed')
-      }
+      setState((await copy(body.secret)) ? 'copied' : 'copyFailed')
     } catch {
       setState('error')
     }
