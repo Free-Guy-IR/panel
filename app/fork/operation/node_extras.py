@@ -1,6 +1,7 @@
 import asyncio
 import itertools
 import time
+import weakref
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 
@@ -26,11 +27,14 @@ from app.utils.logger import get_logger
 
 logger = get_logger("node-operation")
 
-_CONNECT_LOCKS: dict[int, asyncio.Lock] = {}
+_CONNECT_LOCKS: weakref.WeakValueDictionary[int, asyncio.Lock] = weakref.WeakValueDictionary()
 
 
 def _connect_lock(node_id: int) -> asyncio.Lock:
-    return _CONNECT_LOCKS.setdefault(node_id, asyncio.Lock())
+    lock = _CONNECT_LOCKS.get(node_id)
+    if lock is None:
+        lock = _CONNECT_LOCKS[node_id] = asyncio.Lock()
+    return lock
 
 
 _connect_snapshots = itertools.count(1)
@@ -65,6 +69,7 @@ def note_connect_push(node_id: int, snapshot: int) -> None:
 
 def forget_connect_pushes(node_id: int) -> None:
     _pushed_snapshots.pop(node_id, None)
+    _ambiguous_starts.pop(node_id, None)
 
 
 AMBIGUOUS_START_MIN_WINDOW_SECONDS = 120.0

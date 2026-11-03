@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.db import GetDB
 from app.db.crud.node import get_node_by_id
 from app.db.models import NodeStatus
+from app.fork.operation.node_extras import forget_connect_pushes
 from app.nats.message import MessageTopic
 from app.nats.router import router
 from app.node import node_manager
@@ -36,6 +37,7 @@ async def handle_node_message(data: dict) -> None:
 
     if action == "remove":
         await node_manager.remove_node(node_id, remote_stop=False)
+        forget_connect_pushes(node_id)
         await clear_bridge_memory_for_node(node_id)
         return
 
