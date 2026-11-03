@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.db.models import ConnectionRestriction, User, UserStatus
+from app.fork.crud.user_locks import on_primary_key
 from app.fork.proxy_secrets.locks import holds_row_locks, read_committed_rows
 from app.models.settings import ConnectionLimit
 from app.utils.logger import get_logger
@@ -134,11 +135,10 @@ async def _lock_rows_by_id(db: AsyncSession, model, ids: list[int]) -> list[int]
     locked: list[int] = []
     for start in range(0, len(ids), RELEASE_LOCK_BATCH_SIZE):
         chunk = ids[start : start + RELEASE_LOCK_BATCH_SIZE]
-        locked.extend(
-            (await db.execute(select(model.id).where(model.id.in_(chunk)).order_by(model.id).with_for_update()))
-            .scalars()
-            .all()
-        )
+        statement = select(model.id).where(model.id.in_(chunk)).order_by(model.id).with_for_update()
+        if model is User:
+            statement = on_primary_key(statement)
+        locked.extend((await db.execute(statement)).scalars().all())
     return locked
 
 

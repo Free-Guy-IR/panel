@@ -4,8 +4,10 @@ from datetime import UTC, datetime
 from sqlalchemy import case, inspect, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
+from sqlalchemy.sql import Select
 
 from app.db.models import NextPlan, User, UserStatus
+from app.fork.proxy_secrets.locks import MYSQL_FAMILY
 
 USER_STATE_KEYS = (
     "status",
@@ -18,10 +20,20 @@ USER_STATE_KEYS = (
 )
 MODIFY_STATUS_KEYS = ("status", "used_traffic", "data_limit", "_expire", "on_hold_expire_duration")
 USER_LOCK_BATCH_SIZE = 500
+PRIMARY_KEY_HINT = "FORCE INDEX (PRIMARY)"
 
 
 class NextPlanUnavailable(LookupError):
     pass
+
+
+def on_primary_key(statement):
+    for dialect_name in MYSQL_FAMILY:
+        if isinstance(statement, Select):
+            statement = statement.with_hint(User.__table__, PRIMARY_KEY_HINT, dialect_name=dialect_name)
+        else:
+            statement = statement.with_hint(PRIMARY_KEY_HINT, dialect_name=dialect_name)
+    return statement
 
 
 def _set_unmodified(db_user: User, values: dict[str, object]) -> None:
@@ -46,7 +58,7 @@ async def lock_user_rows(db: AsyncSession, user_ids: Iterable[int]) -> None:
     ordered_ids = sorted({int(user_id) for user_id in user_ids if user_id is not None})
     for start in range(0, len(ordered_ids), USER_LOCK_BATCH_SIZE):
         chunk = ordered_ids[start : start + USER_LOCK_BATCH_SIZE]
-        await db.execute(select(User.id).where(User.id.in_(chunk)).order_by(User.id).with_for_update())
+        await db.execute(on_primary_key(select(User.id)).where(User.id.in_(chunk)).order_by(User.id).with_for_update())
 
 
 async def refresh_users_state_for_update(
@@ -101,7 +113,9 @@ async def reactivate_limited_users(db: AsyncSession, users: Iterable[User]) -> N
             .values(status=_reactivated_status())
             .execution_options(synchronize_session=False)
         )
-        rows = await db.execute(select(User.id, User.status).where(User.id.in_(chunk)).with_for_update())
+        rows = await db.execute(
+            on_primary_key(select(User.id, User.status)).where(User.id.in_(chunk)).with_for_update()
+        )
         for user_id, status in rows.all():
             _set_unmodified(by_id[user_id], {"status": status})
 

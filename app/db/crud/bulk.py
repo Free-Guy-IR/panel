@@ -26,7 +26,8 @@ from app.fork.crud.bulk_result_bounds import (
     out_of_range_result_exists,
 )
 from app.fork.crud.group_scope import user_in_allowed_groups
-from app.fork.proxy_secrets.locks import holds_row_locks
+from app.fork.crud.user_locks import USER_LOCK_BATCH_SIZE, on_primary_key
+from app.fork.proxy_secrets.locks import holds_row_locks, read_committed_rows
 from app.models.group import BulkGroup
 from app.models.user import BulkUser, BulkUserFilter, BulkUsersProxy
 
@@ -411,7 +412,7 @@ def _create_final_filter(bulk_model: BulkUserFilter, allowed_group_ids: list[int
     return and_(*conditions)
 
 
-BULK_STATUS_CHUNK_SIZE = 5000
+BULK_STATUS_CHUNK_SIZE = USER_LOCK_BATCH_SIZE
 
 
 def _id_chunks(user_ids: list[int]) -> list[list[int]]:
@@ -422,15 +423,19 @@ async def _lock_bulk_targets(
     db: AsyncSession, condition, target_ids: Sequence[int] | None = None
 ) -> dict[int, UserStatus]:
     if target_ids is None:
-        rows = await db.execute(select(User.id, User.status).where(condition).order_by(User.id).with_for_update())
-        return {user_id: status for user_id, status in rows.all()}
+        candidates = {user_id for (user_id,) in await read_committed_rows(db, select(User.id).where(condition))}
+    else:
+        candidates = set(target_ids)
     locked: dict[int, UserStatus] = {}
-    for chunk in _id_chunks(sorted(set(target_ids))):
+    for chunk in _id_chunks(sorted(candidates)):
         rows = await db.execute(
-            select(User.id, User.status).where(condition, User.id.in_(chunk)).order_by(User.id).with_for_update()
+            on_primary_key(select(User.id, User.status))
+            .where(condition, User.id.in_(chunk))
+            .order_by(User.id)
+            .with_for_update()
         )
         locked.update({user_id: status for user_id, status in rows.all()})
-    if len(locked) != len(set(target_ids)):
+    if target_ids is not None and len(locked) != len(candidates):
         await db.rollback()
         raise BulkUserUpdateConflict("Selected users changed during the bulk update; retry the request")
     return locked
@@ -465,7 +470,7 @@ async def _apply_to_locked_targets(
     in_range = ~bulk_result_guard(db, field, amount)
     for chunk in _id_chunks(sorted(locked)):
         result = await db.execute(
-            update(User)
+            on_primary_key(update(User))
             .where(User.id.in_(chunk), *conditions, in_range)
             .values(**values)
             .execution_options(synchronize_session="fetch")
@@ -477,7 +482,9 @@ async def _apply_to_locked_targets(
             if strict:
                 await db.rollback()
                 raise BulkUserUpdateConflict("Selected users changed during the bulk update; retry the request")
-        rows = await db.execute(select(User.id, User.status).where(User.id.in_(chunk)).with_for_update())
+        rows = await db.execute(
+            on_primary_key(select(User.id, User.status)).where(User.id.in_(chunk)).with_for_update()
+        )
         changed_ids.extend(user_id for user_id, status in rows.all() if status != locked[user_id])
     await db.commit()
 

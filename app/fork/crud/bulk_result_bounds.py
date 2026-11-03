@@ -5,6 +5,7 @@ from sqlalchemy import Boolean, DateTime, Integer, cast, false, func, select, tr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import User
+from app.fork.crud.user_locks import on_primary_key
 
 STORABLE_EXPIRE_MIN = datetime(1000, 1, 1, tzinfo=UTC)
 STORABLE_EXPIRE_MAX = datetime(9999, 12, 31, 23, 59, 59, 999999, tzinfo=UTC)
@@ -67,7 +68,7 @@ async def out_of_range_result_exists(
 ) -> bool:
     stmt = select(User.id).where(*conditions, bulk_result_guard(db, field, amount)).limit(1)
     if lock:
-        stmt = stmt.with_for_update()
+        stmt = on_primary_key(stmt).with_for_update()
     return (await db.execute(stmt)).first() is not None
 
 

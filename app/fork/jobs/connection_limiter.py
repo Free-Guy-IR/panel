@@ -21,6 +21,7 @@ from app import notification, scheduler
 from app.db import GetDB
 from app.db.crud.settings import get_settings
 from app.db.models import User, UserConnectionState, UserStatus
+from app.fork.crud.user_locks import USER_LOCK_BATCH_SIZE, on_primary_key
 from app.fork.proxy_secrets.errors import describe_failure
 from app.fork.proxy_secrets.locks import is_lock_unavailable
 from app.jobs.dependencies import SYSTEM_ADMIN
@@ -263,6 +264,23 @@ async def record_connection_states():
     )
 
 
+async def _lock_still_active_users(db, user_ids) -> list[int]:
+    ordered_ids = sorted(set(user_ids))
+    still_active: list[int] = []
+    for start in range(0, len(ordered_ids), USER_LOCK_BATCH_SIZE):
+        chunk = ordered_ids[start : start + USER_LOCK_BATCH_SIZE]
+        rows = await db.execute(
+            on_primary_key(
+                select(User.id)
+                .where(User.id.in_(chunk), User.status == UserStatus.active)
+                .order_by(User.id)
+                .with_for_update()
+            )
+        )
+        still_active.extend(rows.scalars().all())
+    return still_active
+
+
 async def _enforce(db, observations, settings) -> None:
     """Act on the users whose verdict has held long enough to be believed.
 
@@ -275,18 +293,7 @@ async def _enforce(db, observations, settings) -> None:
         return
 
     async def attempt():
-        still_active = (
-            (
-                await db.execute(
-                    select(User.id)
-                    .where(User.id.in_(sorted(o.user_id for o in over)), User.status == UserStatus.active)
-                    .order_by(User.id)
-                    .with_for_update()
-                )
-            )
-            .scalars()
-            .all()
-        )
+        still_active = await _lock_still_active_users(db, (o.user_id for o in over))
         users = {
             user.id: user
             for user in (
