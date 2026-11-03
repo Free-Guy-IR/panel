@@ -67,6 +67,7 @@ USER_ADMIN_LOOKUP_BATCH_SIZE = 1_000
 _pending_user_usage_history: defaultdict[tuple[dt, int, int | None, int], int] = defaultdict(int)
 _user_usage_history_lock = asyncio.Lock()
 _user_usage_history_last_flush: float | None = None
+USER_USAGE_HISTORY_MAX_PENDING_BUCKETS = 6
 MYSQL_FAMILY = frozenset({"mysql", "mariadb"})
 ONLINE_AT_WRITE_INTERVAL = td(minutes=1)
 DEADLOCK_MAX_RETRIES = 5
@@ -739,6 +740,21 @@ async def _write_node_user_usage_params(dialect: str, upsert_params: list[dict])
         await run_in_retried_transaction(_write)
 
 
+def _drop_stale_pending_user_usage_history() -> None:
+    buckets = sorted({created_at for created_at, _, _, _ in _pending_user_usage_history})
+    if len(buckets) <= USER_USAGE_HISTORY_MAX_PENDING_BUCKETS:
+        return
+    cutoff = buckets[-USER_USAGE_HISTORY_MAX_PENDING_BUCKETS]
+    stale_keys = [key for key in _pending_user_usage_history if key[0] < cutoff]
+    for key in stale_keys:
+        del _pending_user_usage_history[key]
+    logger.error(
+        "Dropped %s buffered node user usage history rows older than %s after repeated flush failures",
+        len(stale_keys),
+        cutoff.isoformat(),
+    )
+
+
 async def _flush_pending_user_usage_history_locked(now_monotonic: float | None = None) -> int:
     global _user_usage_history_last_flush
 
@@ -759,7 +775,11 @@ async def _flush_pending_user_usage_history_locked(now_monotonic: float | None =
         if value
     ]
     if upsert_params:
-        await _write_node_user_usage_params(await get_dialect(), upsert_params)
+        try:
+            await _write_node_user_usage_params(await get_dialect(), upsert_params)
+        except Exception:
+            _drop_stale_pending_user_usage_history()
+            raise
     _pending_user_usage_history.clear()
     _user_usage_history_last_flush = now_monotonic if now_monotonic is not None else _monotonic_now()
     return len(upsert_params)
