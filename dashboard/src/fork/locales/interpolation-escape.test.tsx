@@ -7,11 +7,14 @@ import { Trans } from 'react-i18next'
 
 const dashboardRoot = join(import.meta.dir, '..', '..', '..')
 const appI18nSource = readFileSync(join(dashboardRoot, 'src', 'locales', 'i18n.ts'), 'utf8')
+const appI18nCode = appI18nSource.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
 const englishResources = JSON.parse(readFileSync(join(dashboardRoot, 'public', 'statics', 'locales', 'en.json'), 'utf8'))
 
-const appEscapeValue = /interpolation:\s*\{[^}]*escapeValue:\s*true/.test(appI18nSource)
-const appKeepBasicHtmlNodes = appI18nSource.match(/react:\s*\{[^}]*transKeepBasicHtmlNodesFor:\s*\[([^\]]*)\]/)?.[1]
-const appReactOptions = appKeepBasicHtmlNodes === undefined ? {} : { transKeepBasicHtmlNodesFor: [...appKeepBasicHtmlNodes.matchAll(/'([^']+)'/g)].map(match => match[1]) }
+const appEscapeValues = [...appI18nCode.matchAll(/\bescapeValue:\s*(\w+)/g)].map(match => match[1])
+const appEscapeValue = appEscapeValues.length === 1 && /interpolation:\s*\{[^}]*escapeValue:\s*true/.test(appI18nCode)
+const appKeepBasicHtmlNodes = appI18nCode.match(/react:\s*\{[^}]*transKeepBasicHtmlNodesFor:\s*\[([^\]]*)\]/)?.[1]
+const appKeepBasicHtmlNodesFor = appKeepBasicHtmlNodes === undefined ? undefined : [...appKeepBasicHtmlNodes.matchAll(/'([^']+)'/g)].map(match => match[1])
+const appReactOptions = appKeepBasicHtmlNodesFor === undefined ? {} : { transKeepBasicHtmlNodesFor: appKeepBasicHtmlNodesFor }
 
 const makeI18n = async () => {
   const instance = i18next.createInstance()

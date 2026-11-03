@@ -10,9 +10,13 @@ import { mergeForkLocale } from '@/fork/locales'
 const dashboardRoot = join(import.meta.dir, '..', '..', '..')
 const srcRoot = join(dashboardRoot, 'src')
 const appI18nSource = readFileSync(join(srcRoot, 'locales', 'i18n.ts'), 'utf8')
-const appEscapeValue = /interpolation:\s*\{[^}]*escapeValue:\s*true/.test(appI18nSource)
-const appKeepBasicHtmlNodes = appI18nSource.match(/react:\s*\{[^}]*transKeepBasicHtmlNodesFor:\s*\[([^\]]*)\]/)?.[1]
-const appReactOptions = appKeepBasicHtmlNodes === undefined ? {} : { transKeepBasicHtmlNodesFor: [...appKeepBasicHtmlNodes.matchAll(/'([^']+)'/g)].map(match => match[1]) }
+const appI18nCode = appI18nSource.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+const appEscapeValues = [...appI18nCode.matchAll(/\bescapeValue:\s*(\w+)/g)].map(match => match[1])
+const appEscapeValue = appEscapeValues.length === 1 && /interpolation:\s*\{[^}]*escapeValue:\s*true/.test(appI18nCode)
+const appKeepBasicHtmlNodeMentions = appI18nCode.match(/\btransKeepBasicHtmlNodesFor\b/g)?.length ?? 0
+const appKeepBasicHtmlNodes = appI18nCode.match(/react:\s*\{[^}]*transKeepBasicHtmlNodesFor:\s*\[([^\]]*)\]/)?.[1]
+const appKeepBasicHtmlNodesFor = appKeepBasicHtmlNodes === undefined ? undefined : [...appKeepBasicHtmlNodes.matchAll(/'([^']+)'/g)].map(match => match[1])
+const appReactOptions = appKeepBasicHtmlNodesFor === undefined ? {} : { transKeepBasicHtmlNodesFor: appKeepBasicHtmlNodesFor }
 const languages = ['en', 'fa', 'ru', 'zh'] as const
 
 const loadLocale = (lng: string) => mergeForkLocale(JSON.parse(readFileSync(join(dashboardRoot, 'public', 'statics', 'locales', `${lng}.json`), 'utf8')), lng)
@@ -74,6 +78,12 @@ const siteFor = (key: string) => {
 }
 
 describe('name prompts rendered through <Trans>', () => {
+  it('the app i18n config keeps escapeValue on and sets one Trans keep list of exactly br, strong, i, p and b', () => {
+    expect(appEscapeValue).toBe(true)
+    expect(appKeepBasicHtmlNodeMentions).toBe(1)
+    expect(appKeepBasicHtmlNodesFor).toEqual(['br', 'strong', 'i', 'p', 'b'])
+  })
+
   it('the scan finds the node and host delete prompts', () => {
     expect(siteFor('deleteNode.prompt').file).toBe('src/features/nodes/components/node-actions-menu.tsx')
     expect(siteFor('deleteHost.prompt').file).toBe('src/features/hosts/components/host-actions-menu.tsx')
