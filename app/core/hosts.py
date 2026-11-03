@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import on_shutdown, on_startup
 from app.core.manager import DB_RELOAD_ATTEMPTS, core_manager
 from app.db import GetDB
-from app.db.crud.host import get_host_by_id, get_hosts, upsert_inbounds
+from app.db.crud.host import get_hosts, upsert_inbounds
 from app.db.models import ProxyHost, ProxyHostSecurity
 from app.models.host import (
     BaseHost,
@@ -670,7 +670,7 @@ class HostManager:
             and host.transport_settings.xhttp_settings
             and (ds_host := host.transport_settings.xhttp_settings.download_settings)
         ):
-            downstream = await get_host_by_id(db, ds_host)
+            downstream = next(iter(await self._read_hosts(db, [ds_host])), None)
             if downstream:
                 try:
                     downstream_base = BaseHost.model_validate(downstream)
