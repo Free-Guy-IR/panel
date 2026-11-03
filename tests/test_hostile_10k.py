@@ -19,8 +19,8 @@ def load_inventory():
     return module
 
 
-def test_10k_shipped_arches_are_node_release_yml_linux_amd64_386_arm_arm64_and_docker_amd64_arm64():
-    assert load_inventory().GO_SHIPPED_ARCHES == frozenset({"amd64", "arm64", "386", "arm"})
+def test_10k_shipped_arches_are_node_release_matrix_linux_amd64_386_arm_arm64_s390x_and_docker_amd64_arm64():
+    assert load_inventory().GO_SHIPPED_ARCHES == frozenset({"amd64", "arm64", "386", "arm", "s390x"})
 
 
 @pytest.mark.parametrize(
@@ -65,13 +65,12 @@ def test_10k_file_missing_from_any_shipped_linux_target_is_excluded(path, conten
 @pytest.mark.parametrize(
     "content",
     [
-        "//go:build !s390x\n\npackage x\n",
         "//go:build !riscv64\n\npackage x\n",
         "//go:build !mips64le\n\npackage x\n",
         "//go:build linux\n\npackage x\n",
         "package x\n",
     ],
-    ids=["not-s390x", "not-riscv64", "not-mips64le", "linux", "plain"],
+    ids=["not-riscv64", "not-mips64le", "linux", "plain"],
 )
 def test_10k_file_built_on_every_shipped_linux_target_is_kept(content):
     assert not load_inventory().go_build_excluded("pkg/x.go", content, 22)

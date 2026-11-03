@@ -156,7 +156,7 @@ DIRECTIVE_PREFIXES = (
 )
 CGO_IMPORT_RE = re.compile(r'["`]C["`]')
 FORK_CITE_RE = re.compile(
-    r"\b(?:commits?|ported\s+in|carried\s+by|fixed\s+by)\s+(?:[0-9a-f]{9,40}\s*(?:,|and)\s*)*$", re.IGNORECASE
+    r"\b(?:commits?|ported\s+in|carried\s+by|fixed\s+by):?\s+`?(?:[0-9a-f]{9,40}`?\s*(?:,|and)\s*`?)*$", re.IGNORECASE
 )
 GO_MODULE_VERSION_RE = re.compile(r"^go\s+1\.(\d+)\b", re.MULTILINE)
 GO_FILENAME_OSES = frozenset(
@@ -209,7 +209,11 @@ GO_FILENAME_ARCHES = frozenset(
         "wasm",
     ]
 )
-GO_SHIPPED_ARCHES = frozenset({"amd64", "arm64", "386", "arm"})
+GO_SHIPPED_ARCHES = frozenset({"amd64", "arm64", "386", "arm", "s390x"})
+GO_CGO_IMPORT_RE = re.compile(r'\bimport\s*(?:\([^)]*?)?(?:[\w.]+\s+)?["`]C["`]')
+WORKFLOW_DIRECTORY = ".github/workflows"
+WORKFLOW_PLATFORMS_RE = re.compile(r"^\s*-?\s*platforms:\s*(.*)$")
+WORKFLOW_MATRIX_KEYS = ("goos", "goarch")
 GO_LINUX_TRUE_TERMS = frozenset({"linux", "unix"})
 GO_CONSTRAINT_RE = re.compile(r"^\s*//\s*(?:go:build|\+build)\b(.*)$", re.MULTILINE)
 NAMED_BRANCH_RE = re.compile(
@@ -1548,7 +1552,156 @@ def go_filename_excluded(name):
     return bool(parts) and parts[-1] in GO_FILENAME_OSES and parts[-1] != "linux"
 
 
-def go_term_true_on_linux(term, go_minor):
+class ShippedArchesUnreadable(ValueError):
+    pass
+
+
+def workflow_scalar(value):
+    value = value.strip().strip("'\"").strip()
+    if not value or "${{" in value or value[0] in "[{&*|>":
+        raise ShippedArchesUnreadable(f"cannot read the matrix value {value!r}")
+    return value
+
+
+def workflow_values(value, children):
+    value = value.strip()
+    if value.startswith("[") and value.endswith("]"):
+        return [workflow_scalar(item) for item in value[1:-1].split(",") if item.strip()]
+    if value:
+        return [workflow_scalar(value)]
+    items = []
+    for _, text in children:
+        if not text.startswith("- "):
+            raise ShippedArchesUnreadable(f"cannot read the matrix list line {text!r}")
+        items.append(workflow_scalar(text[2:]))
+    return items
+
+
+def workflow_mappings(children):
+    items = []
+    for _, text in children:
+        if text.startswith("- "):
+            items.append({})
+            text = text[2:].strip()
+        if not items:
+            raise ShippedArchesUnreadable(f"cannot read the matrix entry line {text!r}")
+        key, colon, value = text.partition(":")
+        if not colon:
+            raise ShippedArchesUnreadable(f"cannot read the matrix entry line {text!r}")
+        if "${{" in value:
+            raise ShippedArchesUnreadable(f"cannot read the matrix entry line {text!r}")
+        items[-1][key.strip()] = value.strip().strip("'\"").strip()
+    return items
+
+
+def workflow_lines(text):
+    lines = []
+    for raw in text.splitlines():
+        stripped = raw.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        cut = re.sub(r"\s+#.*$", "", raw).rstrip()
+        lines.append((len(cut) - len(cut.lstrip()), cut.strip()))
+    return lines
+
+
+def matrix_linux_arches(block):
+    if not block:
+        raise ShippedArchesUnreadable("an empty matrix")
+    child = block[0][0]
+    keys = {}
+    index = 0
+    while index < len(block):
+        indent, text = block[index]
+        if indent != child:
+            raise ShippedArchesUnreadable(f"cannot read the matrix line {text!r}")
+        key, colon, value = text.partition(":")
+        if not colon:
+            raise ShippedArchesUnreadable(f"cannot read the matrix line {text!r}")
+        end = index + 1
+        while end < len(block) and block[end][0] > child:
+            end += 1
+        keys[key.strip()] = (value, block[index + 1 : end])
+        index = end
+    present = [key for key in WORKFLOW_MATRIX_KEYS if key in keys]
+    combos = []
+    if present:
+        if len(present) != len(WORKFLOW_MATRIX_KEYS):
+            raise ShippedArchesUnreadable("a matrix with only one of goos and goarch")
+        oses = workflow_values(*keys["goos"])
+        arches = workflow_values(*keys["goarch"])
+        combos = [{"goos": goos, "goarch": goarch} for goos in oses for goarch in arches]
+    if "exclude" in keys:
+        if keys["exclude"][0].strip():
+            raise ShippedArchesUnreadable("an inline matrix exclude")
+        for entry in workflow_mappings(keys["exclude"][1]):
+            if set(entry) <= set(WORKFLOW_MATRIX_KEYS):
+                combos = [combo for combo in combos if any(combo[key] != value for key, value in entry.items())]
+    if "include" in keys:
+        if keys["include"][0].strip():
+            raise ShippedArchesUnreadable("an inline matrix include")
+        for entry in workflow_mappings(keys["include"][1]):
+            named = [key for key in WORKFLOW_MATRIX_KEYS if key in entry]
+            if named and len(named) != len(WORKFLOW_MATRIX_KEYS):
+                raise ShippedArchesUnreadable(f"a matrix include without both goos and goarch: {entry}")
+            if named:
+                combos.append({key: workflow_scalar(entry[key]) for key in WORKFLOW_MATRIX_KEYS})
+    return {combo["goarch"] for combo in combos if combo["goos"] == "linux"}
+
+
+def workflow_linux_arches(text):
+    lines = workflow_lines(text)
+    found = set()
+    for index, (indent, line) in enumerate(lines):
+        platforms = WORKFLOW_PLATFORMS_RE.match(line)
+        if platforms:
+            value = platforms.group(1).strip().strip("'\"")
+            if not value or "${{" in value:
+                raise ShippedArchesUnreadable(f"cannot read the platforms line {line!r}")
+            for platform in value.split(","):
+                parts = platform.strip().split("/")
+                if len(parts) < 2 or not parts[1]:
+                    raise ShippedArchesUnreadable(f"cannot read the platform {platform!r}")
+                if parts[0] == "linux":
+                    found.add(parts[1])
+            continue
+        key, colon, value = line.partition(":")
+        if key.strip() != "matrix" or not colon:
+            continue
+        if value.strip():
+            raise ShippedArchesUnreadable(f"cannot read the matrix line {line!r}")
+        end = index + 1
+        while end < len(lines) and lines[end][0] > indent:
+            end += 1
+        block = lines[index + 1 : end]
+        if any(text.partition(":")[0].strip().lstrip("- ") in WORKFLOW_MATRIX_KEYS for _, text in block):
+            found |= matrix_linux_arches(block)
+    return frozenset(found)
+
+
+@functools.lru_cache(maxsize=16)
+def shipped_linux_arches(ref):
+    listing = subprocess.run(
+        ["git", "ls-tree", "--name-only", f"{ref}:{WORKFLOW_DIRECTORY}"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    found = set(GO_SHIPPED_ARCHES)
+    if listing.returncode != 0:
+        return frozenset(found)
+    for name in listing.stdout.split("\n"):
+        if name.endswith((".yml", ".yaml")):
+            content = head_blob(ref, f"{WORKFLOW_DIRECTORY}/{name}")
+            if content is None:
+                raise ShippedArchesUnreadable(f"cannot read {WORKFLOW_DIRECTORY}/{name}")
+            found |= workflow_linux_arches(content)
+    return frozenset(found)
+
+
+def go_term_true_on_linux(term, go_minor, arches=GO_SHIPPED_ARCHES):
     version = re.fullmatch(r"go1\.(\d+)", term)
     if version:
         return go_minor is not None and int(version.group(1)) <= go_minor
@@ -1558,19 +1711,20 @@ def go_term_true_on_linux(term, go_minor):
     if negated in GO_FILENAME_OSES:
         return negated != "linux"
     if negated in GO_FILENAME_ARCHES:
-        return negated not in GO_SHIPPED_ARCHES
+        return negated not in arches
     return False
 
 
-def go_build_excluded(path, content, go_minor=None):
+def go_build_excluded(path, content, go_minor=None, arches=GO_SHIPPED_ARCHES):
+    content = content.removeprefix("\ufeff")
     parts = Path(path).parts
     if any(part == "testdata" or part.startswith(("_", ".")) for part in parts):
         return True
-    if go_filename_excluded(parts[-1]):
+    if go_filename_excluded(parts[-1]) or GO_CGO_IMPORT_RE.search(content):
         return True
     for match in GO_CONSTRAINT_RE.finditer(content):
         terms = match.group(1).split()
-        if len(terms) != 1 or not go_term_true_on_linux(terms[0], go_minor):
+        if len(terms) != 1 or not go_term_true_on_linux(terms[0], go_minor, arches):
             return True
     return False
 
@@ -1608,9 +1762,13 @@ def moved_hunk_problem(ident, why, target, head, upstream_sha, hunks, carriers):
     if not ((post[0] or post[2]) and block_in_place(here, post)):
         return f"{label}, but its non-comment lines are not in place in {target} on {head}"
     content = head_blob(head, target)
-    if target.endswith(".go") and (
-        content is None or go_build_excluded(target, content, go_module_minor(head, target))
-    ):
+    if not target.endswith(".go"):
+        return None
+    try:
+        arches = shipped_linux_arches(head)
+    except ShippedArchesUnreadable as error:
+        return f"{label}, but the shipped linux arch set on {head} cannot be read from its workflows: {error}"
+    if content is None or go_build_excluded(target, content, go_module_minor(head, target), arches):
         return f"{label}, but {target} is excluded from the build on {head}"
     return None
 
