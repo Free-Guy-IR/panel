@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import status
 
+from app.fork.crud.bulk_result_bounds import STORABLE_EXPIRE_MIN
 from tests.api import client
 from tests.api.helpers import auth_headers, create_admin, create_user, delete_admin, delete_user, unique_name
 
@@ -223,7 +224,7 @@ def test_negative_expire_step_landing_exactly_on_the_lower_edge_after_a_bulk_wri
 
 
 def test_expire_step_landing_inside_the_last_second_of_9999_is_accepted(access_token):
-    user = _user(access_token, expire=datetime(9999, 12, 31, 23, 59, 58, 500000, tzinfo=UTC))
+    user = _user(access_token, expire=datetime(9999, 12, 31, 23, 59, 58, 400000, tzinfo=UTC))
     try:
         response = _post(access_token, "expire", 1, user["id"])
         assert response.status_code == status.HTTP_200_OK, response.text
@@ -232,3 +233,28 @@ def test_expire_step_landing_inside_the_last_second_of_9999_is_accepted(access_t
         assert rejected.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY, rejected.text
     finally:
         delete_user(access_token, user["username"])
+
+
+LOWER_EDGE_FRACTION_SEED = STORABLE_EXPIRE_MIN + timedelta(seconds=2) - timedelta(microseconds=1)
+
+
+def test_owner_negative_step_never_stores_an_expire_below_the_storable_minimum(access_token):
+    user = _user(access_token, expire=LOWER_EDGE_FRACTION_SEED)
+    try:
+        response = _post(access_token, "expire", -2, user["id"])
+        stored = _fetch(access_token, user["username"])["expire"]
+        assert stored is not None and stored >= "1000-01-01T00:00:00", (response.status_code, response.text, stored)
+    finally:
+        delete_user(access_token, user["username"])
+
+
+def test_owner_and_limited_admin_agree_on_the_lower_edge(access_token):
+    role, admin, token = _limited_token(access_token, {"expire_max": EXPIRE_AMOUNT_BOUND})
+    user = _user(access_token, expire=LOWER_EDGE_FRACTION_SEED)
+    try:
+        owner = _post(access_token, "expire", -2, user["id"], True)
+        limited = _post(token, "expire", -2, user["id"], True)
+        assert owner.status_code == limited.status_code, (owner.text, limited.text)
+    finally:
+        delete_user(access_token, user["username"])
+        _drop_limited(access_token, role, admin)
