@@ -411,3 +411,97 @@ def test_a_mapping_used_twice_or_not_at_all_renders_like_plain_logging(message, 
     record = _scrubbed(_record(message, args))
     assert record.getMessage() == raw
     assert SECRET not in repr(record.args)
+
+
+class _Flags(enum.IntFlag):
+    READ = 1
+    WRITE = 2
+
+
+class _Ratio(float, enum.Enum):
+    HALF = 0.5
+
+
+class _Port(int):
+    pass
+
+
+class _ChangingNumber(int):
+    text = "clean"
+
+    def __repr__(self) -> str:
+        return self.text
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        [_Level.HIGH, 501],
+        (_Level.HIGH, 501),
+        [_Flags.READ | _Flags.WRITE, _Flags.READ],
+        [_Ratio.HALF, 2.5],
+        [_Port(8080), True, None, 1.5],
+    ],
+    ids=repr,
+)
+@pytest.mark.parametrize("message", ["s %s", "s %r", "s %a"])
+def test_a_container_of_numeric_subclasses_keeps_its_type_and_renders_like_plain_logging(message, value):
+    raw = _raw_message(message, (value,))
+    record = _scrubbed(_record(message, (value,)))
+    assert type(record.args[0]) is type(value)
+    assert list(record.args[0]) == list(value)
+    assert record.getMessage() == raw
+
+
+def test_a_number_subclass_with_its_own_repr_inside_a_list_is_still_frozen_at_log_time():
+    number = _ChangingNumber(3)
+    record = _scrubbed(_record("values %s", ([number],)))
+    number.text = URL
+    _scrubbed(record)
+    assert record.getMessage() == "values [clean]"
+    assert SECRET not in record.getMessage()
+    assert SECRET not in repr(record.args)
+
+
+@pytest.mark.parametrize(
+    ("message", "args", "kept"),
+    [
+        ("%s password=%s", ([1, 2], SECRET), [1, 2]),
+        ("%s password=%s", ((1, 2), SECRET), (1, 2)),
+        ("%s password=%s", ([_Level.HIGH, 501], SECRET), [_Level.HIGH, 501]),
+        ("%(a)s password=%(b)s", ({"a": [1, 2], "b": SECRET},), [1, 2]),
+    ],
+    ids=repr,
+)
+def test_a_list_next_to_a_secret_keeps_its_type_and_its_shown_values(message, args, kept):
+    raw = _raw_message(message, args)
+    record = _scrubbed(_record(message, args))
+    value = record.args["a"] if isinstance(record.args, dict) else record.args[0]
+    assert type(value) is type(kept)
+    assert value == kept
+    assert record.getMessage() == raw.replace(SECRET, "***")
+    assert SECRET not in repr(record.args)
+
+
+@pytest.mark.parametrize(
+    ("message", "args", "where"),
+    [
+        ("password=%s", ([90210],), 0),
+        ("password=%s%s", ("ab", [90210]), 1),
+        ("password=ab%s", ((90210,),), 0),
+        ("[90210] password=%s%s", ("ab", [90210]), 1),
+        ("%.0s password=%s", ([90210], SECRET), 0),
+        ("%(a).0s password=%(b)s", ({"a": [90210], "b": SECRET},), "a"),
+    ],
+    ids=repr,
+)
+def test_a_list_that_is_part_of_a_masked_secret_or_not_shown_is_masked_item_by_item(message, args, where):
+    original = args[0][where] if isinstance(where, str) else args[where]
+    record = _scrubbed(_record(message, args))
+    value = record.args[where]
+    assert type(value) is type(original)
+    assert [str(item) for item in value] == ["***"] * len(original)
+    assert [repr(item) for item in value] == ["***"] * len(original)
+    assert "90210" not in repr(record.args)
+    assert record.getMessage().count("90210") == message.count("90210")
+    assert SECRET not in record.getMessage()

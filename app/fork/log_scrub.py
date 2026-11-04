@@ -1,3 +1,4 @@
+import enum
 import logging
 import operator
 import re
@@ -11,6 +12,8 @@ _EXCEPTION_FORMATTER = logging.Formatter()
 _FORMAT_EXCEPTION = logging.Formatter.formatException
 _SCRUBBED_STATE = "_credential_scrub_state"
 _PLAIN_TYPES = (int, float, bool, type(None))
+_PLAIN_ITEM_REPRS = frozenset({int.__repr__, float.__repr__, enum.Enum.__repr__, enum.Flag.__repr__})
+_PLAIN_VALUE_REPRS = frozenset({int.__repr__, float.__repr__})
 _MASK = "***"
 _DIRECTIVE = re.compile(
     r"%(?:\((?P<key>[^()]*)\))?[-+ #0]*(?P<width>\*|\d+)?(?:\.(?P<precision>\*|\d*))?[hlL]?(?P<conversion>.)",
@@ -62,6 +65,18 @@ def _is_plain(argument: object) -> bool:
     return type(argument) in _PLAIN_TYPES
 
 
+def _is_plain_item(item: object) -> bool:
+    if _is_plain(item):
+        return True
+    kind = type(item)
+    representation = next((vars(base)["__repr__"] for base in kind.__mro__ if "__repr__" in vars(base)), None)
+    if not isinstance(item, int | float) or representation not in _PLAIN_ITEM_REPRS:
+        return False
+    if not isinstance(item, enum.Enum):
+        return representation in _PLAIN_VALUE_REPRS
+    return kind._value_repr_ in _PLAIN_VALUE_REPRS and _is_plain(item._value_)
+
+
 def _rendered(argument: object, render) -> str:
     try:
         return render(argument)
@@ -75,7 +90,7 @@ def _frozen(argument: object, conversions: set[str]) -> object:
         return argument if scrubbed == argument else scrubbed
     if _is_plain(argument):
         return argument
-    if type(argument) in (list, tuple) and all(_is_plain(item) for item in argument):
+    if type(argument) in (list, tuple) and all(_is_plain_item(item) for item in argument):
         return list(argument) if type(argument) is list else argument
     number = _number(argument, conversions - set(_TEXT_CONVERSIONS))
     texts = conversions & set(_TEXT_CONVERSIONS)
@@ -169,10 +184,11 @@ def _scrub_message(record: logging.LogRecord) -> None:
     if scrubbed == rendered and original == rendered:
         record.msg, record.args = message, arguments
         return
+    renders = ((first, original), (rendered, scrubbed))
     if isinstance(arguments, dict):
-        masked = {key: _masked(value) for key, value in arguments.items()}
+        masked = {key: _masked(value, renders) for key, value in arguments.items()}
     else:
-        masked = tuple(_masked(argument) for argument in arguments)
+        masked = tuple(_masked(argument, renders) for argument in arguments)
     text = scrubbed if original == scrubbed else _template_with_masked_arguments(message, masked)
     if isinstance(masked, dict):
         record.msg, record.args = text.replace("%", "%%"), masked
@@ -187,7 +203,16 @@ def _template_with_masked_arguments(message: str, masked: tuple | dict) -> str:
         return _MASK
 
 
-def _masked(argument: object) -> object:
+def _survives_scrubbing(piece: str, renders: tuple) -> bool:
+    return "*" not in piece and all(before.count(piece) == after.count(piece) > 0 for before, after in renders)
+
+
+def _masked(argument: object, renders: tuple = ()) -> object:
+    if type(argument) in (list, tuple):
+        if _survives_scrubbing(_rendered(argument, repr), renders):
+            return argument
+        items = [_masked(item) for item in argument]
+        return items if type(argument) is list else tuple(items)
     if isinstance(argument, int):
         return _FrozenInt(0, _MASK, _MASK)
     if isinstance(argument, float):
