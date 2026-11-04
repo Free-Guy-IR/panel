@@ -375,8 +375,8 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         except CreatorAdminGone:
             await self.raise_error(message=CREATOR_ADMIN_GONE_DETAIL, code=404, db=db)
 
-    async def _enforce_bulk_create_quota(
-        self, db: AsyncSession, admin: AdminDetails, users_to_create_count: int
+    async def _enforce_locked_user_quota(
+        self, db: AsyncSession, admin: AdminDetails, users_to_create_count: int, refusal: str
     ) -> None:
         if admin.is_owner or users_to_create_count <= 0:
             return
@@ -388,7 +388,14 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         await lock_admin_quota_row(db, admin.id)
         current_count = await get_users_count_by_admin(db, admin.id)
         if current_count + users_to_create_count > limits.max_users:
-            await self.raise_error(message=f"Bulk create would exceed user limit ({limits.max_users})", code=400, db=db)
+            await self.raise_error(message=refusal.format(limit=limits.max_users), code=400, db=db)
+
+    async def _enforce_bulk_create_quota(
+        self, db: AsyncSession, admin: AdminDetails, users_to_create_count: int
+    ) -> None:
+        await self._enforce_locked_user_quota(
+            db, admin, users_to_create_count, "Bulk create would exceed user limit ({limit})"
+        )
 
     async def _persist_bulk_users(
         self,
@@ -762,6 +769,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             db, all_groups, new_user.proxy_settings, explicit_fields=supplied_secret_fields(new_user.proxy_settings)
         )
 
+        await self._enforce_locked_user_quota(db, admin, 1, "User limit reached ({limit})")
         await self._lock_creator_admin(db, admin, db_admin)
         try:
             db_user = await create_user(db, new_user, all_groups, db_admin)
