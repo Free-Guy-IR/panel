@@ -19,7 +19,13 @@ from app.db.models import (
     NodeUserUsage,
     node_additional_cores_association,
 )
-from app.fork.crud.node import get_inbounds_usage, resolve_additional_cores  # noqa: F401
+from app.fork.crud.node import (  # noqa: F401
+    NODE_DELETE_ATTEMPTS,
+    NodeDeleteConflict,
+    delete_nodes_in_lock_order,
+    get_inbounds_usage,
+    resolve_additional_cores,
+)
 from app.fork.operation.usage_guard import execute_with_statement_timeout
 from app.models.node import (
     NodeCreate,
@@ -468,19 +474,7 @@ async def remove_node(db: AsyncSession, db_node: Node) -> None:
         db (AsyncSession): The database session.
         db_node (Node): The Node object to be removed.
     """
-    node_id = db_node.id
-
-    # Remove dependent rows explicitly to avoid ORM cascading overhead on large tables.
-    await db.execute(
-        delete(node_additional_cores_association).where(node_additional_cores_association.c.node_id == node_id)
-    )
-    await db.execute(delete(NodeOutboundUsage).where(NodeOutboundUsage.node_id == node_id))
-    for usage_table in (NodeUserUsage, NodeUsage, NodeInboundUsage, NodeUsageResetLogs):
-        await db.execute(update(usage_table).where(usage_table.node_id == node_id).values(node_id=None))
-    await db.execute(delete(NodeStat).where(NodeStat.node_id == node_id))
-    await db.execute(delete(Node).where(Node.id == node_id))
-
-    await db.commit()
+    await delete_nodes_in_lock_order(db, [db_node.id], lambda node_ids: _delete_node_rows(db, node_ids))
 
 
 async def modify_node(db: AsyncSession, db_node: Node, modify: NodeModify) -> Node:
@@ -894,6 +888,10 @@ async def remove_nodes(db: AsyncSession, node_ids: list[int]) -> None:
     if not node_ids:
         return
 
+    await delete_nodes_in_lock_order(db, node_ids, lambda ordered: _delete_node_rows(db, ordered))
+
+
+async def _delete_node_rows(db: AsyncSession, node_ids: list[int]) -> None:
     await db.execute(
         delete(node_additional_cores_association).where(node_additional_cores_association.c.node_id.in_(node_ids))
     )
@@ -902,4 +900,3 @@ async def remove_nodes(db: AsyncSession, node_ids: list[int]) -> None:
         await db.execute(update(usage_table).where(usage_table.node_id.in_(node_ids)).values(node_id=None))
     await db.execute(delete(NodeStat).where(NodeStat.node_id.in_(node_ids)))
     await db.execute(delete(Node).where(Node.id.in_(node_ids)))
-    await db.commit()

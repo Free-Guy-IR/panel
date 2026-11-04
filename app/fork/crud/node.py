@@ -1,6 +1,9 @@
+import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 
 from sqlalchemy import and_, func, select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.crud.general import (
@@ -8,13 +11,59 @@ from app.db.crud.general import (
     attach_timezone_to_period_start,
     to_utc_for_filter,
 )
-from app.db.models import CoreConfig, NodeInboundUsage
+from app.db.models import CoreConfig, Node, NodeInboundUsage
 from app.fork.operation.usage_guard import execute_with_statement_timeout
 from app.models.stats import InboundUsageStat, InboundUsageStatsList, Period
 
 
 class CoreConfigMissing(LookupError):
     pass
+
+
+NODE_DELETE_ATTEMPTS = 3
+NODE_DELETE_BACKOFF_SECONDS = 0.05
+NODE_DELETE_RETRY_ERRNOS = frozenset({1213})
+NODE_DELETE_RETRY_SQLSTATES = frozenset({"40001", "40P01"})
+
+
+class NodeDeleteConflict(RuntimeError):
+    pass
+
+
+def is_node_delete_conflict(exc: BaseException) -> bool:
+    if not isinstance(exc, DBAPIError):
+        return False
+    driver_error = exc.orig
+    arguments = getattr(driver_error, "args", ()) or ()
+    if arguments and arguments[0] in NODE_DELETE_RETRY_ERRNOS:
+        return True
+    sqlstates = {getattr(driver_error, "sqlstate", None), getattr(driver_error, "pgcode", None)}
+    return bool(sqlstates & NODE_DELETE_RETRY_SQLSTATES)
+
+
+async def delete_nodes_in_lock_order(
+    db: AsyncSession,
+    node_ids: list[int],
+    delete_rows: Callable[[list[int]], Awaitable[None]],
+    attempts: int | None = None,
+) -> None:
+    ordered = sorted(set(node_ids))
+    limit = attempts or NODE_DELETE_ATTEMPTS
+    for attempt in range(1, limit + 1):
+        try:
+            await db.execute(select(Node.id).where(Node.id.in_(ordered)).order_by(Node.id).with_for_update())
+            await delete_rows(ordered)
+            await db.commit()
+            return
+        except DBAPIError as exc:
+            await db.rollback()
+            if not is_node_delete_conflict(exc):
+                raise
+            if attempt == limit:
+                raise NodeDeleteConflict(
+                    f"deleting nodes {ordered} deadlocked with a concurrent writer; gave up after {limit} attempts"
+                ) from exc
+            await asyncio.sleep(NODE_DELETE_BACKOFF_SECONDS * attempt)
 
 
 async def resolve_additional_cores(db: AsyncSession, core_ids: list[int] | None) -> list[CoreConfig]:
