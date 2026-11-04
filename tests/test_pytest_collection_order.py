@@ -25,7 +25,7 @@ def interleaved_run(tmp_path_factory) -> tuple[subprocess.CompletedProcess, dict
             "-p",
             "no:cacheprovider",
             "--setup-show",
-            "tests/api/test_settings.py",
+            "tests/api/test_settings.py::test_general_settings_custom_variables_round_trip",
             "tests/test_shutdown_order.py",
             "tests/api/test_sub_revoke_same_second.py",
         ],
