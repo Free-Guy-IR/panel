@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import ast
 import functools
 import hashlib
 import io
@@ -261,6 +262,27 @@ SHELL_DYNAMIC_NAME_RE = re.compile(
     r"""(?:^|[\s;&|(!])(?:\w|["']|""" + SHELL_DYNAMIC_PART + r""")*""" + SHELL_DYNAMIC_PART
     + r"""(?:\w|["']|""" + SHELL_DYNAMIC_PART + r""")*\+?=(?!=)"""
 )
+SHELL_ARCH_NAME_RE = re.compile(r"(?<![\w$.{-])(?:goarch|targetarch)(?!\w)", re.IGNORECASE)
+SHELL_ARCH_ASSIGNMENT_RE = re.compile(r"(?<![\w$.{-])(?:goarch|targetarch)\s*(?:::|[:?+!])?=(?!=)", re.IGNORECASE)
+SHELL_ANSI_C_SEGMENT_RE = re.compile(r"\$'((?:[^'\\]|\\.)*)'")
+SHELL_ANSI_C_ESCAPE_RE = re.compile(
+    r"\\(x[0-9a-fA-F]{1,2}|u[0-9a-fA-F]{1,4}|U[0-9a-fA-F]{1,8}|[0-7]{1,3}|c.?|.)", re.DOTALL
+)
+SHELL_ANSI_C_SIMPLE = {
+    "a": "\a", "b": "\b", "e": "\x1b", "E": "\x1b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v"
+}
+SHELL_DECLARING_COMMAND_RE = re.compile(
+    r"(?<![\w.-])(?:env|export|declare|typeset|local|readonly|eval|let)(?![\w-])|GITHUB_ENV"
+)
+SHELL_ARCH_SPELLINGS = ("goarch", "targetarch")
+WORKFLOW_EXPRESSION_KEY_RE = re.compile(r"""(?:^(?:-\s+)?|[{,]\s*)(["']?)\$\{\{.*?\}\}[^:{},]*\1\s*:(?=\s|$)""")
+PY_LITERAL_STRING_RE = re.compile(r"""[rRuU]?(?:'[^'\\\n]*'|"[^"\\\n]*")""")
+PY_ENV_CALLS = frozenset({"setdefault", "putenv", "update", "pop", "__setitem__"})
+GO_LITERAL_STRING = r"""(?:"[^"\\\n]*"|`[^`]*`)"""
+GO_SETENV_RE = re.compile(r"\b(?:Setenv|putenv)\s*\(")
+GO_SETENV_LITERAL_RE = re.compile(r"\s*" + GO_LITERAL_STRING + r"\s*,")
+GO_STRING_MAP_RE = re.compile(r"map\s*\[\s*string\s*\]\s*string\s*\{")
+GO_MAP_ENTRY_RE = re.compile(r"\s*" + GO_LITERAL_STRING + r"\s*:")
 DOCKER_LEGACY_ENV_TARGETARCH_RE = re.compile(r"^env\s+targetarch(?:\s|$)", re.IGNORECASE)
 WORKFLOW_TARGETARCH_SET_RE = re.compile(
     r"""(?<![\w$.{-])["']?targetarch["']?\s*(?:(?:::|[:?+!])?=(?!=)|:(?=\s|$))""", re.IGNORECASE
@@ -1633,6 +1655,53 @@ def design_fork_commit(reason, head, upstream_sha, in_range):
     return None
 
 
+@functools.lru_cache(maxsize=1024)
+def commit_line_texts(sha, path, sign):
+    if not commit_exists(f"{sha}^"):
+        return None
+    texts = Counter()
+    in_hunk = False
+    diff = git("diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", f"{sha}^", sha, "--", path)
+    for line in diff.splitlines():
+        if line.startswith("@@"):
+            in_hunk = True
+            continue
+        if in_hunk and line[:1] == sign:
+            text = normalise_line(path, line[1:])
+            if text:
+                texts[text] += 1
+    return texts
+
+
+def superseding_pick(reason, head, upstream_sha):
+    added = {}
+    for path in commit_paths(upstream_sha):
+        texts = commit_line_texts(upstream_sha, path, "+")
+        if texts is None:
+            return None
+        if texts:
+            added[path] = texts
+    if not added:
+        return None
+    for fork_sha in named_commits(MISSING_LINE_RE.sub("", reason), head, upstream_sha):
+        if on_upstream_ref(fork_sha):
+            continue
+        body = git("log", "-1", "--format=%B", fork_sha)
+        for later in sorted(set(CHERRY_PICK_RE.findall(body)) | set(UPSTREAM_TRAILER_RE.findall(body))):
+            if later == upstream_sha or not commit_exists(later) or not on_upstream_ref(later):
+                continue
+            if not is_ancestor(upstream_sha, later):
+                continue
+            if any(texts - (commit_line_texts(later, path, "-") or Counter()) for path, texts in added.items()):
+                continue
+            if paths_bringing_upstream_change(later, fork_sha, set(added)) != set(added):
+                continue
+            expected, missing = own_lines_missing(fork_sha, head, set())
+            if expected and not missing:
+                return fork_sha
+    return None
+
+
 @functools.lru_cache(maxsize=4096)
 def resolve_commit(token):
     result = subprocess.run(
@@ -1998,6 +2067,8 @@ def workflow_linux_arches(text):
         decoded = yaml_hex_unescape(line)
         if decoded != line and ESCAPED_ARCH_WORD_RE.search(decoded):
             raise ShippedArchesUnreadable(f"the line {line!r} spells an arch word through a YAML escape")
+        if WORKFLOW_EXPRESSION_KEY_RE.search(line):
+            raise ShippedArchesUnreadable(f"the line {line!r} names a key through an expression the gate does not read")
     found = set()
     in_matrix = set()
     values = {}
@@ -2049,7 +2120,254 @@ def builds_dynamic_name(line):
     return False
 
 
+def ansi_c_decode(body):
+    def one(match):
+        code = match.group(1)
+        try:
+            if code[0] in "xuU":
+                return chr(int(code[1:], 16))
+            if code[0] in "01234567":
+                return chr(int(code, 8))
+        except ValueError:
+            return "\ufffd"
+        if code[0] == "c":
+            return chr(ord(code[1:].upper() or "@") ^ 0x40)
+        return SHELL_ANSI_C_SIMPLE.get(code, code)
+
+    return SHELL_ANSI_C_ESCAPE_RE.sub(one, body)
+
+
+def shell_plain(line):
+    chars, origin = [], []
+    index = 0
+    while index < len(line):
+        ansi = SHELL_ANSI_C_SEGMENT_RE.match(line, index)
+        if ansi:
+            decoded = ansi_c_decode(ansi.group(1))
+            chars.extend(decoded)
+            origin.extend([index] * len(decoded))
+            index = ansi.end()
+            continue
+        char = line[index]
+        if not (char in "'\"\\" or (char == "$" and line[index + 1 : index + 2] in ("'", '"'))):
+            chars.append(char)
+            origin.append(index)
+        index += 1
+    return "".join(chars), origin
+
+
+def spells_arch_name(literal):
+    letters = re.sub(r"[^a-z0-9]", "", literal.lower())
+    if not letters:
+        return False
+    for word in SHELL_ARCH_SPELLINGS:
+        position = 0
+        for char in letters:
+            position = word.find(char, position)
+            if position < 0:
+                break
+            position += 1
+        else:
+            return True
+    return False
+
+
+def refuse_shell_name_forms(line):
+    plain, origin = shell_plain(line)
+    if WORKFLOW_GOARCH_BARE_RE.search(plain):
+        raise ShippedArchesUnreadable(f"the line {line!r} binds GOARCH or TARGETARCH in a form the gate cannot read")
+    for pattern in (SHELL_ARCH_NAME_RE, SHELL_ARCH_ASSIGNMENT_RE):
+        for match in pattern.finditer(plain):
+            if line[origin[match.start()] : origin[match.end() - 1] + 1] != match.group(0):
+                raise ShippedArchesUnreadable(f"the line {line!r} quotes or splits a GOARCH or TARGETARCH name")
+    declaring = SHELL_DECLARING_COMMAND_RE.search(line)
+    for match in SHELL_DYNAMIC_NAME_RE.finditer(plain):
+        name = match.group(0).lstrip(" \t;&|(!").rstrip("+=")
+        if declaring or spells_arch_name(re.sub(SHELL_DYNAMIC_PART, "", name)):
+            raise ShippedArchesUnreadable(f"the line {line!r} builds a variable name the gate cannot read")
+
+
+def python_literal_key(node, text):
+    if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+        return False
+    segment = ast.get_source_segment(text, node)
+    return segment is not None and PY_LITERAL_STRING_RE.fullmatch(segment) is not None
+
+
+def python_dotted(node):
+    parts = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if not isinstance(node, ast.Name):
+        return None
+    parts.append(node.id)
+    return ".".join(reversed(parts))
+
+
+def python_is_environ(node, env_names):
+    name = python_dotted(node)
+    return name is not None and (name in env_names or name == "environ" or name.endswith(".environ"))
+
+
+def python_env_value(node, text):
+    if isinstance(node, ast.Dict):
+        for key, value in zip(node.keys, node.values):
+            if key is None:
+                python_env_value(value, text)
+            elif not python_literal_key(key, text):
+                segment = ast.get_source_segment(text, key)
+                raise ShippedArchesUnreadable(f"an env mapping key {segment!r} is not a literal")
+        return
+    if isinstance(node, ast.Call) and python_dotted(node.func) == "dict":
+        for arg in node.args:
+            python_env_value(arg, text)
+        for keyword in node.keywords:
+            if keyword.arg is None:
+                python_env_value(keyword.value, text)
+        return
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "copy"
+        and python_dotted(node.func.value) is not None
+        and not node.args
+        and not node.keywords
+    ):
+        return
+    if python_dotted(node) is not None or (isinstance(node, ast.Constant) and node.value is None):
+        return
+    raise ShippedArchesUnreadable(f"cannot read the env value {ast.get_source_segment(text, node)!r}")
+
+
+def python_built_arch_string(node, text):
+    if isinstance(node, ast.BinOp):
+        pieces = []
+        stack = [node]
+        while stack:
+            item = stack.pop()
+            if isinstance(item, ast.BinOp):
+                stack.extend((item.right, item.left))
+            elif isinstance(item, ast.Constant) and isinstance(item.value, str):
+                pieces.append(item.value)
+        joined = "".join(pieces)
+    elif isinstance(node, ast.Constant) and isinstance(node.value, str) and not python_literal_key(node, text):
+        joined = node.value
+    else:
+        return False
+    raw = (ast.get_source_segment(text, node) or "").lower()
+    return any(word in joined.lower() and word not in raw for word in SHELL_ARCH_SPELLINGS)
+
+
+def python_mapping_from(node, names):
+    if python_is_environ(node, names):
+        return True
+    if isinstance(node, ast.Call) and python_dotted(node.func) == "dict":
+        unpacked = [keyword.value for keyword in node.keywords if keyword.arg is None]
+        return any(python_mapping_from(arg, names) for arg in [*node.args, *unpacked])
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "copy":
+        return python_mapping_from(node.func.value, names)
+    if isinstance(node, ast.Dict):
+        return any(key is None and python_mapping_from(value, names) for key, value in zip(node.keys, node.values))
+    return False
+
+
+def python_env_names(tree):
+    names = {"os.environ", "environ"}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.keyword) and node.arg == "env" and python_dotted(node.value):
+            names.add(python_dotted(node.value))
+    while True:
+        before = len(names)
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                if python_mapping_from(node.value, names):
+                    names.update(python_dotted(target) for target in targets if python_dotted(target))
+        if len(names) == before:
+            return names
+
+
+def python_source_linux_arches(text):
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError) as error:
+        raise ShippedArchesUnreadable(f"cannot parse the Python source: {error}") from error
+    env_names = python_env_names(tree)
+    for node in ast.walk(tree):
+        if python_built_arch_string(node, text):
+            raise ShippedArchesUnreadable(f"the string {ast.get_source_segment(text, node)!r} builds an arch name")
+        if isinstance(node, ast.Subscript) and python_is_environ(node.value, env_names):
+            if not python_literal_key(node.slice, text):
+                segment = ast.get_source_segment(text, node.slice)
+                raise ShippedArchesUnreadable(f"an environ key {segment!r} is not a literal")
+        elif isinstance(node, ast.keyword) and node.arg == "env":
+            python_env_value(node.value, text)
+        elif isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)) and node.value is not None:
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(python_dotted(target) in env_names for target in targets):
+                python_env_value(node.value, text)
+        elif isinstance(node, ast.Call):
+            function = node.func
+            name = python_dotted(function) or ""
+            if name == "putenv" or name.endswith(".putenv"):
+                if not node.args or not python_literal_key(node.args[0], text):
+                    segment = ast.get_source_segment(text, node)
+                    raise ShippedArchesUnreadable(f"a putenv key in {segment!r} is not a literal")
+            elif (
+                isinstance(function, ast.Attribute)
+                and function.attr in PY_ENV_CALLS
+                and python_is_environ(function.value, env_names)
+            ):
+                if function.attr == "update":
+                    for arg in node.args:
+                        python_env_value(arg, text)
+                    for keyword in node.keywords:
+                        if keyword.arg is None:
+                            python_env_value(keyword.value, text)
+                elif not node.args or not python_literal_key(node.args[0], text):
+                    segment = ast.get_source_segment(text, node)
+                    raise ShippedArchesUnreadable(f"an environ key in {segment!r} is not a literal")
+    return unread_source_linux_arches(text, literal_arches=GO_FILENAME_ARCHES)
+
+
+def go_map_entries_literal(text, start):
+    position = start
+    value_re = re.compile(r"""(?:"[^"\\\n]*(?:\\.[^"\\\n]*)*"|`[^`]*`|\([^()]*\)|[^,}"`(])*""")
+    while True:
+        while position < len(text) and text[position] in " \t\r\n,":
+            position += 1
+        if position >= len(text):
+            return False
+        if text[position] == "}":
+            return True
+        key = GO_MAP_ENTRY_RE.match(text, position)
+        if not key:
+            return False
+        value = value_re.match(text, key.end())
+        position = value.end()
+        if position < len(text) and text[position] not in ",}":
+            return False
+
+
+def go_source_linux_arches(text):
+    code = GO_COMMENT_RE.sub(" ", text)
+    for match in GO_SETENV_RE.finditer(code):
+        if not GO_SETENV_LITERAL_RE.match(code, match.end()):
+            segment = code[match.start() : match.start() + 60]
+            raise ShippedArchesUnreadable(f"a Setenv key at {segment!r} is not a literal")
+    for match in GO_STRING_MAP_RE.finditer(code):
+        if not go_map_entries_literal(code, match.end()):
+            raise ShippedArchesUnreadable(f"a map key at {code[match.start() : match.start() + 60]!r} is not a literal")
+    for match in re.finditer(GO_LITERAL_STRING + r"(?:\s*\+\s*" + GO_LITERAL_STRING + r")+", code):
+        joined = "".join(piece[1:-1] for piece in re.findall(GO_LITERAL_STRING, match.group(0)))
+        if any(word in joined.lower() for word in SHELL_ARCH_SPELLINGS):
+            raise ShippedArchesUnreadable(f"the string {match.group(0)!r} builds an arch name")
+    return unread_source_linux_arches(text, literal_arches=GO_FILENAME_ARCHES)
+
+
 def refuse_dynamic_or_targetarch(line):
+    refuse_shell_name_forms(line)
     if builds_dynamic_name(line):
         raise ShippedArchesUnreadable(f"the line {line!r} builds a variable name the gate cannot read")
     if WORKFLOW_TARGETARCH_SET_RE.search(line):
@@ -2063,6 +2381,7 @@ def build_file_linux_arches(text, passthrough=GOARCH_SELF_REFERENCES | GOARCH_DO
             raise ShippedArchesUnreadable(f"the line {line!r} builds with a tool whose config the gate does not read")
         if TARGETARCH_ASSIGNMENT_RE.search(line) or DOCKER_LEGACY_ENV_TARGETARCH_RE.match(line):
             raise ShippedArchesUnreadable(f"the line {line!r} sets TARGETARCH, which the gate does not read")
+        refuse_shell_name_forms(line)
         if builds_dynamic_name(line):
             raise ShippedArchesUnreadable(f"the line {line!r} builds a variable name the gate cannot read")
         legacy = DOCKER_LEGACY_ENV_GOARCH_RE.match(line)
@@ -2136,6 +2455,7 @@ def unread_source_linux_arches(text, passthrough=GOARCH_SELF_REFERENCES, literal
         allowed = passthrough | GOARCH_DOCKER_TARGET_REFERENCES if index in literal else passthrough
         if WORKFLOW_GOARCH_BARE_RE.search(line) or (not literal_arches and UNREAD_OS_ARCH_RE.search(line)):
             raise ShippedArchesUnreadable(f"the line {raw!r} names an arch in a source the gate does not read")
+        refuse_shell_name_forms(raw)
         if index not in literal and builds_dynamic_name(line):
             raise ShippedArchesUnreadable(f"the line {raw!r} builds a variable name the gate cannot read")
         values = [(match.group(1) or match.group(2) or "") for match in UNREAD_ARCH_VALUE_RE.finditer(line)]
@@ -2171,7 +2491,11 @@ def shipped_linux_arch_source(path):
         return workflow_linux_arches
     if not folder and name in MAKEFILE_NAMES:
         return makefile_linux_arches
-    if TASK_SOURCE_RE.fullmatch(name) or (path.startswith(SCRIPT_FOLDERS) and name.lower().endswith(".py")):
+    if path.startswith(SCRIPT_FOLDERS) and name.lower().endswith(".py"):
+        return python_source_linux_arches
+    if name.lower() == "magefile.go":
+        return go_source_linux_arches
+    if TASK_SOURCE_RE.fullmatch(name):
         return task_source_linux_arches
     if CONTAINER_FILE_RE.fullmatch(name):
         return unread_dockerfile_linux_arches if folder else build_file_linux_arches
@@ -2382,7 +2706,7 @@ def own_line_exceptions(reason, head, upstream_sha, decision_covers, hunks=(), c
     return named, problems
 
 
-def named_token_problems(reason, head, upstream_sha, hunks):
+def named_token_problems(reason, head, upstream_sha, hunks, allowed=frozenset()):
     text = SECURITY_FLAG_RE.sub("", reason)
     excused = [match.span(2) for match in MISSING_LINE_RE.finditer(text)]
     problems = []
@@ -2395,7 +2719,7 @@ def named_token_problems(reason, head, upstream_sha, hunks):
                 seen.add(token)
                 problems.append(f"names `{token}`, which is not a commit in the fork or upstream history")
             continue
-        if sha in seen or sha == upstream_sha:
+        if sha in seen or sha == upstream_sha or sha in allowed:
             continue
         upstream = on_upstream_ref(sha)
         if not upstream and not is_ancestor(sha, head):
@@ -2421,7 +2745,16 @@ def security_design_problems(reason, head, upstream_sha, decision_covers):
         if any(hunk_brought(sha, hunk) for hunk in hunks)
     ]
     if not carriers:
-        return None
+        pick = superseding_pick(reason, head, upstream_sha)
+        if pick is None:
+            return None
+        problems = [
+            f"names missing `{ident}`, but its change is superseded by the later upstream change {pick[:12]} carries; "
+            "remove the exception"
+            for ident, _ in MISSING_LINE_RE.findall(reason)
+        ]
+        problems.extend(named_token_problems(reason, head, upstream_sha, hunks, frozenset({pick})))
+        return problems
     named, problems = own_line_exceptions(reason, head, upstream_sha, decision_covers, hunks, frozenset(carriers))
     problems.extend(named_token_problems(reason, head, upstream_sha, hunks))
     carried = 0
@@ -3196,14 +3529,15 @@ def parity_gate(
             if strict_security_design:
                 problems = security_design_problems(entry["reason"], head, sha, entry.get("exception_covers", {}))
             else:
-                problems = [] if design_fork_commit(entry["reason"], head, sha, in_range) else None
+                carried = design_fork_commit(entry["reason"], head, sha, in_range)
+                problems = [] if carried or superseding_pick(entry["reason"], head, sha) else None
             if problems is None:
                 del coverage[sha]
                 ledger_errors.append(
                     f"{entry['where']}: `{sha[:12]}` is ported by design as a security fix, but its reason names no "
                     f"fork commit on {head} that carries part of the upstream change or names it in a cherry-pick or "
-                    "Upstream: line, with its change still there; name that fork commit, or record a Waived entry "
-                    "under an owner decision"
+                    "Upstream: line, or cherry-picks a later upstream commit that removed every line it added, with "
+                    "its change still there; name that fork commit, or record a Waived entry under an owner decision"
                 )
             elif problems:
                 del coverage[sha]
