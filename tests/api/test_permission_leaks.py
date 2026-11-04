@@ -6,8 +6,12 @@ import pytest
 from fastapi import status
 from sqlalchemy import select
 
+from app.db.crud.admin import build_admin_details, get_admin_by_id
 from app.db.models import Admin
 from app.models.admin import hash_password
+from app.models.user import UserListQuery
+from app.operation import OperatorType
+from app.operation.user import UserOperation
 from tests.api import TestSession, client
 from tests.api.helpers import (
     auth_headers,
@@ -371,6 +375,18 @@ def test_user_lists_use_the_scope_of_the_permission_their_route_checks(scoped_ac
 
     assert response.status_code == status.HTTP_200_OK
     assert victim["username"] not in {user["username"] for user in response.json()["users"]}
+
+
+def test_get_users_requires_users_read_without_a_router_gate(scoped_actor):
+    actor_id = scoped_actor({"users": {"create": True}})["actor"]["id"]
+
+    async def _search():
+        async with TestSession() as db:
+            admin = build_admin_details(await get_admin_by_id(db, actor_id, load_users=False, load_usage_logs=False))
+            return await UserOperation(OperatorType.TELEGRAM).get_users(db, admin, UserListQuery(limit=50))
+
+    with pytest.raises(ValueError):
+        asyncio.run(_search())
 
 
 @pytest.mark.parametrize(
