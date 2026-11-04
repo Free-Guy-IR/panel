@@ -85,3 +85,21 @@ def test_10w_later_hunk_at_the_picks_own_spot_is_brought(tmp_path, monkeypatch):
     assert len(hunks) == 1
     assert module.later_hunk_brought(head, "a.py", hunks[0], superseded) is True
     assert [sha for sha, _ in module.ported_later_changes(superseded, head, "a.py")] == [later]
+
+
+def test_10w_positions_survive_pure_deletions_and_insertions(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "fork")
+    git(repo, "config", "commit.gpgsign", "false")
+    lines = [f"x{n} = {n}" for n in range(10)]
+    first = commit(repo, "base", {"a.py": "\n".join(lines) + "\n"})
+    second = commit(repo, "drop", {"a.py": "\n".join(lines[:2] + lines[4:]) + "\n"})
+    third = commit(repo, "drop again", {"a.py": "\n".join(lines[:1] + lines[4:]) + "\n"})
+    fourth = commit(repo, "insert", {"a.py": "\n".join(lines[:1] + ["y = 1", "z = 2"] + lines[4:]) + "\n"})
+    module = load_inventory()
+    monkeypatch.chdir(repo)
+    assert module.carried_positions(first, second, "a.py", frozenset({5})) == frozenset({3})
+    assert module.carried_positions(second, third, "a.py", frozenset({3})) == frozenset({2})
+    assert module.carried_positions(third, fourth, "a.py", frozenset({2})) == frozenset({4})
+    assert module.carried_positions(first, fourth, "a.py", frozenset({5})) == frozenset({4})

@@ -1783,7 +1783,7 @@ def carried_positions(old_ref, new_ref, path, positions):
                 landed = range(new_at, new_at + new_count) if new_count else range(new_at, new_at + 2)
                 break
             if (old_at + old_count - 1 if old_count else old_at) < number:
-                shift = new_at + new_count - (old_at + old_count) if old_count else new_at + new_count - old_at - 1
+                shift = new_at + max(new_count, 1) - (old_at + old_count) if old_count else new_at + new_count - old_at - 1
         raw.update(landed if landed is not None else (number + shift,))
     return frozenset(index for index, number in enumerate(new_kept) if number in raw)
 
