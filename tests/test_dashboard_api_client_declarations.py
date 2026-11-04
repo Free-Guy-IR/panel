@@ -4,7 +4,7 @@ from pathlib import Path
 
 API_CLIENT = Path(__file__).resolve().parents[1] / "dashboard" / "src" / "service" / "api" / "index.ts"
 
-DECLARATION = re.compile(r"^export (const|type|interface) ([A-Za-z_$][\w$]*)\b", re.M)
+DECLARATION = re.compile(r"^export (const|type|interface) ([A-Za-z_$][\w$]*)\b", re.MULTILINE)
 
 
 def _declarations(kinds):
