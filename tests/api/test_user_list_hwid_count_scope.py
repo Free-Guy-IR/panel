@@ -4,7 +4,12 @@ import pytest
 from fastapi import status
 from sqlalchemy import update
 
+import app.operation.user as user_operation
+from app.db.crud.hwid import register_user_hwid
+from app.db.crud.user import get_users
 from app.db.models import User
+from app.models.user import UserListQuery
+from app.routers.admin_role import role_operator
 from tests.api import TestSession, client
 from tests.api.concurrent_requests import send_concurrently
 from tests.api.helpers import (
@@ -196,3 +201,30 @@ def test_lists_racing_a_hwids_read_change_never_leak_or_mix_device_counts(access
         delete_admin(access_token, plain["username"])
         for role in (reader_role, plain_role):
             client.delete(f"/api/admin-role/{role['id']}", headers=auth_headers(access_token))
+
+
+@pytest.mark.parametrize(
+    "first_load_counts", [pytest.param(True, id="counted-then-counted"), pytest.param(False, id="plain-then-counted")]
+)
+def test_a_session_that_reloads_users_reads_the_current_device_count(access_token, first_load_counts):
+    tag = unique_name("hwid_fresh")
+    user = create_user(access_token, username=f"{tag}_a")
+    try:
+        set_user_hwids(user["id"], 1)
+
+        async def _load_add_device_reload() -> list[int | None]:
+            query = UserListQuery(search=tag)
+            async with TestSession() as session:
+                held = await get_users(session, query, load_usage_logs=False, load_hwid_count=first_load_counts)
+                await session.commit()
+                async with TestSession() as writer:
+                    await register_user_hwid(writer, user["id"], "device-late")
+                    await writer.commit()
+                reloaded = await get_users(session, query, load_usage_logs=False, load_hwid_count=True)
+                assert [loaded.id for loaded in held] == [user["id"]]
+                return [loaded.hwid_count for loaded in reloaded]
+
+        assert asyncio.run(_load_add_device_reload()) == [2]
+    finally:
+        set_user_hwids(user["id"], 0)
+        client.delete(f"/api/user/by-id/{user['id']}", headers=auth_headers(access_token))
