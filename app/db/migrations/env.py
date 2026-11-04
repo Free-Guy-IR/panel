@@ -13,16 +13,8 @@ from alembic import context
 from app.db.base import Base
 import app.db.models
 from app.db.compiles_types import SqliteCompatibleBigInteger, WebAuthnBinary, WebAuthnChallenge, WebAuthnCredentialId
-from app.fork.migration_guards import (
-    MIGRATION_LOCK_HELD,
-    SqliteIdHighWater,
-    guard_planned_steps,
-    migration_command,
-    migration_lock,
-    migration_url,
-    version_hooks,
-)
 from config import database_settings
+from app.fork.migration_guards import MIGRATION_LOCK_HELD, SqliteIdHighWater, guard_planned_steps, migration_command, migration_lock, migration_url, version_hooks
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
