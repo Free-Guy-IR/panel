@@ -278,19 +278,7 @@ class _PausingConnection:
 
 
 @pytest.mark.asyncio
-async def test_a_node_delete_issued_inside_the_usage_write_succeeds_without_a_deadlock_and_loses_no_bytes_of_the_kept_node(
-    monkeypatch: pytest.MonkeyPatch, session_factory
-):
-    async with session_factory() as session:
-        dialect_name = session.bind.dialect.name
-    if dialect_name == "sqlite":
-        pytest.skip("needs a real database with row locks and concurrent writers")
-    lock_waits_sql = text(
-        "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'"
-        if dialect_name == "postgresql"
-        else "SELECT count(*) FROM information_schema.innodb_trx WHERE trx_state = 'LOCK WAIT'"
-    )
-    doomed_id, kept_id = await _seed_two_nodes(session_factory)
+def _patch_two_node_job(monkeypatch: pytest.MonkeyPatch, doomed_id: int, kept_id: int) -> None:
     samples = {
         doomed_id: [{"tag": "direct", "up": 3, "down": 4}],
         kept_id: [{"tag": "direct", "up": 5, "down": 6}, {"tag": "warp", "up": 1, "down": 2}],
@@ -310,36 +298,9 @@ async def test_a_node_delete_issued_inside_the_usage_write_succeeds_without_a_de
 
     monkeypatch.setattr(record_usages, "get_outbounds_stats", fake_get_outbounds_stats)
     monkeypatch.setattr(record_usages, "general_settings", outbound_settings)
-    real_run = record_usages.run_in_retried_transaction
-    deletes: list[asyncio.Task] = []
-    attempts = {"n": 0}
-    delete_blocked_inside_the_write = []
 
-    async def delete_once_after_the_existence_check():
-        if deletes:
-            return
-        deletes.append(asyncio.create_task(_delete_node(session_factory, doomed_id)))
-        for _ in range(50):
-            await asyncio.sleep(0.1)
-            async with session_factory() as probe:
-                if (await probe.execute(lock_waits_sql)).scalar_one() > 0:
-                    delete_blocked_inside_the_write.append(not deletes[0].done())
-                    return
 
-    async def run_with_a_concurrent_delete(operation, *args, **kwargs):
-        async def paused(conn):
-            attempts["n"] += 1
-            return await operation(_PausingConnection(conn, delete_once_after_the_existence_check))
-
-        return await real_run(paused, *args, **kwargs)
-
-    monkeypatch.setattr(record_usages, "run_in_retried_transaction", run_with_a_concurrent_delete)
-
-    await asyncio.wait_for(record_usages.record_node_usages(), timeout=30)
-    assert len(deletes) == 1
-    assert delete_blocked_inside_the_write == [True]
-    await asyncio.wait_for(deletes[0], timeout=30)
-
+async def _assert_delete_kept_every_byte_of_the_kept_node(session_factory, doomed_id: int, kept_id: int) -> None:
     assert record_usages._retained_node_usage == []
     async with session_factory() as session:
         assert await session.get(Node, doomed_id) is None
@@ -372,4 +333,77 @@ async def test_a_node_delete_issued_inside_the_usage_write_succeeds_without_a_de
     assert node == (6, 8)
     assert tuple(system) == (9, 12)
     assert tuple(node_history) == (9, 12)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mutant", [None, "drop_kept_outbound_row", "drop_kept_node_bytes"])
+async def test_the_interleaving_check_goes_red_when_the_writer_loses_bytes_of_the_kept_node(
+    monkeypatch: pytest.MonkeyPatch, session_factory, mutant
+):
+    doomed_id, kept_id = await _seed_two_nodes(session_factory)
+    _patch_two_node_job(monkeypatch, doomed_id, kept_id)
+    real_write = record_usages.write_node_usage
+
+    async def mutated_write(node_totals, created_at, stat_batches=None, record_node_usage=True, outbound_params=None):
+        if mutant == "drop_kept_outbound_row":
+            outbound_params = [param for param in outbound_params or [] if param["tag"] != "warp"]
+        if mutant == "drop_kept_node_bytes":
+            node_totals = {node_id: totals for node_id, totals in node_totals.items() if node_id != kept_id}
+        return await real_write(node_totals, created_at, stat_batches, record_node_usage, outbound_params)
+
+    monkeypatch.setattr(record_usages, "write_node_usage", mutated_write)
+    await record_usages.record_node_usages()
+    await _delete_node(session_factory, doomed_id)
+    if mutant is None:
+        await _assert_delete_kept_every_byte_of_the_kept_node(session_factory, doomed_id, kept_id)
+    else:
+        with pytest.raises(AssertionError):
+            await _assert_delete_kept_every_byte_of_the_kept_node(session_factory, doomed_id, kept_id)
+
+
+async def test_a_node_delete_issued_inside_the_usage_write_succeeds_without_a_deadlock_and_loses_no_bytes_of_the_kept_node(
+    monkeypatch: pytest.MonkeyPatch, session_factory
+):
+    async with session_factory() as session:
+        dialect_name = session.bind.dialect.name
+    if dialect_name == "sqlite":
+        pytest.skip("needs a real database with row locks and concurrent writers")
+    lock_waits_sql = text(
+        "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'"
+        if dialect_name == "postgresql"
+        else "SELECT count(*) FROM information_schema.innodb_trx WHERE trx_state = 'LOCK WAIT'"
+    )
+    doomed_id, kept_id = await _seed_two_nodes(session_factory)
+    _patch_two_node_job(monkeypatch, doomed_id, kept_id)
+    real_run = record_usages.run_in_retried_transaction
+    deletes: list[asyncio.Task] = []
+    attempts = {"n": 0}
+    delete_blocked_inside_the_write = []
+
+    async def delete_once_after_the_existence_check():
+        if deletes:
+            return
+        deletes.append(asyncio.create_task(_delete_node(session_factory, doomed_id)))
+        for _ in range(50):
+            await asyncio.sleep(0.1)
+            async with session_factory() as probe:
+                if (await probe.execute(lock_waits_sql)).scalar_one() > 0:
+                    delete_blocked_inside_the_write.append(not deletes[0].done())
+                    return
+
+    async def run_with_a_concurrent_delete(operation, *args, **kwargs):
+        async def paused(conn):
+            attempts["n"] += 1
+            return await operation(_PausingConnection(conn, delete_once_after_the_existence_check))
+
+        return await real_run(paused, *args, **kwargs)
+
+    monkeypatch.setattr(record_usages, "run_in_retried_transaction", run_with_a_concurrent_delete)
+
+    await asyncio.wait_for(record_usages.record_node_usages(), timeout=30)
+    assert len(deletes) == 1
+    assert delete_blocked_inside_the_write == [True]
+    await asyncio.wait_for(deletes[0], timeout=30)
+
+    await _assert_delete_kept_every_byte_of_the_kept_node(session_factory, doomed_id, kept_id)
     assert attempts["n"] >= 1
