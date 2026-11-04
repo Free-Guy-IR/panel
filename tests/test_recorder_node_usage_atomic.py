@@ -33,7 +33,7 @@ class OutboundNode:
 
     async def get_stats(self, stat_type, reset: bool, timeout: int):
         value, self.pending = self.pending, 0
-        return SimpleNamespace(stats=[SimpleNamespace(type="downlink", value=value)] if value else [])
+        return SimpleNamespace(stats=[SimpleNamespace(name="direct", type="downlink", value=value)] if value else [])
 
 
 def _starts_with(prefix: str):
