@@ -187,14 +187,18 @@ async def get_subscription_payload(token: str) -> dict | None:
             return
 
         if token.startswith("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."):
-            payload = jwt.decode(token, await get_secret_key(), algorithms=["HS256"])
+            secret = await get_secret_key()
+            try:
+                payload = jwt.decode(token, secret, algorithms=["HS256"])
+            except TypeError:
+                return
             if payload.get("access") == "subscription":
                 username = payload.get("sub")
-                if not username:
+                if not username or "iat" not in payload:
                     return
                 try:
                     created_at = datetime.fromtimestamp(payload["iat"], tz=UTC)
-                except (OverflowError, OSError, ValueError):
+                except (OverflowError, OSError, TypeError, ValueError):
                     return
                 return {
                     "username": username,
