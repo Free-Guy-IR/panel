@@ -178,3 +178,48 @@ async def test_a_dashboard_save_of_the_loaded_section_keeps_a_legacy_import_url(
         restored = client.put("/api/settings", headers=auth_headers(access_token), json={"subscription": original})
         assert restored.status_code == 200, restored.text
         await settings_module.refresh_caches()
+
+
+def _keep(stored_apps, incoming_apps):
+    from app.fork.operation.settings_extras import keep_legacy_import_urls
+    from app.models.settings import Application, SettingsSchema, Subscription
+
+    modify = SettingsSchema.model_construct(
+        subscription=Subscription.model_construct(
+            applications=[
+                Application(name=name, platform=platform, download_links=[]) for name, platform in incoming_apps
+            ]
+        )
+    )
+    stored = {
+        "applications": [
+            {"name": name, "platform": platform, "import_url": url, "download_links": []}
+            for name, platform, url in stored_apps
+        ]
+    }
+    keep_legacy_import_urls(modify, stored)
+    return [(app.name, app.import_url) for app in modify.subscription.applications]
+
+
+def test_a_renamed_app_and_a_new_app_with_the_old_name_inherit_no_legacy_import_url():
+    stored = [("X", "android", LEGACY_SCHEME_URL), ("V", "ios", "")]
+    assert _keep(stored, [("Y", "android"), ("V", "ios"), ("X", "android")]) == [("Y", ""), ("V", ""), ("X", "")]
+
+
+def test_a_plain_rename_clears_the_legacy_import_url():
+    stored = [("X", "android", LEGACY_SCHEME_URL), ("V", "ios", "")]
+    assert _keep(stored, [("Y", "android"), ("V", "ios")]) == [("Y", ""), ("V", "")]
+
+
+def test_an_unchanged_save_keeps_the_legacy_import_url():
+    stored = [("X", "android", LEGACY_SCHEME_URL), ("V", "ios", "")]
+    assert _keep(stored, [("V", "ios"), ("X", "android")]) == [("V", ""), ("X", LEGACY_SCHEME_URL)]
+
+
+def test_adding_an_unrelated_app_on_another_platform_keeps_the_legacy_import_url():
+    stored = [("X", "android", LEGACY_SCHEME_URL), ("V", "ios", "")]
+    assert _keep(stored, [("X", "android"), ("V", "ios"), ("Z", "windows")]) == [
+        ("X", LEGACY_SCHEME_URL),
+        ("V", ""),
+        ("Z", ""),
+    ]
