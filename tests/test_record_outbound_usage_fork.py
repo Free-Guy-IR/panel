@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
 
-from app.db.crud.node import reset_node_usage
+from app.db.crud.node import remove_node, reset_node_usage
 from app.db.models import Node, NodeOutboundUsage, NodeUsage, NodeUsageResetLogs, System
 from app.jobs import record_usages
 from app.models.settings import General, UsageSettings
@@ -146,3 +147,116 @@ async def test_a_reset_between_the_poll_and_the_write_keeps_outbound_history_and
     assert outbound == {"direct": (8, 10)}
     assert node_history == (8, 10)
     assert len(settings_reads) == 2
+
+
+async def _seed_two_nodes(session_factory) -> tuple[int, int]:
+    async with session_factory() as session:
+        doomed = Node(
+            name="doomed",
+            address="10.0.0.2",
+            port=1002,
+            api_port=1003,
+            server_ca="ca2",
+            api_key="key2",
+            core_config_id=None,
+        )
+        kept = Node(
+            name="kept",
+            address="10.0.0.3",
+            port=1004,
+            api_port=1005,
+            server_ca="ca3",
+            api_key="key3",
+            core_config_id=None,
+        )
+        session.add_all([doomed, kept, System(uplink=0, downlink=0)])
+        await session.flush()
+        ids = (doomed.id, kept.id)
+        await session.commit()
+    return ids
+
+
+async def _delete_node(session_factory, node_id: int) -> None:
+    async with session_factory() as session:
+        await remove_node(session, await session.get(Node, node_id))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("deleted_during", ["poll", "write"])
+async def test_a_node_deleted_while_its_outbound_usage_is_recorded_leaves_no_orphan_rows_and_loses_no_live_bytes(
+    monkeypatch: pytest.MonkeyPatch, session_factory, deleted_during
+):
+    doomed_id, kept_id = await _seed_two_nodes(session_factory)
+    samples = {
+        doomed_id: [{"tag": "direct", "up": 3, "down": 4}],
+        kept_id: [{"tag": "direct", "up": 5, "down": 6}, {"tag": "warp", "up": 1, "down": 2}],
+    }
+    monkeypatch.setattr(record_usages, "_retained_node_usage", [])
+    monkeypatch.setattr(
+        record_usages.node_manager,
+        "get_healthy_nodes",
+        AsyncMock(return_value=[(doomed_id, DummyNode(doomed_id)), (kept_id, DummyNode(kept_id))]),
+    )
+
+    async def fake_get_outbounds_stats(node: DummyNode, node_id: int | None = None):
+        if deleted_during == "poll" and node_id == doomed_id:
+            await _delete_node(session_factory, doomed_id)
+        return samples[node_id]
+
+    async def outbound_settings():
+        return General(usage=UsageSettings(record_node_usage=True, record_outbound_usage=True))
+
+    monkeypatch.setattr(record_usages, "get_outbounds_stats", fake_get_outbounds_stats)
+    monkeypatch.setattr(record_usages, "general_settings", outbound_settings)
+    gate = asyncio.Semaphore(1)
+    monkeypatch.setattr(record_usages, "JOB_SEM", gate)
+    real_write = record_usages.write_node_usage
+    write_entered = asyncio.Event()
+    writes = []
+
+    async def observed_write(node_totals, *args, **kwargs):
+        writes.append(dict(node_totals))
+        write_entered.set()
+        return await real_write(node_totals, *args, **kwargs)
+
+    monkeypatch.setattr(record_usages, "write_node_usage", observed_write)
+
+    await gate.acquire()
+    job = asyncio.create_task(record_usages.record_node_usages())
+    try:
+        await asyncio.wait_for(write_entered.wait(), timeout=5)
+        await asyncio.sleep(0)
+        assert not job.done()
+        if deleted_during == "write":
+            await _delete_node(session_factory, doomed_id)
+    finally:
+        gate.release()
+    await asyncio.wait_for(job, timeout=10)
+
+    assert writes == [{doomed_id: (3, 4), kept_id: (6, 8)}]
+    assert record_usages._retained_node_usage == []
+    async with session_factory() as session:
+        assert await session.get(Node, doomed_id) is None
+        rows = (
+            await session.execute(
+                select(
+                    NodeOutboundUsage.node_id,
+                    NodeOutboundUsage.outbound_tag,
+                    NodeOutboundUsage.uplink,
+                    NodeOutboundUsage.downlink,
+                ).order_by(NodeOutboundUsage.node_id, NodeOutboundUsage.outbound_tag)
+            )
+        ).all()
+        system = (await session.execute(select(System.uplink, System.downlink))).one()
+        node_history = (
+            await session.execute(
+                select(func.coalesce(func.sum(NodeUsage.uplink), 0), func.coalesce(func.sum(NodeUsage.downlink), 0))
+            )
+        ).one()
+    assert [tuple(row) for row in rows] == [(kept_id, "direct", 5, 6), (kept_id, "warp", 1, 2)]
+    _, outbound, _, _ = await _totals(session_factory, kept_id)
+    assert outbound == {"direct": (5, 6), "warp": (1, 2)}
+    node, _, _, _ = await _totals(session_factory, kept_id)
+    assert node == (6, 8)
+    assert tuple(system) == (9, 12)
+    assert tuple(node_history) == (9, 12)
