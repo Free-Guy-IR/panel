@@ -31,11 +31,31 @@ PARTIAL_LATER = PARTIAL_PICK.replace("    validate(x)\n", "    validate_strict(x
 PARTIAL_PORTED = PARTIAL_PICK.replace("    return q\n", "    return single_pass(q)\n")
 PARTIAL_HEAD = PARTIAL_PORTED.replace("    validate(x)\n", "")
 
+SPLIT_FIRST = "def first(admin):\n    load(admin)\n    return admin\n"
+SPLIT_SECOND = "def second(admin):\n    save(admin)\n    return admin\n"
+SPLIT_MIDDLE = "def middle(z):\n    z1 = 1\n    z2 = 2\n    z3 = 3\n    return z\n"
+
+
+def split_guarded(block):
+    return block.replace("(admin):\n", "(admin):\n    require_admin(admin)\n", 1)
+
+
+def split_doc(first, second):
+    return f"import os\n\n\n{first}\n\n{SPLIT_MIDDLE}\n\n{second}"
+
+
+SPLIT_BASE = split_doc(SPLIT_FIRST, split_guarded(SPLIT_SECOND))
+SPLIT_PICK = split_doc(split_guarded(SPLIT_FIRST), split_guarded(SPLIT_SECOND))
+SPLIT_LATER = split_doc(SPLIT_FIRST, SPLIT_SECOND)
+SPLIT_PORTED = split_doc(split_guarded(SPLIT_FIRST), SPLIT_SECOND)
+
 WORLDS = {
     "removal-elsewhere": (ELSEWHERE_BASE, ELSEWHERE_PICK, ELSEWHERE_LATER, ELSEWHERE_LATER, ELSEWHERE_HEAD),
     "twin-copy": (TWIN_BASE, TWIN_PICK, TWIN_LATER, TWIN_LATER, TWIN_HEAD),
     "partial-port": (PARTIAL_BASE, PARTIAL_PICK, PARTIAL_LATER, PARTIAL_PORTED, PARTIAL_HEAD),
     "honest-port": (PARTIAL_BASE, PARTIAL_PICK, PARTIAL_LATER, PARTIAL_LATER, PARTIAL_LATER),
+    "split-later-far-hunk-only": (SPLIT_BASE, SPLIT_PICK, SPLIT_LATER, SPLIT_PORTED, SPLIT_LATER),
+    "split-honest": (SPLIT_BASE, SPLIT_PICK, SPLIT_LATER, SPLIT_LATER, SPLIT_LATER),
 }
 
 
@@ -66,15 +86,16 @@ def run_row(tmp_path, monkeypatch, name):
     return module.security_design_problems(reason, head, superseded, {})
 
 
-@pytest.mark.parametrize("name", ["removal-elsewhere", "twin-copy", "partial-port"])
+@pytest.mark.parametrize("name", ["removal-elsewhere", "twin-copy", "partial-port", "split-later-far-hunk-only"])
 def test_10u_unported_reversal_is_refused(tmp_path, monkeypatch, name):
     problems = run_row(tmp_path, monkeypatch, name)
     assert problems is not None
     assert any("a.py:+" in problem for problem in problems)
 
 
-def test_10u_brought_later_hunk_at_the_spot_is_accepted(tmp_path, monkeypatch):
-    assert run_row(tmp_path, monkeypatch, "honest-port") == []
+@pytest.mark.parametrize("name", ["honest-port", "split-honest"])
+def test_10u_brought_later_hunk_at_the_spot_is_accepted(tmp_path, monkeypatch, name):
+    assert run_row(tmp_path, monkeypatch, name) == []
 
 
 @pytest.mark.parametrize(

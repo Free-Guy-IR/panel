@@ -1735,18 +1735,26 @@ def later_hunk_brought(fork_sha, path, hunk):
         return True
     removed, added = fork_line_changes(fork_sha, path)
     for side, ref, changes in ((hunk["post"], fork_sha, added), (hunk["pre"], f"{fork_sha}^", removed)):
-        marked = marked_lines(path, side)
-        core = tuple(text for text, changed in marked if changed)
+        split = hunk_side(path, side)
+        if split is None:
+            continue
         lines = normalised_file(ref, path)
-        if core and (
-            lines is None
-            or not any(
-                lines[i : i + len(core)] == core and all(i + k in changes for k in range(len(core)))
-                for i in range(len(lines) - len(core) + 1)
-            )
+        if lines is None or not any(
+            core_at_spot(lines, i, split) and all(i + offset in changes for offset in changed_offsets(path, side))
+            for i in range(len(lines) - len(split[1]) + 1)
         ):
             return False
     return True
+
+
+def core_at_spot(lines, i, split):
+    before, core, after = split
+    end = i + len(core)
+    if lines[i:end] != core:
+        return False
+    if (lines[i - 1] if i > 0 else None) != (before[-1] if before else None):
+        return False
+    return (lines[end] if end < len(lines) else None) == (after[0] if after else None)
 
 
 def marked_lines(path, side):
