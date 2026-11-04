@@ -101,7 +101,7 @@ from app.node import core_users, node_manager
 from app.node.manager_sync import publish_node_sync
 from app.node.nats_memory import clear_bridge_memory_for_node
 from app.operation import BaseOperation, OperatorType
-from app.utils.http_client import INVALID_PROXY_MESSAGE, InvalidProxyURL, checked_proxy_url
+from app.utils.http_client import INVALID_PROXY_MESSAGE, InvalidProxyURL
 from app.utils.logger import get_logger
 from config import nats_settings, runtime_settings
 
@@ -788,15 +788,6 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             )
 
         node_name = modified_node.name or db_node.name
-        effective_proxy = (
-            modified_node.proxy_url if "proxy_url" in modified_node.model_fields_set else db_node.proxy_url
-        )
-        try:
-            checked_proxy_url(effective_proxy)
-        except InvalidProxyURL:
-            await self.raise_error(
-                message="node proxy_url is invalid; set a valid proxy_url or clear it", code=400, db=db
-            )
 
         try:
             db_node = await modify_node(db, db_node, modified_node)

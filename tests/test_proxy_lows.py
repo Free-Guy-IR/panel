@@ -209,30 +209,84 @@ BAD_STORED = f"http://{USER}:{SECRET}一@{HOST}:8080"
 
 
 @pytest.mark.asyncio
-async def test_r2_modify_keeping_bad_stored_proxy_is_refused_before_any_write(monkeypatch):
-    from fastapi import HTTPException
-
+async def test_r2_status_only_disable_works_on_a_node_with_bad_stored_proxy(monkeypatch):
     import app.operation.node as op_module
+    from app.db.models import NodeStatus
     from app.models.node import NodeModify
 
     stored = _node_row(BAD_STORED)
+    stored.status = NodeStatus.connected
     operation = _node_operation()
     operation.get_validated_node = AsyncMock(return_value=stored)
-    crud_modify = AsyncMock(return_value=stored)
+
+    async def crud_modify(db, db_node, modified):
+        db_node.status = modified.status
+        return db_node
+
     monkeypatch.setattr(op_module, "modify_node", crud_modify)
+    disconnect = AsyncMock()
+    operation.disconnect_single_node = disconnect
     update_impl = AsyncMock()
     operation._update_node_impl = update_impl
-    db = _db()
-    with pytest.raises(HTTPException) as caught:
-        await operation.modify_node(db, 7, NodeModify(name="n2"), ADMIN)
-    assert caught.value.status_code == 400
-    assert "proxy_url" in caught.value.detail
-    assert SECRET not in str(caught.value.detail)
-    crud_modify.assert_not_awaited()
+    monkeypatch.setattr(op_module, "NodeResponse", MagicMock())
+    monkeypatch.setattr(op_module.notification, "modify_node", AsyncMock())
+    await operation.modify_node(_db(), 7, NodeModify(status=NodeStatus.disabled), ADMIN)
+    assert stored.status == NodeStatus.disabled
+    disconnect.assert_awaited_once_with(7)
     update_impl.assert_not_awaited()
-    db.commit.assert_not_awaited()
-    assert stored.proxy_url == BAD_STORED
-    assert stored.name == "n1"
+
+
+@pytest.mark.asyncio
+async def test_r2_rename_of_a_connected_node_with_bad_stored_proxy_is_not_refused(monkeypatch):
+    import app.operation.node as op_module
+    from app.db.models import NodeStatus
+    from app.models.node import NodeModify
+    from app.utils.http_client import INVALID_PROXY_MESSAGE
+
+    stored = _node_row(BAD_STORED)
+    stored.status = NodeStatus.connected
+    operation = _node_operation()
+    operation.get_validated_node = AsyncMock(return_value=stored)
+    monkeypatch.setattr(op_module, "modify_node", AsyncMock(return_value=stored))
+    status_update = AsyncMock()
+    operation._update_single_node_status = status_update
+    monkeypatch.setattr(operation, "_connect_single_node_background", AsyncMock())
+    monkeypatch.setattr(op_module, "NodeResponse", MagicMock())
+    monkeypatch.setattr(op_module.notification, "modify_node", AsyncMock())
+    await operation.modify_node(_db(), 7, NodeModify(name="n2"), ADMIN)
+    status_update.assert_awaited_once()
+    args, kwargs = status_update.await_args
+    assert args[2] == NodeStatus.error
+    assert kwargs["message"] == INVALID_PROXY_MESSAGE
+
+
+@pytest.mark.parametrize("scheme", ["https"])
+def test_telegram_session_refuses_a_scheme_its_proxy_client_cannot_use(scheme):
+    from app.telegram.session import NativeTLSAiohttpSession
+
+    with pytest.raises(Exception) as caught:
+        NativeTLSAiohttpSession(proxy=f"{scheme}://{USER}:{SECRET}@{HOST}:443")
+    _assert_clean_invalid_proxy(caught.value)
+
+
+@pytest.mark.asyncio
+async def test_telegram_start_with_https_proxy_logs_fixed_message_and_stays_off(caplog):
+    from app.models.settings import RunMethod
+    from app.telegram import TelegramBotManager
+    from app.utils.http_client import INVALID_PROXY_MESSAGE
+
+    caplog.set_level(logging.DEBUG)
+    manager = TelegramBotManager()
+    settings = SimpleNamespace(
+        method=RunMethod.WEBHOOK,
+        proxy_url=f"https://{USER}:{SECRET}@{HOST}:443",
+        token="0:" + "t" * 8,
+        webhook_url=f"https://{HOST}",
+    )
+    await manager._start_locked(settings)
+    assert manager._bot is None
+    assert any(record.getMessage() == INVALID_PROXY_MESSAGE for record in caplog.records)
+    assert all(SECRET not in record.getMessage() for record in caplog.records)
 
 
 @pytest.mark.asyncio
