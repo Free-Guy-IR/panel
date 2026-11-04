@@ -15,10 +15,10 @@ from sqlalchemy.pool import NullPool, StaticPool
 from app.db import base
 from app.db.models import Admin, AdminRole, Node, NodeUserUsage, User
 from app.fork.jobs import usage_limits
-from app.jobs import record_usages
+from app.jobs import record_usages, review_users
 from app.models.proxy import ProxyTable
 from app.models.settings import General
-from app.operation import admin_sync
+from app.operation import admin_sync, user as user_operation
 from config import database_settings
 
 
@@ -138,6 +138,8 @@ async def recorder_db_fixture(monkeypatch: pytest.MonkeyPatch):
         return default_general
 
     monkeypatch.setattr(record_usages, "general_settings", serve_default_general)
+    monkeypatch.setattr(review_users, "general_settings", serve_default_general)
+    monkeypatch.setattr(user_operation, "general_settings", serve_default_general)
     record_usages._usage_coefficient_cache.clear()
 
     yield session_factory

@@ -24,6 +24,7 @@ from app.fork.operation import node_extras as extras_operation
 from app.jobs import node_checker, record_usages
 from app.models.core import CoreType
 from app.models.node import NodeCreate
+from app.models.settings import General
 from app.node import NodeManager
 from app.operation import OperatorType, node as node_operation
 from app.operation.node import NodeOperation
@@ -218,6 +219,7 @@ async def test_shutdown_drains_and_bills_counters_before_stopping_cores(monkeypa
     monkeypatch.setattr(node_checker.node_manager, "get_nodes", AsyncMock(return_value={4: node}))
     monkeypatch.setattr(node_checker, "runtime_settings", SimpleNamespace(role=SimpleNamespace(runs_node=True)))
     monkeypatch.setattr(node_checker, "is_multi_worker", lambda: False)
+    monkeypatch.setattr(node_checker, "general_settings", AsyncMock(return_value=General()))
 
     await node_checker.shutdown_nodes()
 
