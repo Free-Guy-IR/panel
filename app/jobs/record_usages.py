@@ -31,6 +31,7 @@ from app.fork.jobs.stat_batches import (
     acks_for_request,
     as_ack_only,
     batch_from_response,
+    batches_settled,
     held,
     remember_epoch,
     request_keywords,
@@ -1334,19 +1335,37 @@ async def apply_fenced_user_usage(
         )
 
     try:
-        outcome = await run_in_retried_transaction(_apply)
-    except IntegrityError as err:
-        if not is_missing_parent_error(err):
-            raise
-        logger.warning("A node was deleted while its usage was being written; writing the cohort again without it")
-        outcome = await run_in_retried_transaction(_apply)
+        try:
+            outcome = await run_in_retried_transaction(_apply)
+        except IntegrityError as err:
+            if not is_missing_parent_error(err):
+                raise
+            logger.warning("A node was deleted while its usage was being written; writing the cohort again without it")
+            outcome = await run_in_retried_transaction(_apply)
+    except DBAPIError as err:
+        if deferred_history and _write_may_have_committed(err) and await _fenced_write_landed(stat_batches):
+            await _record_deferred_history(deferred_history)
+        raise
 
     if deferred_history:
-        try:
-            await record_user_stats(list(deferred_history))
-        except Exception:
-            logger.exception("Failed to flush coalesced node user usage history; pending rows will be retried")
+        await _record_deferred_history(deferred_history)
     return outcome
+
+
+async def _fenced_write_landed(stat_batches: dict[int, StatBatch] | None) -> bool:
+    try:
+        async with GetDB() as db:
+            return await batches_settled(db, StatType.UsersStat, stat_batches)
+    except Exception:
+        logger.exception("Could not tell whether a usage write in doubt committed; its chart history is not kept")
+        return False
+
+
+async def _record_deferred_history(deferred_history: list[dict]) -> None:
+    try:
+        await record_user_stats(list(deferred_history))
+    except Exception:
+        logger.exception("Failed to flush coalesced node user usage history; pending rows will be retried")
 
 
 def _report_unknown_uid_usage(

@@ -124,6 +124,24 @@ async def acks_for_request(db, stat_type: int, node_ids: Iterable[int]) -> dict[
     return acks
 
 
+async def batches_settled(db, stat_type: int, batches: Mapping[int, StatBatch] | None) -> bool:
+    billable = [batch for batch in held(batches).values() if batch.billable]
+    if not billable:
+        return False
+    epochs = sorted({batch.epoch for batch in billable})
+    stored = {
+        epoch: int(batch_id)
+        for epoch, batch_id in (
+            await db.execute(
+                select(NodeStatAck.batch_epoch, NodeStatAck.batch_id).where(
+                    NodeStatAck.stat_type == int(stat_type), NodeStatAck.batch_epoch.in_(epochs)
+                )
+            )
+        ).all()
+    }
+    return all(stored.get(batch.epoch, 0) >= batch.batch_id for batch in billable)
+
+
 async def settle_batches(conn, stat_type: int, batches: Mapping[int, StatBatch] | None) -> None:
     live = held(batches)
     if not live:
