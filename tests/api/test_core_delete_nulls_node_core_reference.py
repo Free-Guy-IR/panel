@@ -4,7 +4,6 @@ import pytest
 
 from app.db.crud.core import remove_core_config, remove_cores
 from app.db.models import CoreConfig, Node
-from app.operation.node import NodeOperation
 from app.routers import core as core_router
 from tests.api import TestSession
 from tests.api.helpers import create_core, unique_name
@@ -16,10 +15,10 @@ from tests.api.test_core_delete_restarts_its_nodes import make_node, stored_node
 def restarts(monkeypatch):
     issued = []
 
-    async def connect_nodes_bulk(self, db, nodes, *, force_start=False):
+    async def connect_nodes_bulk(db, nodes, *, force_start=False):
         issued.append((sorted((node.id, node.core_config_id) for node in nodes), force_start))
 
-    monkeypatch.setattr(NodeOperation, "connect_nodes_bulk", connect_nodes_bulk)
+    monkeypatch.setattr(core_router.node_operator, "connect_nodes_bulk", connect_nodes_bulk)
     return issued
 
 
