@@ -163,8 +163,38 @@ def _listed(response) -> list[tuple[str, int | None]]:
     return [(user["username"], user["hwid_count"]) for user in response.json()["users"]]
 
 
+class _ChangeBetweenGateAndQuery:
+    def __init__(self, monkeypatch, lists: int):
+        self.lists = lists
+        self.held = 0
+        self.held_when_changed = 0
+        self.queried_after_change = 0
+        self.all_held = asyncio.Event()
+        self.changed = asyncio.Event()
+        real_get_users = user_operation.get_users
+        real_modify_role = role_operator.modify_role
+
+        async def gated_get_users(*args, **kwargs):
+            self.held += 1
+            if self.held == self.lists:
+                self.all_held.set()
+            await asyncio.wait_for(self.changed.wait(), 10)
+            self.queried_after_change += 1
+            return await real_get_users(*args, **kwargs)
+
+        async def modify_role_after_every_gate(*args, **kwargs):
+            await asyncio.wait_for(self.all_held.wait(), 10)
+            result = await real_modify_role(*args, **kwargs)
+            self.held_when_changed = self.held - self.queried_after_change
+            self.changed.set()
+            return result
+
+        monkeypatch.setattr(user_operation, "get_users", gated_get_users)
+        monkeypatch.setattr(role_operator, "modify_role", modify_role_after_every_gate)
+
+
 @pytest.mark.parametrize("granted_after", [pytest.param(False, id="revoke"), pytest.param(True, id="grant")])
-def test_lists_racing_a_hwids_read_change_never_leak_or_mix_device_counts(access_token, granted_after):
+def test_lists_racing_a_hwids_read_change_never_leak_or_mix_device_counts(access_token, granted_after, monkeypatch):
     reader_role = _role(access_token, {"users": {"read": SCOPE_ALL}, "hwids": {"read": True}})
     plain_role = _role(access_token, {"users": {"read": SCOPE_ALL}})
     reader = create_admin(access_token, role_id=reader_role["id"])
@@ -183,12 +213,15 @@ def test_lists_racing_a_hwids_read_change_never_leak_or_mix_device_counts(access
         for _ in range(3):
             calls = [_users_list(token, tag) for _ in range(4) for token in (reader_token, plain_token)]
             calls.insert(3, _hwids_read_change(access_token, reader_role["id"], granted_after))
+            barrier = _ChangeBetweenGateAndQuery(monkeypatch, lists=8)
             responses = send_concurrently(calls)
+            monkeypatch.undo()
 
+            assert (barrier.held_when_changed, barrier.queried_after_change) == (8, 8)
             role_change = responses.pop(3)
             assert role_change.status_code == status.HTTP_200_OK, role_change.text
             for index, response in enumerate(responses):
-                assert _listed(response) in ([hidden] if index % 2 else [counted, hidden])
+                assert _listed(response) == (hidden if index % 2 or granted_after else counted)
 
             settled = [_listed(_send(_users_list(token, tag))) for token in (reader_token, plain_token)]
             assert settled == [counted if granted_after else hidden, hidden]
