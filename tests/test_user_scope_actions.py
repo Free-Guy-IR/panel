@@ -1,5 +1,6 @@
 import ast
 import pathlib
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -162,45 +163,182 @@ async def test_a_write_action_the_role_lacks_is_denied_even_with_update_all(meth
     get_user_by_id.assert_not_awaited()
 
 
+FOREIGN_OWNER_ID = 99
+
+
+def _user_owned_by(owner_id):
+    def lookup(db, user_id, *, admin_id=None, **kwargs):
+        if admin_id is not None and admin_id != owner_id:
+            return None
+        return SimpleNamespace(id=user_id)
+
+    return lookup
+
+
+def _lookup_admin_ids(get_user_by_id):
+    return [call.kwargs["admin_id"] for call in get_user_by_id.await_args_list]
+
+
 @pytest.mark.asyncio
-async def test_hwid_reads_are_scoped_by_the_hwids_resource_not_users():
+@pytest.mark.parametrize(
+    "permissions",
+    [
+        pytest.param({"hwids": {"read": True}}, id="no-users-read"),
+        pytest.param({"users": {"read": {"scope": 0}}, "hwids": {"read": True}}, id="users-read-disabled"),
+    ],
+)
+async def test_hwid_reads_need_users_read_before_any_lookup(permissions):
     op = HWIDOperation(OperatorType.API)
-    admin = _admin_with_permissions({"hwids": {"read": True}})
+    admin = _admin_with_permissions(permissions)
 
     with (
-        patch("app.operation.get_user_by_id", new_callable=AsyncMock, return_value=None) as get_user_by_id,
+        patch(
+            "app.operation.get_user_by_id", new_callable=AsyncMock, side_effect=_user_owned_by(admin.id)
+        ) as get_user_by_id,
+        patch("app.operation.hwid.get_user_hwids", new_callable=AsyncMock, return_value=[]) as read_hwids,
         pytest.raises(HTTPException) as exc,
     ):
         await op.get_user_hwids(AsyncMock(), 1, admin)
 
-    assert exc.value.status_code == 404
-    assert get_user_by_id.await_args.kwargs["admin_id"] is None
+    assert (exc.value.status_code, exc.value.detail) == (404, "User not found")
+    get_user_by_id.assert_not_awaited()
+    read_hwids.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_hwid_reads_without_the_hwid_permission_are_denied():
+@pytest.mark.parametrize(
+    "permissions",
+    [
+        pytest.param({"users": {"read": {"scope": 1}}, "hwids": {"read": True}}, id="users-read-own"),
+        pytest.param({"users": {"read": True}, "hwids": {"read": {"scope": 1}}}, id="hwids-read-own"),
+    ],
+)
+async def test_hwid_reads_apply_both_the_users_and_the_hwids_scope(permissions):
     op = HWIDOperation(OperatorType.API)
-    admin = _admin(read={"scope": 2})
+    admin = _admin_with_permissions(permissions)
 
     with (
-        patch("app.operation.get_user_by_id", new_callable=AsyncMock) as get_user_by_id,
+        patch("app.operation.get_user_by_id", new_callable=AsyncMock, side_effect=_user_owned_by(FOREIGN_OWNER_ID)),
+        patch("app.operation.hwid.get_user_hwids", new_callable=AsyncMock, return_value=[]) as read_hwids,
+        pytest.raises(HTTPException) as exc,
+    ):
+        await op.get_user_hwids(AsyncMock(), 1, admin)
+
+    assert (exc.value.status_code, exc.value.detail) == (404, "User not found")
+    read_hwids.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "permissions",
+    [
+        pytest.param({"users": {"read": {"scope": 1}}}, id="hwids-read-missing"),
+        pytest.param({"users": {"read": {"scope": 1}}, "hwids": {"read": {"scope": 0}}}, id="hwids-read-disabled"),
+    ],
+)
+async def test_hwid_reads_without_the_hwid_permission_are_denied(permissions):
+    op = HWIDOperation(OperatorType.API)
+    admin = _admin_with_permissions(permissions)
+
+    with (
+        patch(
+            "app.operation.get_user_by_id", new_callable=AsyncMock, side_effect=_user_owned_by(admin.id)
+        ) as get_user_by_id,
+        patch("app.operation.hwid.get_user_hwids", new_callable=AsyncMock, return_value=[]) as read_hwids,
         pytest.raises(PermissionDenied),
     ):
         await op.get_user_hwids(AsyncMock(), 1, admin)
 
-    get_user_by_id.assert_not_awaited()
+    assert _lookup_admin_ids(get_user_by_id) == [admin.id]
+    read_hwids.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_hwid_deletes_follow_the_hwid_scope():
+@pytest.mark.parametrize(
+    "method, args, crud",
+    [
+        pytest.param("delete_user_hwid", ("hwid",), "delete_user_hwid", id="delete"),
+        pytest.param("reset_user_hwids", (), "reset_user_hwids", id="reset"),
+    ],
+)
+@pytest.mark.parametrize(
+    "permissions, denial",
+    [
+        pytest.param({"hwids": {"delete": True}}, HTTPException, id="no-users-perms"),
+        pytest.param(
+            {"users": {"read": {"scope": 1}, "delete": True}, "hwids": {"delete": True}},
+            HTTPException,
+            id="users-read-own",
+        ),
+        pytest.param(
+            {"users": {"read": True, "delete": {"scope": 1}}, "hwids": {"delete": True}},
+            HTTPException,
+            id="users-delete-own",
+        ),
+        pytest.param({"users": {"read": True}, "hwids": {"delete": True}}, PermissionDenied, id="users-delete-missing"),
+        pytest.param(
+            {"users": {"read": True, "delete": True}, "hwids": {"delete": {"scope": 1}}},
+            HTTPException,
+            id="hwids-delete-own",
+        ),
+    ],
+)
+async def test_hwid_deletes_follow_the_users_and_the_hwid_scope(method, args, crud, permissions, denial):
     op = HWIDOperation(OperatorType.API)
-    admin = _admin_with_permissions({"hwids": {"delete": {"scope": 1}}})
+    admin = _admin_with_permissions(permissions)
 
     with (
-        patch("app.operation.get_user_by_id", new_callable=AsyncMock, return_value=None) as get_user_by_id,
-        pytest.raises(HTTPException) as exc,
+        patch("app.operation.get_user_by_id", new_callable=AsyncMock, side_effect=_user_owned_by(FOREIGN_OWNER_ID)),
+        patch(f"app.operation.hwid.{crud}", new_callable=AsyncMock, return_value=1) as write_hwids,
+        patch("app.operation.hwid._clear_connection_state", new_callable=AsyncMock) as clear_state,
+        pytest.raises(denial) as exc,
     ):
-        await op.delete_user_hwid(AsyncMock(), 1, "hwid", admin)
+        await getattr(op, method)(AsyncMock(), 1, *args, admin)
 
-    assert exc.value.status_code == 404
-    assert get_user_by_id.await_args.kwargs["admin_id"] == admin.id
+    if denial is HTTPException:
+        assert (exc.value.status_code, exc.value.detail) == (404, "User not found")
+    write_hwids.assert_not_awaited()
+    clear_state.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "method, args, crud, scope_lookups, expected",
+    [
+        pytest.param("get_user_hwids", (), "get_user_hwids", 2, None, id="read"),
+        pytest.param("delete_user_hwid", ("hwid",), "delete_user_hwid", 3, {}, id="delete"),
+        pytest.param("reset_user_hwids", (), "reset_user_hwids", 3, {"count": 0}, id="reset"),
+    ],
+)
+@pytest.mark.parametrize(
+    "grant, owner_id, scoped_admin_id",
+    [
+        pytest.param({"scope": 1}, 7, 7, id="own-scope-own-user"),
+        pytest.param({"scope": 2}, FOREIGN_OWNER_ID, None, id="all-scope-foreign-user"),
+        pytest.param(True, FOREIGN_OWNER_ID, None, id="unscoped-foreign-user"),
+    ],
+)
+async def test_hwid_actions_reach_a_user_every_scope_allows(
+    method, args, crud, scope_lookups, expected, grant, owner_id, scoped_admin_id
+):
+    op = HWIDOperation(OperatorType.API)
+    admin = _admin_with_permissions(
+        {"users": {"read": grant, "delete": grant}, "hwids": {"read": grant, "delete": grant}}
+    )
+    crud_result = [] if crud == "get_user_hwids" else (True if crud == "delete_user_hwid" else 0)
+
+    with (
+        patch(
+            "app.operation.get_user_by_id", new_callable=AsyncMock, side_effect=_user_owned_by(owner_id)
+        ) as get_user_by_id,
+        patch(f"app.operation.hwid.{crud}", new_callable=AsyncMock, return_value=crud_result) as hwid_crud,
+        patch("app.operation.hwid._clear_connection_state", new_callable=AsyncMock),
+    ):
+        result = await getattr(op, method)(AsyncMock(), 1, *args, admin)
+
+    assert _lookup_admin_ids(get_user_by_id) == [scoped_admin_id] * scope_lookups
+    hwid_crud.assert_awaited_once()
+    if expected is None:
+        assert (result.count, result.hwids) == (0, [])
+    else:
+        assert result == expected
