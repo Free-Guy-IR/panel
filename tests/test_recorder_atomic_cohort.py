@@ -12,6 +12,7 @@ from app.db.models import NodeUserUsage, User
 from app.jobs import record_usages
 from tests.test_recorder_harness import (  # noqa: F401
     CountingNode,
+    commit_faults_fixture,
     is_billing_write,
     is_chart_write,
     recorder_db_fixture,
@@ -172,15 +173,11 @@ async def test_a_cohort_that_always_fails_is_retried_up_to_the_bound_then_abando
 
 
 @pytest.mark.asyncio
-async def test_a_write_whose_connection_dropped_is_abandoned_at_once(
-    monkeypatch: pytest.MonkeyPatch, recorder_db, statement_faults, caplog
+async def test_a_commit_whose_connection_dropped_is_abandoned_at_once(
+    monkeypatch: pytest.MonkeyPatch, recorder_db, commit_faults, caplog
 ):
     user_ids = await _two_users_on_one_node(monkeypatch, recorder_db)
-    statement_faults(
-        is_billing_write,
-        OperationalError("UPDATE users", {}, _ConnectionLost(), connection_invalidated=True),
-        {1},
-    )
+    commit_faults(OperationalError("COMMIT", {}, _ConnectionLost(), connection_invalidated=True), {1})
     caplog.set_level(logging.WARNING, logger="record-usages")
 
     with pytest.raises(OperationalError):

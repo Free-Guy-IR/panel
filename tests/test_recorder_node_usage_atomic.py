@@ -12,6 +12,7 @@ from app.db.crud.node import remove_node
 from app.db.models import Node, NodeUsage, System
 from app.jobs import record_usages
 from tests.test_recorder_harness import (  # noqa: F401
+    commit_faults_fixture,
     recorder_db_fixture,
     seed_users_and_nodes,
     statement_faults_fixture,
@@ -135,11 +136,29 @@ async def test_node_usage_that_keeps_failing_is_abandoned_at_the_retry_bound(
 
 @pytest.mark.asyncio
 async def test_node_usage_whose_commit_is_in_doubt_is_not_written_twice(
-    monkeypatch: pytest.MonkeyPatch, recorder_db, statement_faults, caplog
+    monkeypatch: pytest.MonkeyPatch, recorder_db, commit_faults, caplog
 ):
     _, _, node_ids = await seed_users_and_nodes(recorder_db, user_count=0, node_count=1)
     node_id = node_ids[0]
     await _install(monkeypatch, recorder_db, {node_id: OutboundNode(900)})
+    commit_faults(OperationalError("COMMIT", {}, _ConnectionLost(), connection_invalidated=True), {1})
+    caplog.set_level(logging.WARNING, logger="record-usages")
+
+    with pytest.raises(OperationalError):
+        await record_usages._record_node_usages_impl()
+
+    assert _retained() == []
+    assert any("may have committed" in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_node_usage_whose_connection_dropped_before_commit_is_kept_and_written_once(
+    monkeypatch: pytest.MonkeyPatch, recorder_db, statement_faults, caplog
+):
+    _, _, node_ids = await seed_users_and_nodes(recorder_db, user_count=0, node_count=1)
+    node_id = node_ids[0]
+    node = OutboundNode(900)
+    await _install(monkeypatch, recorder_db, {node_id: node})
     statement_faults(
         _starts_with("INSERT INTO NODE_USAGES"),
         OperationalError("INSERT INTO node_usages", {}, _ConnectionLost(), connection_invalidated=True),
@@ -150,8 +169,15 @@ async def test_node_usage_whose_commit_is_in_doubt_is_not_written_twice(
     with pytest.raises(OperationalError):
         await record_usages._record_node_usages_impl()
 
+    assert await _state(recorder_db, node_id) == (0, 0, 0)
+    assert _retained() == [({node_id: (0, 900)}, 1)]
+    assert not any("may have committed" in record.getMessage() for record in caplog.records)
+
+    node.pending = 100
+    await record_usages._record_node_usages_impl()
+
+    assert await _state(recorder_db, node_id) == (1_000, 1_000, 1_000)
     assert _retained() == []
-    assert any("may have committed" in record.getMessage() for record in caplog.records)
 
 
 @pytest.mark.asyncio

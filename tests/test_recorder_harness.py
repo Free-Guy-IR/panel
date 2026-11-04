@@ -279,3 +279,27 @@ def statement_faults_fixture(recorder_db):
 
     for faults in installed:
         event.remove(engine, "before_cursor_execute", faults.before_cursor_execute)
+
+
+@pytest.fixture(name="commit_faults")
+def commit_faults_fixture(recorder_db):
+    engine = record_usages.engine.sync_engine
+    installed = []
+
+    def install(error: Exception, occurrences=None) -> dict:
+        state = {"commits": 0, "failed": 0}
+
+        def on_commit(conn):
+            state["commits"] += 1
+            if occurrences is None or state["commits"] in occurrences:
+                state["failed"] += 1
+                raise error
+
+        event.listen(engine, "commit", on_commit)
+        installed.append(on_commit)
+        return state
+
+    yield install
+
+    for on_commit in installed:
+        event.remove(engine, "commit", on_commit)

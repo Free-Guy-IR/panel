@@ -55,6 +55,7 @@ USAGE_PERSIST_MAX_CONSECUTIVE_FAILURES = 2
 USAGE_JOB_LATENESS_TOLERANCE_S = 5.0
 USAGE_RETAINED_MAX_ATTEMPTS = 10
 USAGE_SHUTDOWN_GRACE_S = 8.0
+FAILED_BEFORE_COMMIT_ATTR = "usage_write_failed_before_commit"
 NODE_USER_USAGE_BATCH_SIZE_BY_DIALECT = {
     "mysql": 1_000,
     "sqlite": 400,
@@ -564,7 +565,11 @@ async def run_in_retried_transaction(operation, max_retries: int = DEADLOCK_MAX_
         try:
             # engine.begin() ensures commit/rollback + connection return on exit
             async with connectable.begin() as conn:
-                return await operation(conn)
+                try:
+                    return await operation(conn)
+                except DBAPIError as err:
+                    setattr(err, FAILED_BEFORE_COMMIT_ATTR, True)
+                    raise
 
         except (OperationalError, DatabaseError) as err:
             # Session auto-closed by context manager, locks released
@@ -1607,7 +1612,11 @@ async def _settle_collection(
 
 
 def _write_may_have_committed(failure: BaseException | None) -> bool:
-    return isinstance(failure, DBAPIError) and failure.connection_invalidated
+    return (
+        isinstance(failure, DBAPIError)
+        and failure.connection_invalidated
+        and not getattr(failure, FAILED_BEFORE_COMMIT_ATTR, False)
+    )
 
 
 def _keep_or_abandon_retained(cohort: UsageCohort, failure: BaseException | None) -> None:
