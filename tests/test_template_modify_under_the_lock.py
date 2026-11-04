@@ -10,7 +10,7 @@ from app.db.crud.user import get_user_by_id
 from app.db.models import Admin, AdminRole, Base, Group, User, UserTemplate
 from app.fork.proxy_secrets.locks import acquire_proxy_secrets_lock
 from app.models.proxy import ProxyTable
-from app.models.settings import HWIDSettings
+from app.models.settings import General, HWIDSettings
 from app.models.user import BulkUsersApplyTemplate, ModifyUserByTemplate
 from app.operation import OperatorType
 from app.operation.user import UserOperation
@@ -52,6 +52,9 @@ def operation(monkeypatch):
     async def default_hwid():
         return HWIDSettings()
 
+    async def default_general():
+        return General()
+
     async def no_node_push(db_user, include_subscription_url=True):
         return SimpleNamespace(username=db_user.username, status=db_user.status, id=db_user.id)
 
@@ -60,6 +63,7 @@ def operation(monkeypatch):
     monkeypatch.setattr(user_module, "sync_user", nothing)
     monkeypatch.setattr(user_module, "sync_users", nothing)
     monkeypatch.setattr(user_module, "hwid_settings", default_hwid)
+    monkeypatch.setattr(user_module, "general_settings", default_general)
     users = UserOperation.__new__(UserOperation)
     users.operator_type = OperatorType.API
     users.update_user = no_node_push
