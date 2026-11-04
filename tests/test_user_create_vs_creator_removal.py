@@ -38,10 +38,8 @@ async def _seed_creator(recorder_db) -> tuple[int, str, int, int, str]:
     tag = uuid4().hex[:8]
     async with recorder_db() as session:
         name = (await session.execute(select(Admin.username).where(Admin.id == creator_id))).scalar_one()
-        group_id = (await session.execute(insert(Group).values(name=f"fo3-{tag}").returning(Group.id))).scalar_one()
-        template_id = (
-            await session.execute(insert(UserTemplate).values(name=f"fo3-{tag}").returning(UserTemplate.id))
-        ).scalar_one()
+        group_id = (await session.execute(insert(Group).values(name=f"fo3-{tag}"))).inserted_primary_key[0]
+        template_id = (await session.execute(insert(UserTemplate).values(name=f"fo3-{tag}"))).inserted_primary_key[0]
         await session.execute(
             insert(template_group_association).values(user_template_id=template_id, group_id=group_id)
         )
