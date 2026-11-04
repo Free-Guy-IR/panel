@@ -91,8 +91,11 @@ def test_user_list_shows_device_counts_only_with_hwids_read(access_token, permis
         client.delete(f"/api/admin-role/{role['id']}", headers=auth_headers(access_token))
 
 
-def test_an_own_scope_admin_never_sees_or_sorts_by_other_admins_device_counts(access_token):
-    role = _role(access_token, {"users": {"read": SCOPE_OWN}, "hwids": {"read": True}})
+@pytest.mark.parametrize(
+    "hwids_read", [pytest.param(True, id="hwids-read-true"), pytest.param(SCOPE_OWN, id="hwids-read-own")]
+)
+def test_an_own_scope_admin_never_sees_or_sorts_by_other_admins_device_counts(access_token, hwids_read):
+    role = _role(access_token, {"users": {"read": SCOPE_OWN}, "hwids": {"read": hwids_read}})
     actor = create_admin(access_token, role_id=role["id"])
     tag = unique_name("hwid_own")
     mine = create_user(access_token, username=f"{tag}_mine")
