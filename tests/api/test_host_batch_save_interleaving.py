@@ -18,15 +18,15 @@ MANAGER_PAUSE_TARGETS = {"add_hosts": "add_hosts", "apply": "_prepare_hosts"}
 PAUSE_AFTER_THE_REAL_CALL = {"apply"}
 
 
-class _SilentRouter:
+class _EchoRouter:
     async def publish(self, topic, message):
-        return None
+        await host_manager._handle_host_message(message)
 
 
 @pytest.fixture(params=["configured", "nats"])
 def host_write_path(request, monkeypatch):
     if request.param == "nats":
-        monkeypatch.setattr(hosts_module, "router", _SilentRouter())
+        monkeypatch.setattr(hosts_module, "router", _EchoRouter())
         monkeypatch.setattr(host_manager, "_add_hosts_impl", host_manager._add_hosts_nats)
         monkeypatch.setattr(host_manager, "_remove_host_impl", host_manager._remove_host_nats)
     return request.param
