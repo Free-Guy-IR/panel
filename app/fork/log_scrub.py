@@ -100,9 +100,11 @@ def _frozen(argument: object, conversions: set[str]) -> object:
         return argument if scrubbed == argument else scrubbed
     if _is_plain(argument):
         return argument
-    if type(argument) in (list, tuple) and all(_is_plain_item(item) for item in argument):
-        items = [_snapshot(item) for item in argument]
-        return items if type(argument) is list else tuple(items)
+    if type(argument) in (list, tuple):
+        members = tuple(argument)
+        if all(_is_plain_item(item) for item in members):
+            items = [_snapshot(item) for item in members]
+            return items if type(argument) is list else tuple(items)
     number = _number(argument, conversions - set(_TEXT_CONVERSIONS))
     texts = conversions & set(_TEXT_CONVERSIONS)
     if number is not None and not texts:
@@ -184,8 +186,8 @@ def _scrub_message(record: logging.LogRecord) -> None:
     except Exception:
         record.msg, record.args = scrub_credentials(f"{message} {_rendered(record.args, repr)}"), None
         return
-    arguments = _frozen_arguments(message, record.args)
     try:
+        arguments = _frozen_arguments(message, record.args)
         rendered = message % arguments
     except Exception:
         record.msg, record.args = scrub_credentials(first), None

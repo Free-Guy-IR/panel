@@ -547,3 +547,34 @@ def test_a_number_class_whose_repr_is_replaced_after_logging_keeps_the_logged_te
     _LateRatio.__repr__ = lambda self: URL
     assert record.getMessage() == "values [5, 0.5]"
     assert SECRET not in repr(record.args)
+
+
+@pytest.mark.parametrize("number", [int, float])
+def test_a_list_that_grows_while_its_items_are_snapshotted_is_still_scrubbed(number):
+    class _Secretive:
+        def __str__(self) -> str:
+            return "password=" + SECRET
+
+    items = []
+
+    class _Growing(number):
+        def __str__(self) -> str:
+            items.append(_Secretive())
+            return "7"
+
+    items.append(_Growing(7))
+    record = _scrubbed(_record("password=%s %s", (SECRET, items)))
+    assert SECRET not in record.getMessage()
+    assert SECRET not in repr(record.args)
+
+
+def test_a_list_item_whose_class_lookup_raises_is_still_scrubbed():
+    class _Broken:
+        __class__ = property(lambda self: 1 / 0)
+
+        def __repr__(self) -> str:
+            return "Broken()"
+
+    record = _scrubbed(_record("password=%s %s", (SECRET, [_Broken()])))
+    assert SECRET not in record.getMessage()
+    assert SECRET not in repr(record.args)
