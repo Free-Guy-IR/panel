@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 
 from app.db.crud import user as user_crud
 from app.db.models import Admin, User
@@ -16,6 +16,14 @@ from tests.test_status_lock_order_interleavings import _deadlocks
 pytestmark = pytest.mark.skipif(_database_url().startswith("sqlite"), reason="needs a server database")
 
 SETTLE_SECONDS = 0.5
+FILLER_USERS = 40
+
+
+async def _production_sized_user_table(recorder_db) -> None:
+    await seed_users_and_nodes(recorder_db, user_count=FILLER_USERS, node_count=0)
+    async with recorder_db() as session:
+        if (await session.connection()).dialect.name in ("mysql", "mariadb"):
+            await session.execute(text("ANALYZE TABLE users"))
 
 
 @pytest.mark.asyncio
@@ -27,6 +35,7 @@ async def test_a_user_carried_onto_a_removed_admin_between_its_passes_and_moved_
     away, (late,), _ = await seed_users_and_nodes(recorder_db, user_count=1, node_count=0)
     target, target_ids, _ = await seed_users_and_nodes(recorder_db, user_count=1, node_count=0)
     everyone = [*gone_ids, late, *target_ids]
+    await _production_sized_user_table(recorder_db)
     async with recorder_db() as session:
         await session.execute(update(User).where(User.id.in_(everyone)).values(used_traffic=0))
         await session.execute(update(Admin).where(Admin.id.in_([gone, away, target])).values(used_traffic=0))
