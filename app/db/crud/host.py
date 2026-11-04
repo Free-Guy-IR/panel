@@ -5,6 +5,7 @@ from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.dialect import sql_family
 from app.db.models import ProxyHost, ProxyInbound
 from app.models.host import CreateHost, HostListQuery
 
@@ -30,7 +31,7 @@ async def upsert_inbounds(db: AsyncSession, inbound_tags: list[str]) -> dict[str
     # Remove duplicates while preserving order
     unique_tags = list(dict.fromkeys(inbound_tags))
 
-    dialect = db.bind.dialect.name
+    dialect = sql_family(db.bind.dialect.name)
 
     # Build upsert statement based on dialect
     if dialect == "postgresql":

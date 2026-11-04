@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
+from app.db.dialect import sql_family
 from app.db.models import (
     CoreConfig,
     CoreType,
@@ -475,7 +476,7 @@ async def _lock_subnet_rows(db: AsyncSession, keys: Iterable[str]) -> dict[str, 
     keys = sorted(set(keys))
     if not keys:
         return {}
-    dialect = db.bind.dialect.name
+    dialect = sql_family(db.bind.dialect.name)
     values = [{"network": key, "next_offset": 1, "free_offsets": []} for key in keys]
     if dialect == "postgresql":
         stmt = pg_insert(WireGuardSubnet).on_conflict_do_nothing(index_elements=["network"])

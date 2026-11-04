@@ -21,6 +21,7 @@ from sqlalchemy.sql.expression import Insert
 from app import on_shutdown, scheduler
 from app.db import GetDB
 from app.db.base import engine
+from app.db.dialect import sql_family
 from app.db.models import Admin, Node, NodeUsage, NodeUserUsage, System, User
 from app.fork.jobs import after_record_node_usages, apply_usage_value
 from app.fork.jobs.fenced_traffic import fenced_user_traffic_updates
@@ -69,7 +70,6 @@ _pending_user_usage_history: defaultdict[tuple[dt, int, int | None, int], int] =
 _user_usage_history_lock = asyncio.Lock()
 _user_usage_history_last_flush: float | None = None
 USER_USAGE_HISTORY_MAX_PENDING_BUCKETS = 6
-MYSQL_FAMILY = frozenset({"mysql", "mariadb"})
 ONLINE_AT_WRITE_INTERVAL = td(minutes=1)
 DEADLOCK_MAX_RETRIES = 5
 FENCED_USER_LOG_SAMPLE = 20
@@ -176,10 +176,6 @@ _stats_reset_issued: ContextVar[set[int] | None] = ContextVar("usage_stats_reset
 _stat_batch_context: ContextVar[tuple[dict[int, StatBatch], dict[int, StatBatch]] | None] = ContextVar(
     "usage_stat_batches", default=None
 )
-
-
-def sql_family(dialect: str) -> str:
-    return "mysql" if dialect in MYSQL_FAMILY else dialect
 
 
 def _two_phase_keywords(node, node_id: int | None) -> dict:

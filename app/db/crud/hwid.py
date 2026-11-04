@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.schema import Table
 
+from app.db.dialect import sql_family
 from app.db.models import UserHWID
 
 
@@ -48,7 +49,7 @@ async def register_user_hwid(
         "created_at": now,
         "last_used_at": now,
     }
-    dialect = db.bind.dialect.name
+    dialect = sql_family(db.bind.dialect.name)
     table = cast(Table, UserHWID.__table__)
 
     if dialect == "postgresql":

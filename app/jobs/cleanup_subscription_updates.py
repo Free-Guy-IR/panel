@@ -2,6 +2,7 @@ from sqlalchemy import delete, func, select
 
 from app import scheduler
 from app.db import GetDB
+from app.db.dialect import sql_family
 from app.db.models import UserSubscriptionUpdate
 from app.subscription.sub_update_buffer import flush_user_sub_updates
 from app.utils.logger import get_logger
@@ -28,7 +29,7 @@ async def cleanup_user_subscription_updates():
             logger.info("No users with excess subscription updates")
             return
 
-        dialect = db.bind.dialect.name
+        dialect = sql_family(db.bind.dialect.name)
 
         # Second query: Use different approaches based on database type
         if dialect == "mysql":

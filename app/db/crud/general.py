@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from sqlalchemy import String, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.dialect import sql_family
 from app.db.models import JWT, System
 from app.models.stats import Period
 
@@ -45,7 +46,7 @@ def _build_trunc_expression(
         SQL expression for truncation that returns naive timestamps/strings
         representing wall-clock time in the target timezone
     """
-    dialect = db.bind.dialect.name
+    dialect = sql_family(db.bind.dialect.name)
 
     # Extract timezone offset from start parameter
     tz_offset_str = None
@@ -198,7 +199,7 @@ def get_datetime_add_expression(db: AsyncSession, datetime_column, seconds: int)
     """
     Get database-specific datetime addition expression
     """
-    dialect = db.bind.dialect.name
+    dialect = sql_family(db.bind.dialect.name)
     if dialect == "mysql":
         return func.date_add(datetime_column, text("INTERVAL :seconds SECOND").bindparams(seconds=seconds))
     elif dialect == "postgresql":
@@ -215,7 +216,7 @@ def json_extract(db: AsyncSession, column, path: str):
         column: The JSON column in your model
         path: JSON path (e.g., '$.theme')
     """
-    dialect = db.bind.dialect.name
+    dialect = sql_family(db.bind.dialect.name)
     match dialect:
         case "postgresql":
             keys = path.replace("$.", "").split(".")

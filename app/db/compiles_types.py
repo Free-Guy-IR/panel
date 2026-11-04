@@ -3,6 +3,8 @@ from sqlalchemy.dialects import mysql
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.expression import FunctionElement
 
+from app.db.dialect import sql_family
+
 
 class CaseSensitiveString(String):
     def __init__(self, length=None):
@@ -24,7 +26,7 @@ class WebAuthnBinary(TypeDecorator):
         super().__init__(length=length)
 
     def load_dialect_impl(self, dialect):
-        if dialect.name == "mysql":
+        if sql_family(dialect.name) == "mysql":
             blob_type = mysql.TINYBLOB() if self.length <= 255 else mysql.BLOB()
             return dialect.type_descriptor(blob_type)
         return dialect.type_descriptor(LargeBinary(self.length))
@@ -41,7 +43,7 @@ class WebAuthnCredentialId(TypeDecorator):
         super().__init__(length=length)
 
     def load_dialect_impl(self, dialect):
-        if dialect.name == "mysql":
+        if sql_family(dialect.name) == "mysql":
             return dialect.type_descriptor(mysql.VARBINARY(self.length))
         return dialect.type_descriptor(LargeBinary(self.length))
 
@@ -57,7 +59,7 @@ class WebAuthnChallenge(TypeDecorator):
         super().__init__(length=length)
 
     def load_dialect_impl(self, dialect):
-        if dialect.name == "mysql":
+        if sql_family(dialect.name) == "mysql":
             return dialect.type_descriptor(mysql.VARBINARY(self.length))
         return dialect.type_descriptor(LargeBinary(self.length))
 
