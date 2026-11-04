@@ -1058,6 +1058,7 @@ HUNK_RANGE_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 HUNK_HEADER_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@")
 HUNK_CONTEXT = 3
 HUNK_OLD_RANGE_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+")
+HUNK_COUNTS_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 CONTEXT_SLACK = 2
 
 
@@ -1723,18 +1724,97 @@ def ported_later_changes(upstream_sha, head, path):
             hunks = tuple(
                 (marked_lines(path, hunk["pre"]), marked_lines(path, hunk["post"]))
                 for hunk in commit_hunks(later)
-                if hunk["old"] == path == hunk["new"] and later_hunk_brought(fork_sha, path, hunk)
+                if hunk["old"] == path == hunk["new"] and later_hunk_brought(fork_sha, path, hunk, upstream_sha)
             )
             if hunks:
                 changes.append((later, hunks))
     return tuple(changes)
 
 
-def later_hunk_brought(fork_sha, path, hunk):
-    if hunk_brought(fork_sha, hunk):
-        return True
+def pick_spots(upstream_sha, fork_sha, path):
+    parent = f"{fork_sha}^"
+    if not commit_exists(parent):
+        return frozenset()
+    spots = set()
+    for record in git("log", "--no-merges", "--format=%H%x1f%B%x1e", parent, "--", path).split("\x1e"):
+        sha, _, body = record.strip().partition("\x1f")
+        if not sha or on_upstream_ref(sha):
+            continue
+        if upstream_sha not in set(CHERRY_PICK_RE.findall(body)) | set(UPSTREAM_TRAILER_RE.findall(body)):
+            continue
+        _, added = fork_line_changes(sha, path)
+        lines = normalised_file(sha, path)
+        for hunk in commit_hunks(upstream_sha):
+            post = hunk_side(path, hunk["post"])
+            if hunk["new"] != path or post is None:
+                continue
+            offsets = changed_offsets(path, hunk["post"])
+            own = {i + offset for i in block_positions(lines, post) for offset in offsets if i + offset in added}
+            spots |= carried_positions(sha, parent, path, frozenset(own))
+    return frozenset(spots)
+
+
+@functools.lru_cache(maxsize=1024)
+def line_moves(old_ref, new_ref, path):
+    moves = []
+    for line in git("diff", "-U0", "--no-color", "--no-ext-diff", old_ref, new_ref, "--", path).splitlines():
+        match = HUNK_COUNTS_RE.match(line)
+        if match:
+            moves.append(tuple(int(match.group(n)) if match.group(n) is not None else 1 for n in (1, 2, 3, 4)))
+    return tuple(moves)
+
+
+def carried_positions(old_ref, new_ref, path, positions):
+    if old_ref == new_ref or not positions:
+        return positions
+    old, new = head_blob(old_ref, path), head_blob(new_ref, path)
+    if old is None or new is None:
+        return frozenset()
+    old_kept, new_kept = kept_line_numbers(path, old), kept_line_numbers(path, new)
+    raw = set()
+    for index in positions:
+        if not 0 <= index < len(old_kept):
+            continue
+        number = old_kept[index]
+        shift = 0
+        landed = None
+        for old_at, old_count, new_at, new_count in line_moves(old_ref, new_ref, path):
+            if old_count and old_at <= number < old_at + old_count:
+                landed = range(new_at, new_at + new_count) if new_count else range(new_at, new_at + 2)
+                break
+            if (old_at + old_count - 1 if old_count else old_at) < number:
+                shift = new_at + new_count - (old_at + old_count) if old_count else new_at + new_count - old_at - 1
+        raw.update(landed if landed is not None else (number + shift,))
+    return frozenset(index for index, number in enumerate(new_kept) if number in raw)
+
+
+def spot_near(i, split, place):
+    return any(i - 1 <= p <= i + len(split[1]) for p in place)
+
+
+def later_hunk_brought(fork_sha, path, hunk, upstream_sha):
+    parent = f"{fork_sha}^"
     removed, added = fork_line_changes(fork_sha, path)
-    for side, ref, changes in ((hunk["post"], fork_sha, added), (hunk["pre"], f"{fork_sha}^", removed)):
+    before = pick_spots(upstream_sha, fork_sha, path)
+    after = carried_positions(parent, fork_sha, path, before)
+    sides = ((hunk["post"], fork_sha, added, after), (hunk["pre"], parent, removed, before))
+    post = hunk_side(path, hunk["post"])
+    pre = hunk_side(path, hunk["pre"])
+    if hunk["new"] is not None and post is not None:
+        offsets = changed_offsets(path, hunk["post"])
+        if any(
+            spot_near(i, post, after) and any(i + offset in added for offset in offsets)
+            for i in block_positions(normalised_file(fork_sha, path), post)
+        ):
+            return True
+    if pre is not None and pre != post and not block_in_place(normalised_file(fork_sha, path), pre):
+        offsets = changed_offsets(path, hunk["pre"])
+        if any(
+            spot_near(i, pre, before) and any(i + offset in removed for offset in offsets)
+            for i in block_positions(normalised_file(parent, path), pre)
+        ):
+            return True
+    for side, ref, changes, place in sides:
         split = hunk_side(path, side)
         if split is None:
             continue
@@ -1743,7 +1823,9 @@ def later_hunk_brought(fork_sha, path, hunk):
             return False
         spots = [i for i in range(len(lines) - len(split[1]) + 1) if core_at_spot(lines, i, split)]
         offsets = changed_offsets(path, side)
-        if len(spots) != 1 or not all(spots[0] + offset in changes for offset in offsets):
+        if len(spots) != 1 or not spot_near(spots[0], split, place):
+            return False
+        if not all(spots[0] + offset in changes for offset in offsets):
             return False
     return True
 
