@@ -76,3 +76,25 @@ async def test_an_out_of_range_iat_is_rejected_instead_of_crashing(monkeypatch, 
 async def test_a_non_numeric_iat_is_rejected_instead_of_crashing(monkeypatch, iat):
     monkeypatch.setattr(jwt_utils.jwt_settings, "access_token_expire_minutes", 0)
     assert await jwt_utils.get_admin_payload(_token(iat=iat)) is None
+
+
+@pytest.mark.parametrize("iat", ["Infinity", "-Infinity", "1e400", "NaN"])
+@pytest.mark.asyncio
+async def test_a_non_finite_iat_is_rejected_instead_of_crashing(monkeypatch, iat):
+    monkeypatch.setattr(jwt_utils.jwt_settings, "access_token_expire_minutes", 0)
+    claims = f'{{"sub":"admin","access":"admin","iat":{iat}}}'
+    assert await jwt_utils.get_admin_payload(jwt.api_jws.encode(claims.encode(), SECRET, algorithm="HS256")) is None
+
+
+@pytest.mark.asyncio
+async def test_an_admin_token_issued_in_the_future_is_still_refused(monkeypatch):
+    monkeypatch.setattr(jwt_utils.jwt_settings, "access_token_expire_minutes", 0)
+    assert await jwt_utils.get_admin_payload(_token(iat=datetime.now(UTC) + timedelta(minutes=10))) is None
+
+
+@pytest.mark.asyncio
+async def test_a_missing_signing_secret_is_not_mistaken_for_a_bad_admin_token(monkeypatch):
+    monkeypatch.setattr(jwt_utils.jwt_settings, "access_token_expire_minutes", 0)
+    monkeypatch.setattr(jwt_utils, "get_secret_key", AsyncMock(return_value=None))
+    with pytest.raises(TypeError):
+        await jwt_utils.get_admin_payload(_token(iat=datetime.now(UTC)))

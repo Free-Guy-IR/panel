@@ -81,3 +81,44 @@ def test_a_signed_subscription_jwt_with_a_numeric_iat_still_resolves(secret, sto
 def test_a_float_iat_still_resolves(secret, store):
     token = _jwt(datetime.now(UTC).timestamp())
     assert asyncio.run(BaseOperation(OperatorType.API).get_validated_sub(None, token)).id == 42
+
+
+NON_FINITE_IAT = [
+    pytest.param("Infinity", id="infinity"),
+    pytest.param("-Infinity", id="negative-infinity"),
+    pytest.param("1e400", id="overflowing-exponent"),
+    pytest.param("NaN", id="nan"),
+    pytest.param("1" + "0" * 400, id="huge-integer"),
+    pytest.param("-1" + "0" * 400, id="huge-negative-integer"),
+]
+
+
+def _jwt_with_raw_iat(iat_literal):
+    claims = f'{{"sub":"user42","access":"subscription","iat":{iat_literal}}}'
+    return pyjwt.api_jws.encode(claims.encode(), SECRET, algorithm="HS256")
+
+
+@pytest.mark.parametrize("iat", NON_FINITE_IAT)
+def test_a_signed_subscription_jwt_with_a_non_finite_iat_decodes_to_none(secret, iat):
+    assert asyncio.run(jwt_utils.get_subscription_payload(_jwt_with_raw_iat(iat))) is None
+
+
+@pytest.mark.parametrize("iat", NON_FINITE_IAT)
+def test_a_signed_subscription_jwt_with_a_non_finite_iat_is_a_404_not_a_500(secret, store, iat):
+    with pytest.raises(HTTPException) as refused:
+        asyncio.run(BaseOperation(OperatorType.API).get_validated_sub(None, _jwt_with_raw_iat(iat)))
+    assert refused.value.status_code == 404
+
+
+def test_a_subscription_jwt_issued_in_the_future_is_still_refused(secret):
+    token = _jwt(int(datetime.now(UTC).timestamp()) + 3600)
+    assert asyncio.run(jwt_utils.get_subscription_payload(token)) is None
+
+
+def test_a_missing_signing_secret_is_not_mistaken_for_a_bad_subscription_token(monkeypatch):
+    async def _no_secret():
+        return None
+
+    monkeypatch.setattr(jwt_utils, "get_secret_key", _no_secret)
+    with pytest.raises(TypeError):
+        asyncio.run(jwt_utils.get_subscription_payload(_jwt(int(datetime.now(UTC).timestamp()))))

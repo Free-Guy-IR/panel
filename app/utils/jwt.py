@@ -3,7 +3,7 @@ import time
 from base64 import b64decode, b64encode
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
-from math import ceil
+from math import ceil, isfinite
 
 import jwt
 from aiocache import cached
@@ -16,6 +16,20 @@ from config import jwt_settings
 
 _UNIX_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _READ_FROM_DATABASE = object()
+
+
+def _issued_at(payload: dict, leeway: float) -> datetime | None:
+    iat = payload.get("iat")
+    if isinstance(iat, bool) or not isinstance(iat, (int, float)):
+        return None
+    if isinstance(iat, float) and not isfinite(iat):
+        return None
+    if int(iat) > datetime.now(UTC).timestamp() + leeway:
+        return None
+    try:
+        return datetime.fromtimestamp(iat, tz=UTC)
+    except (OverflowError, OSError, ValueError):
+        return None
 
 
 @cached(ttl=60)
@@ -55,10 +69,9 @@ async def get_admin_payload(token: str, *, secret_key: str | None = None) -> dic
         if secret_key is None:
             secret_key = await get_secret_key()
         required = ["iat", "exp"] if jwt_settings.access_token_expire_minutes > 0 else ["iat"]
-        try:
-            payload = jwt.decode(token, secret_key, algorithms=["HS256"], leeway=5, options={"require": required})
-        except TypeError:
-            return
+        payload = jwt.decode(
+            token, secret_key, algorithms=["HS256"], leeway=5, options={"require": required, "verify_iat": False}
+        )
         username: str = payload.get("sub")
         access: str = payload.get("access")
         admin_id = payload.get("aid")
@@ -72,9 +85,8 @@ async def get_admin_payload(token: str, *, secret_key: str | None = None) -> dic
                 return
         if not username or access not in ("admin", "sudo"):
             return
-        try:
-            created_at = datetime.fromtimestamp(payload["iat"], tz=UTC)
-        except (OverflowError, OSError, TypeError, ValueError):
+        created_at = _issued_at(payload, leeway=5)
+        if created_at is None:
             return
 
         return {
@@ -190,18 +202,13 @@ async def get_subscription_payload(token: str) -> dict | None:
             return
 
         if token.startswith("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."):
-            secret = await get_secret_key()
-            try:
-                payload = jwt.decode(token, secret, algorithms=["HS256"])
-            except TypeError:
-                return
+            payload = jwt.decode(token, await get_secret_key(), algorithms=["HS256"], options={"verify_iat": False})
             if payload.get("access") == "subscription":
                 username = payload.get("sub")
-                if not username or "iat" not in payload:
+                if not username:
                     return
-                try:
-                    created_at = datetime.fromtimestamp(payload["iat"], tz=UTC)
-                except (OverflowError, OSError, TypeError, ValueError):
+                created_at = _issued_at(payload, leeway=0)
+                if created_at is None:
                     return
                 return {
                     "username": username,
