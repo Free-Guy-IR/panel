@@ -1715,42 +1715,109 @@ def ported_later_changes(upstream_sha, head, path):
                 continue
             if on_upstream_ref(fork_sha):
                 continue
-            removed = commit_line_texts(later, path, "-")
-            if not removed or paths_bringing_upstream_change(later, fork_sha, {path}) != {path}:
+            if not commit_line_texts(later, path, "-") or paths_bringing_upstream_change(later, fork_sha, {path}) != {path}:
                 continue
             _, missing = own_lines_missing(fork_sha, head, {path})
-            if not missing:
-                changes.append((frozenset(removed), frozenset(commit_line_texts(later, path, "+") or ())))
+            if missing:
+                continue
+            hunks = tuple(
+                (marked_lines(path, hunk["pre"]), marked_lines(path, hunk["post"]))
+                for hunk in commit_hunks(later)
+                if hunk["old"] == path == hunk["new"] and later_hunk_brought(fork_sha, path, hunk)
+            )
+            if hunks:
+                changes.append((later, hunks))
     return tuple(changes)
 
 
-def superseded_block_in_place(lines, path, side, removed, inserted):
-    marked = [(text, changed) for text, changed in ((normalise_line(path, t), c) for t, c in side) if text]
-    kept = [text for text, _ in marked if text not in removed]
-    if lines is None or not kept or len(kept) == len(marked):
-        return False
-    if not any(changed and text in removed for text, changed in marked):
-        return False
-    for start in range(len(lines)):
-        if lines[start] != kept[0]:
+def later_hunk_brought(fork_sha, path, hunk):
+    if hunk_brought(fork_sha, hunk):
+        return True
+    removed, added = fork_line_changes(fork_sha, path)
+    for side, ref, changes in ((hunk["post"], fork_sha, added), (hunk["pre"], f"{fork_sha}^", removed)):
+        marked = marked_lines(path, side)
+        core = tuple(text for text, changed in marked if changed)
+        lines = normalised_file(ref, path)
+        if core and (
+            lines is None
+            or not any(
+                lines[i : i + len(core)] == core and all(i + k in changes for k in range(len(core)))
+                for i in range(len(lines) - len(core) + 1)
+            )
+        ):
+            return False
+    return True
+
+
+def marked_lines(path, side):
+    return tuple((text, changed) for text, changed in ((normalise_line(path, t), c) for t, c in side) if text)
+
+
+def later_alignments(current, before):
+    size = len(before)
+    found = []
+    for shift in range(1 - size, len(current)):
+        pairs = [(i + shift, i) for i in range(size) if 0 <= i + shift < len(current)]
+        if any(current[j][0] != before[i][0] for j, i in pairs):
             continue
-        index = start + 1
-        for text in kept[1:]:
-            while index < len(lines) and lines[index] != text and lines[index] in inserted:
-                index += 1
-            if index >= len(lines) or lines[index] != text:
-                break
-            index += 1
-        else:
-            return True
-    return False
+        if len(pairs) == size or any(before[i][1] for _, i in pairs):
+            found.append(shift)
+    return found
+
+
+def apply_later_hunk(current, before, after, shift):
+    size = len(before)
+    lead = sum(1 for i in range(size) if i + shift < 0)
+    trail = sum(1 for i in range(size) if i + shift >= len(current))
+    head_context = next((i for i, (_, changed) in enumerate(before) if changed), size)
+    tail_context = next((i for i, (_, changed) in enumerate(reversed(before)) if changed), size)
+    drop_head = min(lead, head_context)
+    drop_tail = min(trail, tail_context)
+    if lead > drop_head or trail > drop_tail:
+        return None
+    middle = after[drop_head : len(after) - drop_tail]
+    return current[: max(shift, 0)] + middle + current[shift + size :]
+
+
+def later_patched_block(marked, hunks):
+    current = marked
+    for before, after in hunks:
+        shifts = later_alignments(current, before)
+        if len(shifts) > 1:
+            return None
+        if shifts:
+            current = apply_later_hunk(current, before, after, shifts[0])
+            if current is None:
+                return None
+    kept = Counter(text for text, _ in current)
+    before = Counter(text for text, _ in marked)
+    if not any(changed and kept[text] < before[text] for text, changed in marked):
+        return None
+    return current
+
+
+def patched_side(patched):
+    texts = tuple(text for text, _ in patched)
+    changed_at = [i for i, (_, changed) in enumerate(patched) if changed]
+    if not changed_at:
+        return (), texts, ()
+    return texts[: changed_at[0]], texts[changed_at[0] : changed_at[-1] + 1], texts[changed_at[-1] + 1 :]
 
 
 def superseded_by_ported_later(upstream_sha, head, path, hunk, here):
-    return any(
-        superseded_block_in_place(here, path, hunk["post"], removed, added)
-        for removed, added in ported_later_changes(upstream_sha, head, path)
-    )
+    marked = marked_lines(path, hunk["post"])
+    post = hunk_side(path, hunk["post"])
+    for later, hunks in ported_later_changes(upstream_sha, head, path):
+        theirs = normalised_file(later, path)
+        if len(block_positions(theirs, post)) > len(block_positions(here, post)):
+            continue
+        patched = later_patched_block(marked, hunks)
+        if patched is None:
+            continue
+        side = patched_side(patched)
+        if len(block_positions(here, side)) >= max(1, len(block_positions(theirs, side))):
+            return True
+    return False
 
 
 @functools.lru_cache(maxsize=4096)
@@ -2432,7 +2499,9 @@ def build_file_linux_arches(text, passthrough=GOARCH_SELF_REFERENCES | GOARCH_DO
             raise ShippedArchesUnreadable(f"the line {line!r} builds with a tool whose config the gate does not read")
         if TARGETARCH_ASSIGNMENT_RE.search(line) or DOCKER_LEGACY_ENV_TARGETARCH_RE.match(line):
             raise ShippedArchesUnreadable(f"the line {line!r} sets TARGETARCH, which the gate does not read")
-        refuse_shell_name_forms(line)
+        make = MAKE_GOARCH_RE.match(line) if not indent else None
+        if not make:
+            refuse_shell_name_forms(line)
         if builds_dynamic_name(line):
             raise ShippedArchesUnreadable(f"the line {line!r} builds a variable name the gate cannot read")
         legacy = DOCKER_LEGACY_ENV_GOARCH_RE.match(line)
@@ -2446,7 +2515,6 @@ def build_file_linux_arches(text, passthrough=GOARCH_SELF_REFERENCES | GOARCH_DO
                 raise ShippedArchesUnreadable(f"cannot read the GOARCH on the line {line!r}")
             found.add(value)
             continue
-        make = MAKE_GOARCH_RE.match(line) if not indent else None
         if make:
             value = make.group(1).strip().strip("'\"").strip()
             if value.lower() in GOARCH_SELF_REFERENCES:
