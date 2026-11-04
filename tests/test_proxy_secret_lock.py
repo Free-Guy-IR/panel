@@ -464,7 +464,7 @@ async def test_a_create_that_cannot_take_the_lock_in_time_answers_503_and_stores
             with pytest.raises(HTTPException) as raised:
                 await _operation()._persist_bulk_users(
                     victim,
-                    SimpleNamespace(is_owner=True),
+                    SimpleNamespace(is_owner=True, id=admin_id),
                     db_admin,
                     [UserCreate(username=f"{USERNAME}-late", proxy_settings={"trojan": {"password": TROJAN}})],
                     [],

@@ -163,7 +163,7 @@ async def test_a_bulk_create_that_submits_one_secret_for_two_users_is_refused_wh
     with pytest.raises(HTTPException) as refused:
         await _operation()._persist_bulk_users(
             db,
-            SimpleNamespace(is_owner=True),
+            SimpleNamespace(is_owner=True, id=admin.id),
             admin,
             users,
             [],
@@ -194,7 +194,7 @@ async def test_a_bulk_create_regenerates_generated_secrets_that_collide_inside_t
 
     await _operation()._persist_bulk_users(
         db,
-        SimpleNamespace(is_owner=True),
+        SimpleNamespace(is_owner=True, id=admin.id),
         admin,
         [first, second],
         [],
@@ -229,7 +229,7 @@ async def test_a_bulk_create_refuses_a_submitted_secret_a_stored_user_holds(
     with pytest.raises(HTTPException) as refused:
         await _operation()._persist_bulk_users(
             db,
-            SimpleNamespace(is_owner=True),
+            SimpleNamespace(is_owner=True, id=admin.id),
             admin,
             users,
             [],
@@ -255,7 +255,7 @@ async def _bulk_create_capturing(db, monkeypatch, admin, users):
     monkeypatch.setattr(user_module, "create_users_bulk", fake_create_users_bulk)
     await _operation()._persist_bulk_users(
         db,
-        SimpleNamespace(is_owner=True),
+        SimpleNamespace(is_owner=True, id=admin.id),
         admin,
         users,
         [],

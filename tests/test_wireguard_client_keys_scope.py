@@ -163,7 +163,13 @@ async def test_bulk_created_users_without_wireguard_access_do_not_store_client_k
     users = [UserCreate(username=name, proxy_settings=_client_wireguard()) for name in ("bulk_a", "bulk_b")]
 
     await operation._persist_bulk_users(
-        db, OWNER_DETAILS, seed.admin, users, [seed.groups["plain"]], skip_per_user_limits=True, sync=False
+        db,
+        SimpleNamespace(**vars(OWNER_DETAILS), id=seed.admin.id),
+        seed.admin,
+        users,
+        [seed.groups["plain"]],
+        skip_per_user_limits=True,
+        sync=False,
     )
 
     for name in ("bulk_a", "bulk_b"):
