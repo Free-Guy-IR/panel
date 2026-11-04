@@ -7,6 +7,7 @@ b021d6f7be94bb5c7dc57cf6a648d4b89584e776 upstream/dependabot/uv/dev/fastapi-0.14
 3d1a1a3605f527dd765064a0aa4992a00db0bc71 upstream/dependabot/uv/dev/fastapi-0.162.0
 6759a6e3db38103b4b8588b37931df4bc0018f48 upstream/dependabot/uv/dev/pydantic-settings-2.16.1
 19611f74522391cc2e8239591aaadc7ea8ebcb2a upstream/dependabot/uv/dev/python-dateutil-3.0.0
+1872a7317f84e1a8e1eb6759fcd486486177fa5b upstream/dependabot/uv/dev/python-multipart-0.0.33
 59a347e6517ec9888ffb21102b954430d492b6b4 upstream/dependabot/uv/dev/ruff-0.16.10
 2f60c83098103ebf36d7b833f893309c883bc8d7 upstream/dependabot/uv/dev/sqlalchemy-asyncio--gte-2.1.1
 75f3788a312ef593f5642466faa380154ce95e09 upstream/dependabot/uv/dev/sqlalchemy-asyncio--gte-2.1.2
