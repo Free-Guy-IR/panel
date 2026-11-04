@@ -121,7 +121,10 @@ async def status_change(user: UserNotificationResponse):
         await notify(UserEnabled(username=user.username, user=user))
 
 
-WEBHOOK_EXCLUDED_FIELDS = {"user": {"proxy_settings"}}
+WEBHOOK_EXCLUDED_FIELDS = {
+    "user": {"proxy_settings": True, "admin": {"discord_webhook"}},
+    "by": {"discord_webhook"},
+}
 
 
 async def notify(message: type[Notification]) -> None:
