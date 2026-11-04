@@ -46,12 +46,35 @@ CHECK_TO_WRITE_SECONDS = 0.05
 DEADLOCK_SETUP_SECONDS = 0.3
 SEED_RACE_WRITERS = 6
 SEED_RACE_ROUNDS = 5
+STALL_SECONDS = 120
 
 
 def _foreign_keys_on(dbapi_connection, _record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
+
+
+async def _signalled(event, task):
+    signal = asyncio.ensure_future(event.wait())
+    try:
+        done, _ = await asyncio.wait({signal, task}, timeout=STALL_SECONDS, return_when=asyncio.FIRST_COMPLETED)
+    finally:
+        signal.cancel()
+    if signal in done:
+        return
+    if task in done:
+        task.result()
+    raise TimeoutError(f"the concurrent writer did not signal within {STALL_SECONDS} seconds")
+
+
+async def _connect_or_break(db, barrier):
+    try:
+        await db.execute(select(1))
+    except BaseException:
+        await barrier.abort()
+        raise
+    await barrier.wait()
 
 
 async def _purge(engine):
@@ -181,12 +204,13 @@ async def test_a_second_writer_waits_for_the_first_and_then_sees_its_value(sessi
         prepared = await enforce_unique_proxy_secrets(first, _trojan(TROJAN))
         await _add_user(first, admin_id, f"{USERNAME}-first", prepared)
         waiting = asyncio.create_task(second_writer())
-        await connected.wait()
+        await _signalled(connected, waiting)
         await asyncio.sleep(WAIT_SECONDS)
         second_was_waiting = not waiting.done()
         await first.commit()
 
-    second_value = await waiting
+    async with asyncio.timeout(STALL_SECONDS):
+        second_value = await waiting
 
     assert prepared.trojan.password == TROJAN
     assert second_was_waiting is True
@@ -253,14 +277,14 @@ async def test_the_lock_holder_never_needs_a_second_slot_from_a_full_pool(engine
 
     async def create(index):
         async with bounded_sessions() as db:
-            await db.execute(select(1))
-            await everyone_connected.wait()
+            await _connect_or_break(db, everyone_connected)
             prepared = await enforce_unique_proxy_secrets(db, _trojan(TROJAN))
             await _add_user(db, admin_id, f"{USERNAME}-pool{index}", prepared)
             await db.commit()
 
     try:
-        outcomes = await asyncio.gather(*(create(index) for index in range(writers)), return_exceptions=True)
+        async with asyncio.timeout(STALL_SECONDS):
+            outcomes = await asyncio.gather(*(create(index) for index in range(writers)), return_exceptions=True)
     finally:
         await bounded.dispose()
 
@@ -304,13 +328,13 @@ async def test_writers_racing_on_a_deleted_lock_row_all_succeed_and_seed_it_once
 
         async def create(index):
             async with sessions() as db:
-                await db.execute(select(1))
-                await everyone_connected.wait()
+                await _connect_or_break(db, everyone_connected)
                 prepared = await _operation()._prepare_user_proxy_settings(db, [], _trojan(TROJAN))
                 await _add_user(db, admin_id, f"{USERNAME}-seed{round_number}-{index}", prepared)
                 await db.commit()
 
-        return await asyncio.gather(*(create(index) for index in range(SEED_RACE_WRITERS)), return_exceptions=True)
+        async with asyncio.timeout(STALL_SECONDS):
+            return await asyncio.gather(*(create(index) for index in range(SEED_RACE_WRITERS)), return_exceptions=True)
 
     failures = []
     for round_number in range(SEED_RACE_ROUNDS):
@@ -354,13 +378,14 @@ async def test_a_writer_chosen_as_deadlock_victim_answers_503_and_leaves_nothing
         await acquire_named_lock(holder, PROXY_SECRETS_LOCK)
         await holder.execute(update(User).where(User.id.in_(ballast_ids)).values(note="ballast"))
         waiting = asyncio.create_task(victim())
-        await victim_holds_the_row.wait()
+        await _signalled(victim_holds_the_row, waiting)
         await asyncio.sleep(DEADLOCK_SETUP_SECONDS)
         await holder.execute(update(User).where(User.id == target_id).values(note="holder"))
         await holder.commit()
 
     with pytest.raises(HTTPException) as raised:
-        await waiting
+        async with asyncio.timeout(STALL_SECONDS):
+            await waiting
 
     assert raised.value.status_code == 503
     async with sessions() as db:
