@@ -224,6 +224,7 @@ class BaseSubscription(ForkSubscriptionHelpers):
         else:
             finalmask_dict = finalmask.model_dump(by_alias=True, exclude_none=True)
         obfs_password = ""
+        # A core config may hold explicit nulls, so read optional sections with "or"
         quic_params: dict = finalmask_dict.get("quicParams") or {}
         if udp := finalmask_dict.get("udp"):
             for i in udp:
