@@ -260,3 +260,103 @@ async def test_a_node_deleted_while_its_outbound_usage_is_recorded_leaves_no_orp
     assert node == (6, 8)
     assert tuple(system) == (9, 12)
     assert tuple(node_history) == (9, 12)
+
+
+class _PausingConnection:
+    def __init__(self, conn, on_existence_check):
+        self._conn = conn
+        self._on_existence_check = on_existence_check
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    async def execute(self, statement, *args, **kwargs):
+        result = await self._conn.execute(statement, *args, **kwargs)
+        if str(statement).startswith("SELECT nodes.id"):
+            await self._on_existence_check()
+        return result
+
+
+@pytest.mark.asyncio
+async def test_a_node_deleted_inside_the_write_transaction_after_the_existence_check_leaves_no_orphan_rows(
+    monkeypatch: pytest.MonkeyPatch, session_factory
+):
+    async with session_factory() as session:
+        if session.bind.dialect.name == "sqlite":
+            pytest.skip("needs a real database with row locks and concurrent writers")
+    doomed_id, kept_id = await _seed_two_nodes(session_factory)
+    samples = {
+        doomed_id: [{"tag": "direct", "up": 3, "down": 4}],
+        kept_id: [{"tag": "direct", "up": 5, "down": 6}, {"tag": "warp", "up": 1, "down": 2}],
+    }
+    monkeypatch.setattr(record_usages, "_retained_node_usage", [])
+    monkeypatch.setattr(
+        record_usages.node_manager,
+        "get_healthy_nodes",
+        AsyncMock(return_value=[(doomed_id, DummyNode(doomed_id)), (kept_id, DummyNode(kept_id))]),
+    )
+
+    async def fake_get_outbounds_stats(node: DummyNode, node_id: int | None = None):
+        return samples[node_id]
+
+    async def outbound_settings():
+        return General(usage=UsageSettings(record_node_usage=True, record_outbound_usage=True))
+
+    monkeypatch.setattr(record_usages, "get_outbounds_stats", fake_get_outbounds_stats)
+    monkeypatch.setattr(record_usages, "general_settings", outbound_settings)
+    real_run = record_usages.run_in_retried_transaction
+    deletes: list[asyncio.Task] = []
+    attempts = {"n": 0}
+
+    async def delete_once_after_the_existence_check():
+        if deletes:
+            return
+        deletes.append(asyncio.create_task(_delete_node(session_factory, doomed_id)))
+        await asyncio.sleep(1.5)
+
+    async def run_with_a_concurrent_delete(operation, *args, **kwargs):
+        async def paused(conn):
+            attempts["n"] += 1
+            return await operation(_PausingConnection(conn, delete_once_after_the_existence_check))
+
+        return await real_run(paused, *args, **kwargs)
+
+    monkeypatch.setattr(record_usages, "run_in_retried_transaction", run_with_a_concurrent_delete)
+
+    await asyncio.wait_for(record_usages.record_node_usages(), timeout=30)
+    assert len(deletes) == 1
+    await asyncio.wait_for(deletes[0], timeout=30)
+
+    assert record_usages._retained_node_usage == []
+    async with session_factory() as session:
+        assert await session.get(Node, doomed_id) is None
+        orphan_rows = (
+            await session.execute(
+                select(func.count())
+                .select_from(NodeOutboundUsage)
+                .where(NodeOutboundUsage.node_id.not_in(select(Node.id)))
+            )
+        ).scalar_one()
+        rows = (
+            await session.execute(
+                select(
+                    NodeOutboundUsage.node_id,
+                    NodeOutboundUsage.outbound_tag,
+                    NodeOutboundUsage.uplink,
+                    NodeOutboundUsage.downlink,
+                ).order_by(NodeOutboundUsage.node_id, NodeOutboundUsage.outbound_tag)
+            )
+        ).all()
+        system = (await session.execute(select(System.uplink, System.downlink))).one()
+        node_history = (
+            await session.execute(
+                select(func.coalesce(func.sum(NodeUsage.uplink), 0), func.coalesce(func.sum(NodeUsage.downlink), 0))
+            )
+        ).one()
+    assert orphan_rows == 0
+    assert [tuple(row) for row in rows] == [(kept_id, "direct", 5, 6), (kept_id, "warp", 1, 2)]
+    node, _, _, _ = await _totals(session_factory, kept_id)
+    assert node == (6, 8)
+    assert tuple(system) == (9, 12)
+    assert tuple(node_history) == (9, 12)
+    assert attempts["n"] >= 1
