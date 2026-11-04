@@ -45,9 +45,7 @@ def test_settings_api_with_a_legacy_stored_proxy(access_token, proxy):
         for section in SECTIONS:
             assert body[section]["proxy_url"] == proxy
 
-        untouched = client.put(
-            "/api/settings", headers=auth_headers(access_token), json={"general": body["general"]}
-        )
+        untouched = client.put("/api/settings", headers=auth_headers(access_token), json={"general": body["general"]})
         assert untouched.status_code == status.HTTP_200_OK, untouched.text
         for section in SECTIONS:
             assert untouched.json()[section]["proxy_url"] == proxy

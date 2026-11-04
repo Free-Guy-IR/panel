@@ -118,7 +118,6 @@ async def test_loaded_legacy_proxy_is_refused_by_every_sender(stored_row, proxy,
     class _Queue:
         async def dequeue(self, timeout=1):
             dequeued.append(timeout)
-            return None
 
     monkeypatch.setattr(job, "get_webhook_queue", lambda: _Queue())
     await job.send_notifications()

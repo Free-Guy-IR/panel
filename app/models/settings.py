@@ -75,8 +75,8 @@ class Telegram(BaseModel):
 
     @field_validator("proxy_url")
     @classmethod
-    def validate_proxy_url(cls, v):
-        return ProxyValidator.validate_proxy_url(v)
+    def keep_stored_proxy_url(cls, v):
+        return v or None
 
     @field_validator("token")
     @classmethod
@@ -116,8 +116,8 @@ class Webhook(BaseModel):
 
     @field_validator("proxy_url", mode="before")
     @classmethod
-    def validate_proxy_url(cls, v):
-        return ProxyValidator.validate_proxy_url(v)
+    def keep_stored_proxy_url(cls, v):
+        return v or None
 
     @model_validator(mode="after")
     def check_enable_requires_webhookinfo(self):
@@ -178,8 +178,8 @@ class NotificationSettings(BaseModel):
 
     @field_validator("proxy_url", mode="before")
     @classmethod
-    def validate_proxy_url(cls, v):
-        return ProxyValidator.validate_proxy_url(v)
+    def keep_stored_proxy_url(cls, v):
+        return v or None
 
     @field_validator("discord_webhook_url", mode="before")
     @classmethod
@@ -594,6 +594,30 @@ class GeneralInput(General):
     custom_variables: list[CustomVariableInput] | None = Field(default=None, max_length=MAX_CUSTOM_VARIABLES)
 
 
+class TelegramInput(Telegram):
+    @field_validator("proxy_url")
+    @classmethod
+    def validate_proxy_url(cls, v):
+        return ProxyValidator.validate_proxy_url(v)
+
+
+class WebhookInput(Webhook):
+    @field_validator("proxy_url", mode="before")
+    @classmethod
+    def validate_proxy_url(cls, v):
+        return ProxyValidator.validate_proxy_url(v)
+
+
+class NotificationSettingsInput(NotificationSettings):
+    @field_validator("proxy_url", mode="before")
+    @classmethod
+    def validate_proxy_url(cls, v):
+        return ProxyValidator.validate_proxy_url(v)
+
+
 class SettingsSchemaInput(SettingsSchema):
+    telegram: TelegramInput | None = Field(default=None)
+    webhook: WebhookInput | None = Field(default=None)
+    notification_settings: NotificationSettingsInput | None = Field(default=None)
     subscription: SubscriptionInput | None = Field(default=None)
     general: GeneralInput | None = Field(default=None)
