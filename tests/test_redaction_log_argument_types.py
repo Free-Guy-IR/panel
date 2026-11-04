@@ -505,3 +505,45 @@ def test_a_list_that_is_part_of_a_masked_secret_or_not_shown_is_masked_item_by_i
     assert "90210" not in repr(record.args)
     assert record.getMessage().count("90210") == message.count("90210")
     assert SECRET not in record.getMessage()
+
+
+def _mutate_after_logging(members) -> None:
+    for member in members:
+        member._name_ = "password=" + SECRET
+        type(member).__name__ = "token"
+
+
+@pytest.mark.parametrize("container", [list, tuple])
+def test_an_enum_member_renamed_after_logging_cannot_put_a_secret_in_the_record(container):
+    kind = enum.IntEnum("Kind", {"A": 1})
+    value = container([kind.A, 2])
+    record = _scrubbed(_record("values %s", (value,)))
+    _mutate_after_logging([kind.A])
+    assert type(record.args[0]) is container
+    assert record.getMessage() == f"values {container(['<Kind.A: 1>', 2])}".replace("'", "")
+    assert SECRET not in repr(record.args)
+
+
+@pytest.mark.parametrize("container", [list, tuple])
+def test_an_enum_member_renamed_after_logging_cannot_reach_the_masked_arguments(container):
+    kind = enum.IntEnum("Kind", {"A": 1})
+    value = container([kind.A])
+    record = _scrubbed(_record("password=%s ids=%s", (SECRET, value)))
+    _mutate_after_logging([kind.A])
+    assert type(record.args[1]) is container
+    assert SECRET not in repr(record.args)
+    assert SECRET not in record.getMessage()
+
+
+def test_a_number_class_whose_repr_is_replaced_after_logging_keeps_the_logged_text():
+    class _Late(int):
+        pass
+
+    class _LateRatio(float):
+        pass
+
+    record = _scrubbed(_record("values %s", ([_Late(5), _LateRatio(0.5)],)))
+    _Late.__repr__ = lambda self: URL
+    _LateRatio.__repr__ = lambda self: URL
+    assert record.getMessage() == "values [5, 0.5]"
+    assert SECRET not in repr(record.args)

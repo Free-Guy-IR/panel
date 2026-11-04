@@ -77,6 +77,16 @@ def _is_plain_item(item: object) -> bool:
     return kind._value_repr_ in _PLAIN_VALUE_REPRS and _is_plain(item._value_)
 
 
+def _snapshot(item: object) -> object:
+    if _is_plain(item):
+        return item
+    text = scrub_credentials(_rendered(item, str))
+    shown = scrub_credentials(_rendered(item, repr))
+    if isinstance(item, int):
+        return _FrozenInt(int.__index__(item), text, shown)
+    return _FrozenFloat(float.__float__(item), text, shown)
+
+
 def _rendered(argument: object, render) -> str:
     try:
         return render(argument)
@@ -91,7 +101,8 @@ def _frozen(argument: object, conversions: set[str]) -> object:
     if _is_plain(argument):
         return argument
     if type(argument) in (list, tuple) and all(_is_plain_item(item) for item in argument):
-        return list(argument) if type(argument) is list else argument
+        items = [_snapshot(item) for item in argument]
+        return items if type(argument) is list else tuple(items)
     number = _number(argument, conversions - set(_TEXT_CONVERSIONS))
     texts = conversions & set(_TEXT_CONVERSIONS)
     if number is not None and not texts:
