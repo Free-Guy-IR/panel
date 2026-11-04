@@ -14,18 +14,38 @@ TOKEN_CONTRACT_FUNCTIONS = (
     "_decode_b64_token",
     "_issued_at",
     "get_subscription_payload",
+    "get_secret_key",
 )
-TOKEN_CONTRACT_GLOBALS: tuple[str, ...] = ()
-ROLLBACK_IMAGE_TOKEN_CONTRACT_SHA256 = "e098552f8130e26465c2ca21256ec634dc331a1e998e012e5e09d0abf17a1ee7"
+TOKEN_CONTRACT_GLOBALS = ("_UNIX_EPOCH", "_READ_FROM_DATABASE")
+ROLLBACK_IMAGE_TOKEN_CONTRACT_SHA256 = "e07a78977a62374d05cc35a32e0890aa92f7c6d8ab6cd4ba112c22328140743e"
 
 
 def token_contract_sha256(source: str) -> str:
+    tree = ast.parse(source)
+    lines = source.splitlines()
+
+    def span(node: ast.stmt) -> str:
+        first = min([node.lineno, *(decorator.lineno for decorator in getattr(node, "decorator_list", ()))])
+        return "\n".join(lines[first - 1 : node.end_lineno])
+
+    imports = [span(node) for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))]
+    assignments = {}
+    for node in tree.body:
+        targets = (
+            node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+        )
+        for target in targets:
+            if isinstance(target, ast.Name):
+                assignments[target.id] = span(node)
     functions = {
-        node.name: ast.get_source_segment(source, node)
-        for node in ast.parse(source).body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        node.name: span(node) for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
-    return hashlib.sha256("\n\n".join(functions[name] for name in TOKEN_CONTRACT_FUNCTIONS).encode()).hexdigest()
+    parts = [
+        *imports,
+        *(assignments[name] for name in TOKEN_CONTRACT_GLOBALS),
+        *(functions[name] for name in TOKEN_CONTRACT_FUNCTIONS),
+    ]
+    return hashlib.sha256("\n\n".join(parts).encode()).hexdigest()
 
 
 def _module_level_definitions(tree: ast.Module) -> dict[str, ast.stmt]:
