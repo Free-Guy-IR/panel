@@ -1,13 +1,17 @@
 """Values that admins control must stay inert in subscription pages and notifications."""
 
 from types import SimpleNamespace
+from urllib import parse as urlparse
 
 import pytest
+from jinja2 import Environment, FileSystemLoader
 from pydantic import ValidationError
 
 from app.db.models import DataLimitResetStrategy, UserStatus
-from app.models.admin import AdminModify
-from app.templates import render_template
+from app.models.admin import AdminCreate, AdminModify
+from app.models.subscription import SubscriptionInboundData, TCPTransportConfig, TLSConfig
+from app.subscription.links import StandardLinks
+from app.templates import env, render_template
 from app.utils.helpers import has_markup_unsafe_chars
 
 
@@ -40,6 +44,36 @@ def test_subscription_page_escapes_links():
 def test_subscription_page_escapes_announce_but_keeps_line_breaks():
     html = _render_subscription_page(announce="first line\n<script>alert(1)</script>")
 
+    assert "first line<br>&lt;script&gt;alert(1)&lt;/script&gt;" in html
+
+
+def test_custom_and_default_page_templates_render_with_autoescape():
+    assert env.from_string("{{ value }}").render(value="<b>x</b>") == "&lt;b&gt;x&lt;/b&gt;"
+
+
+def test_subscription_page_announce_stays_escaped_when_autoescape_is_off():
+    plain_env = Environment(loader=FileSystemLoader(["app/templates"]), autoescape=False)
+    plain_env.filters.update(env.filters)
+    plain_env.globals.update(env.globals)
+    user = SimpleNamespace(
+        username="page_user",
+        status=UserStatus.active,
+        data_limit=0,
+        used_traffic=0,
+        data_limit_reset_strategy=DataLimitResetStrategy.no_reset,
+        on_hold_expire_duration=None,
+        expire=None,
+        on_hold_timeout=None,
+    )
+    html = plain_env.get_template("subscription/index.html").render(
+        user=user,
+        links=[],
+        announce="first line\n<script>alert(1)</script>",
+        announce_url="",
+        apps=[],
+    )
+
+    assert "<script>alert(1)</script>" not in html
     assert "first line<br>&lt;script&gt;alert(1)&lt;/script&gt;" in html
 
 
@@ -89,6 +123,37 @@ def test_admin_sub_domain_rejects_unsafe_values(sub_domain):
 )
 def test_admin_sub_domain_allows_url_prefixes(sub_domain):
     assert AdminModify(sub_domain=sub_domain).sub_domain == sub_domain
+
+
+@pytest.mark.parametrize("sub_domain", ["javascript:alert(1)//", 'https://sub.example.com/"><svg onload=1>'])
+def test_admin_create_sub_domain_rejects_unsafe_values(sub_domain):
+    with pytest.raises(ValidationError):
+        AdminCreate(username="new_admin", password="Str0ng!Passw0rd#", role_id=1, sub_domain=sub_domain)
+
+
+@pytest.mark.parametrize("auth", ["user:pa@ss", "a:b#frag", "x:y/z?q", "u:p'\"<>` \\"])
+def test_hysteria_link_userinfo_keeps_auth_inside_userinfo(auth):
+    inbound = SubscriptionInboundData(
+        remark="hysteria",
+        inbound_tag="hysteria-inbound",
+        protocol="hysteria",
+        address="edge.example.com",
+        port=443,
+        network="tcp",
+        tls_config=TLSConfig(tls=None),
+        transport_config=TCPTransportConfig(),
+        priority=0,
+    )
+    links = StandardLinks()
+    links.add("r", "edge.example.com", inbound, {"auth": auth})
+    link = links.links[0]
+    parsed = urlparse.urlsplit(link)
+
+    assert parsed.hostname == "edge.example.com"
+    assert parsed.port == 443
+    assert urlparse.unquote(parsed.username) == auth
+    assert parsed.password is None
+    assert not set("@#/?'\"<>` \\") & set(link.split("@edge.example.com", 1)[0].removeprefix("hysteria2://"))
 
 
 def _notification_user(group_names: list[str]):
