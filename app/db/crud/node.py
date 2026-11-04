@@ -11,6 +11,7 @@ from app.db.models import (
     DataLimitResetStrategy,
     Node,
     NodeInboundUsage,
+    NodeOutboundUsage,
     NodeStat,
     NodeStatus,
     NodeUsage,
@@ -30,6 +31,7 @@ from app.models.node import (
     UsageTable,
 )
 from app.models.stats import (
+    NodeOutboundUsageStatsList,
     NodeStats,
     NodeStatsList,
     NodeUsageStat,
@@ -354,6 +356,44 @@ async def get_nodes_usage(
     return NodeUsageStatsList(period=period, start=start, end=end, stats=stats)
 
 
+async def get_nodes_outbound_usage(
+    db: AsyncSession,
+    start: datetime,
+    end: datetime,
+    period: Period,
+    node_id: int | None = None,
+) -> NodeOutboundUsageStatsList:
+    dialect = db.bind.dialect.name
+    trunc_expr = _build_trunc_expression(db, period, NodeOutboundUsage.created_at, start)
+
+    conditions = [
+        NodeOutboundUsage.created_at >= to_utc_for_filter(start),
+        NodeOutboundUsage.created_at < to_utc_for_filter(end),
+    ]
+    if node_id is not None:
+        conditions.append(NodeOutboundUsage.node_id == node_id)
+
+    stmt = (
+        select(
+            trunc_expr.label("period_start"),
+            NodeOutboundUsage.outbound_tag,
+            func.sum(NodeOutboundUsage.downlink).label("downlink"),
+            func.sum(NodeOutboundUsage.uplink).label("uplink"),
+        )
+        .where(and_(*conditions))
+        .group_by(trunc_expr, NodeOutboundUsage.outbound_tag)
+        .order_by(trunc_expr, NodeOutboundUsage.outbound_tag)
+    )
+    stats: dict[str, list[NodeUsageStat]] = {}
+    for row in (await execute_with_statement_timeout(db, stmt)).mappings():
+        row_dict = dict(row)
+        tag = row_dict.pop("outbound_tag")
+        attach_timezone_to_period_start(row_dict, start.tzinfo, dialect)
+        stats.setdefault(tag, []).append(NodeUsageStat(**row_dict))
+
+    return NodeOutboundUsageStatsList(period=period, start=start, end=end, stats=stats)
+
+
 async def get_node_stats(
     db: AsyncSession, node_id: int, start: datetime, end: datetime, period: Period
 ) -> NodeStatsList:
@@ -434,6 +474,7 @@ async def remove_node(db: AsyncSession, db_node: Node) -> None:
     await db.execute(
         delete(node_additional_cores_association).where(node_additional_cores_association.c.node_id == node_id)
     )
+    await db.execute(delete(NodeOutboundUsage).where(NodeOutboundUsage.node_id == node_id))
     for usage_table in (NodeUserUsage, NodeUsage, NodeInboundUsage, NodeUsageResetLogs):
         await db.execute(update(usage_table).where(usage_table.node_id == node_id).values(node_id=None))
     await db.execute(delete(NodeStat).where(NodeStat.node_id == node_id))
@@ -532,6 +573,8 @@ def _table_model(table: UsageTable):
         return NodeUserUsage
     if table == UsageTable.node_usages:
         return NodeUsage
+    if table == UsageTable.node_outbound_usages:
+        return NodeOutboundUsage
     raise ValueError("Invalid table enum")
 
 
@@ -854,6 +897,7 @@ async def remove_nodes(db: AsyncSession, node_ids: list[int]) -> None:
     await db.execute(
         delete(node_additional_cores_association).where(node_additional_cores_association.c.node_id.in_(node_ids))
     )
+    await db.execute(delete(NodeOutboundUsage).where(NodeOutboundUsage.node_id.in_(node_ids)))
     for usage_table in (NodeUserUsage, NodeUsage, NodeInboundUsage, NodeUsageResetLogs):
         await db.execute(update(usage_table).where(usage_table.node_id.in_(node_ids)).values(node_id=None))
     await db.execute(delete(NodeStat).where(NodeStat.node_id.in_(node_ids)))

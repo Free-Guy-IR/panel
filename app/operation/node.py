@@ -20,6 +20,7 @@ from app.db.crud.node import (
     get_node_by_id,
     get_node_stats,
     get_nodes,
+    get_nodes_outbound_usage,
     get_nodes_simple,
     get_nodes_usage,
     modify_node,
@@ -74,6 +75,7 @@ from app.models.node import (
     NodeListQuery,
     NodeModify,
     NodeNotification,
+    NodeOutboundUsageQuery,
     NodeResponse,
     NodeSimple,
     NodeSimpleListQuery,
@@ -88,6 +90,7 @@ from app.models.node import (
 )
 from app.models.stats import (
     NodeOutboundsLatencyResponse,
+    NodeOutboundUsageStatsList,
     NodeRealtimeStats,
     NodeStatsList,
     NodeUsageStatsList,
@@ -932,6 +935,14 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 node_id=query.node_id,
                 group_by_node=query.group_by_node,
             )
+
+    async def get_outbound_usage(
+        self,
+        db: AsyncSession,
+        query: NodeOutboundUsageQuery,
+    ) -> NodeOutboundUsageStatsList:
+        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
+        return await get_nodes_outbound_usage(db, start, end, period=query.period, node_id=query.node_id)
 
     async def get_user_count_metric(
         self,

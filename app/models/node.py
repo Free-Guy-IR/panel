@@ -26,6 +26,7 @@ SECONDS_IN_YEAR = 31536000  # 365 days
 class UsageTable(str, Enum):
     node_user_usages = "node_user_usages"
     node_usages = "node_usages"
+    node_outbound_usages = "node_outbound_usages"
 
 
 class GeoFilseRegion(str, Enum):
@@ -320,6 +321,13 @@ class NodeUsageQuery(BaseModel):
 class InboundUsageQuery(BaseModel):
     period: Period = Field(default=Period.hour)
     inbound_tag: str | None = None
+    node_id: int | None = None
+    start: OptionalAwareDatetime = Field(default=None, examples=["2024-01-01T00:00:00+03:30"])
+    end: OptionalAwareDatetime = Field(default=None, examples=["2024-01-31T23:59:59+03:30"])
+
+
+class NodeOutboundUsageQuery(BaseModel):
+    period: Period = Field(default=Period.hour)
     node_id: int | None = None
     start: OptionalAwareDatetime = Field(default=None, examples=["2024-01-01T00:00:00+03:30"])
     end: OptionalAwareDatetime = Field(default=None, examples=["2024-01-31T23:59:59+03:30"])

@@ -22,7 +22,7 @@ from app import on_shutdown, scheduler
 from app.db import GetDB
 from app.db.base import engine
 from app.db.dialect import sql_family
-from app.db.models import Admin, Node, NodeUsage, NodeUserUsage, System, User
+from app.db.models import Admin, Node, NodeOutboundUsage, NodeUsage, NodeUserUsage, System, User
 from app.fork.jobs import after_record_node_usages, apply_usage_value
 from app.fork.jobs.fenced_traffic import fenced_user_traffic_updates
 from app.fork.jobs.stat_batches import (
@@ -72,6 +72,7 @@ _pending_user_usage_history: defaultdict[tuple[dt, int, int | None, int], int] =
 _user_usage_history_lock = asyncio.Lock()
 _user_usage_history_last_flush: float | None = None
 USER_USAGE_HISTORY_MAX_PENDING_BUCKETS = 6
+OUTBOUND_TAG_MAX_LENGTH = 256
 ONLINE_AT_WRITE_INTERVAL = td(minutes=1)
 DEADLOCK_MAX_RETRIES = 5
 FENCED_USER_LOG_SAMPLE = 20
@@ -345,6 +346,36 @@ def build_node_user_usage_upsert(dialect: str, upsert_params: list[dict]):
         set_={"used_traffic": NodeUserUsage.used_traffic + stmt.excluded.used_traffic},
     )
     return [(stmt, stmt_params)]
+
+
+def build_node_outbound_usage_upsert(dialect: str, upsert_params: list[dict]):
+    """Build one executemany UPSERT that adds per-outbound deltas to their bucket rows."""
+    values = {
+        "node_id": bindparam("node_id"),
+        "created_at": bindparam("created_at"),
+        "outbound_tag": bindparam("tag"),
+        "uplink": bindparam("up"),
+        "downlink": bindparam("down"),
+    }
+    if dialect == "mysql":
+        # IGNORE skips a row whose node was deleted after the existing-node check
+        stmt = mysql_insert(NodeOutboundUsage).values(**values).prefix_with("IGNORE")
+        stmt = stmt.on_duplicate_key_update(
+            uplink=NodeOutboundUsage.uplink + stmt.inserted.uplink,
+            downlink=NodeOutboundUsage.downlink + stmt.inserted.downlink,
+        )
+        return [(stmt, upsert_params)]
+
+    insert_fn = pg_insert if dialect == "postgresql" else sqlite_insert
+    stmt = insert_fn(NodeOutboundUsage).values(**values)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["created_at", "node_id", "outbound_tag"],
+        set_={
+            "uplink": NodeOutboundUsage.uplink + stmt.excluded.uplink,
+            "downlink": NodeOutboundUsage.downlink + stmt.excluded.downlink,
+        },
+    )
+    return [(stmt, upsert_params)]
 
 
 def build_user_traffic_update(dialect: str, usage_params: list[dict]):
@@ -853,18 +884,19 @@ async def _flush_user_usage_history_on_shutdown() -> None:
             logger.exception("Failed to flush pending node user usage history during shutdown")
 
 
-async def record_node_stats_batched(all_node_params: dict):
+async def record_node_stats_batched(all_node_params: dict, created_at: dt | None = None):
     """
     Record node-level statistics for ALL nodes in batched operations.
     This reduces write amplification and lock contention.
 
     Args:
         all_node_params: Dict mapping node_id -> list of node stat params
+        created_at: Bucket to write into; defaults to the current one
     """
     if not all_node_params:
         return
 
-    created_at = _get_time_bucket()
+    created_at = created_at or _get_time_bucket()
     dialect = await get_dialect()
 
     # Process each node's stats with concurrency control
@@ -899,6 +931,25 @@ async def record_node_stats_batched(all_node_params: dict):
         for node_id, result in zip(all_node_params, results):
             if isinstance(result, Exception):
                 logger.error("Failed to record node usage history for node %s: %s", node_id, result)
+
+
+def _prepare_node_outbound_usage_params(all_node_params: dict, created_at: dt) -> list[dict]:
+    """Fold outbound deltas into one nonzero row per node and tag."""
+    aggregated: dict[tuple[int, str], list[int]] = {}
+    for node_id, params in all_node_params.items():
+        for param in params or ():
+            tag = (param.get("tag") or "")[:OUTBOUND_TAG_MAX_LENGTH]
+            if not tag:
+                continue
+            totals = aggregated.setdefault((node_id, tag), [0, 0])
+            totals[0] += param.get("up", 0)
+            totals[1] += param.get("down", 0)
+
+    return [
+        {"node_id": node_id, "tag": tag, "up": up, "down": down, "created_at": created_at}
+        for (node_id, tag), (up, down) in sorted(aggregated.items())
+        if up or down
+    ]
 
 
 def _process_users_stats_response(stats_response):
@@ -1114,9 +1165,11 @@ async def get_users_stats(node: PasarGuardNode, node_id: int | None = None):
 
 
 def _process_outbounds_stats_response(stats_response):
-    """Fold outbound uplink/downlink stats into per-row params."""
+    """Fold outbound uplink/downlink stats into per-row params, keeping each outbound tag."""
     params = [
-        {"up": stat.value, "down": 0} if stat.type == "uplink" else {"up": 0, "down": stat.value}
+        {"tag": stat.name, "up": stat.value, "down": 0}
+        if stat.type == "uplink"
+        else {"tag": stat.name, "up": 0, "down": stat.value}
         for stat in filter(attrgetter("value"), stats_response.stats)
     ]
     return params
@@ -1881,8 +1934,10 @@ async def write_node_usage(
     created_at: dt,
     stat_batches: dict[int, StatBatch] | None = None,
     record_node_usage: bool = True,
+    outbound_params: list[dict] | None = None,
 ) -> None:
     ordered = [(node_id, up, down) for node_id, (up, down) in sorted(node_totals.items()) if up or down]
+    outbound_params = outbound_params or []
     if not ordered and not held(stat_batches):
         return
     dialect = await get_dialect()
@@ -1905,19 +1960,24 @@ async def write_node_usage(
             node_update_stmt, [{"node_id": node_id, "up": up, "down": down} for node_id, up, down in ordered]
         )
         await conn.execute(system_update_stmt)
-        if not record_node_usage:
+        if not (record_node_usage or outbound_params):
             return
         existing = set(
             (await conn.execute(select(Node.id).where(Node.id.in_([node_id for node_id, _, _ in ordered])))).scalars()
         )
-        for node_id, up, down in ordered:
-            upsert_param = {
-                "node_id": node_id if node_id in existing else None,
-                "created_at": created_at,
-                "up": up,
-                "down": down,
-            }
-            for stmt, stmt_params in build_node_usage_upsert(dialect, upsert_param):
+        if record_node_usage:
+            for node_id, up, down in ordered:
+                upsert_param = {
+                    "node_id": node_id if node_id in existing else None,
+                    "created_at": created_at,
+                    "up": up,
+                    "down": down,
+                }
+                for stmt, stmt_params in build_node_usage_upsert(dialect, upsert_param):
+                    await conn.execute(stmt, stmt_params)
+        live_outbound_params = [param for param in outbound_params if param["node_id"] in existing]
+        if live_outbound_params:
+            for stmt, stmt_params in build_node_outbound_usage_upsert(sql_family(dialect), live_outbound_params):
                 await conn.execute(stmt, stmt_params)
 
     async with JOB_SEM:
@@ -1970,7 +2030,9 @@ async def _record_node_usages_impl():
         logger.debug("No healthy nodes found, skipping node usage recording")
         return
 
-    record_node_usage = (await general_settings()).usage.record_node_usage
+    usage = (await general_settings()).usage
+    record_node_usage = usage.record_node_usage
+    record_outbound_usage = usage.record_outbound_usage
 
     logger.debug(f"Starting node usage recording for {len(nodes)} nodes")
 
@@ -2013,8 +2075,20 @@ async def _record_node_usages_impl():
             if not node_totals and not stat_batches:
                 logger.debug("No node usage to record")
                 return
+            outbound_params = (
+                _prepare_node_outbound_usage_params(
+                    {
+                        node_id: params
+                        for node_id, params in api_params.items()
+                        if node_id in legacy_fresh or node_id in held_fresh
+                    },
+                    created_at,
+                )
+                if record_outbound_usage
+                else []
+            )
             try:
-                await write_node_usage(node_totals, created_at, stat_batches, record_node_usage)
+                await write_node_usage(node_totals, created_at, stat_batches, record_node_usage, outbound_params)
                 break
             except StaleStatBatches as stale:
                 logger.warning(

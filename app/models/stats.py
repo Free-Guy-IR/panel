@@ -89,6 +89,12 @@ class InboundUsageStatsList(StatList):
     stats: dict[str, list[InboundUsageStat]]
 
 
+class NodeOutboundUsageStatsList(StatList):
+    """Usage per outbound tag; the key is the tag."""
+
+    stats: dict[str, list[NodeUsageStat]]
+
+
 class NodeRealtimeStats(BaseModel):
     mem_total: int
     mem_used: int
