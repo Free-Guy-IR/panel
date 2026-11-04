@@ -152,3 +152,75 @@ def test_the_pin_moves_when_a_pinned_name_is_rebound_later_at_top_level(appended
 def test_the_pin_moves_when_any_other_top_level_statement_is_added(appended):
     source = JWT.read_text(encoding="utf-8")
     assert token_contract_sha256(source + "\n" + appended) != token_contract_sha256(source)
+
+
+@pytest.mark.parametrize(
+    ("original", "mutated"),
+    [
+        (
+            "def get_admin_token_binding(hashed_password: str, secret_key: str) -> str:",
+            "def get_admin_token_binding(\n"
+            "    hashed_password: str, secret_key: str, _=(_UNIX_EPOCH := datetime(2030, 1, 1, tzinfo=UTC))\n"
+            ") -> str:",
+        ),
+        (
+            "async def get_admin_payload(token: str, *, secret_key: str | None = None) -> dict | None:",
+            "async def get_admin_payload(token: str, *, secret_key: str | None = (_READ_FROM_DATABASE := None)) -> dict | None:",
+        ),
+        (
+            "def _admin_token_binding(hashed_password: str, secret_key: str) -> str:",
+            "def _admin_token_binding(hashed_password: str, secret_key: str, _=globals().update(_UNIX_EPOCH=None)) -> str:",
+        ),
+        (
+            "def get_admin_token_binding(hashed_password: str, secret_key: str) -> str:",
+            "def get_admin_token_binding(hashed_password: (_UNIX_EPOCH := str), secret_key: str) -> str:",
+        ),
+        (
+            "def get_admin_token_binding(hashed_password: str, secret_key: str) -> str:",
+            "def get_admin_token_binding(hashed_password: str, secret_key: str) -> (_READ_FROM_DATABASE := str):",
+        ),
+        (
+            "def get_admin_token_binding(hashed_password: str, secret_key: str) -> str:",
+            "def get_admin_token_binding(\n"
+            "    hashed_password: str, secret_key: str, _=[(_UNIX_EPOCH := None) for _ in (0,)]\n"
+            ") -> str:",
+        ),
+    ],
+    ids=[
+        "walrus-positional-default",
+        "walrus-kwonly-default",
+        "side-effecting-default",
+        "walrus-annotation",
+        "walrus-return-annotation",
+        "walrus-in-comprehension-default",
+    ],
+)
+def test_the_pin_moves_when_an_unpinned_function_header_changes(original, mutated):
+    source = JWT.read_text(encoding="utf-8")
+    assert source.count(original) == 1
+    assert token_contract_sha256(source.replace(original, mutated)) != token_contract_sha256(source)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "def f(_=(_UNIX_EPOCH := 1)):\n    pass\n",
+        "async def f(*, _=(_UNIX_EPOCH := 1)):\n    pass\n",
+        "def f(_: (_UNIX_EPOCH := int)):\n    pass\n",
+        "def f() -> (_UNIX_EPOCH := int):\n    pass\n",
+        "@(_UNIX_EPOCH := staticmethod)\ndef f():\n    pass\n",
+        "class C((_UNIX_EPOCH := object)):\n    pass\n",
+        "def f(_=[(_UNIX_EPOCH := 1) for _ in (0,)]):\n    pass\n",
+    ],
+    ids=[
+        "positional-default",
+        "kwonly-default",
+        "annotation",
+        "return-annotation",
+        "decorator",
+        "class-base",
+        "comprehension",
+    ],
+)
+def test_a_walrus_target_at_module_level_counts_as_a_binding(statement):
+    assert "_UNIX_EPOCH" in _module_names_bound_by(ast.parse(statement).body[0])
