@@ -10,6 +10,7 @@ from app.db import base
 from app.db.crud.user import autodelete_expired_users, get_user_by_id, reset_user_data_usage
 from app.db.models import Admin, AdminRole, User, UserStatus
 from app.models.proxy import ProxyTable
+from app.models.settings import General
 
 
 @pytest.fixture
@@ -372,7 +373,12 @@ async def test_activating_a_next_plan_the_review_job_already_applied_is_a_404_an
     async def no_url(*args, **kwargs):
         return ""
 
+    async def default_general():
+        return General()
+
     monkeypatch.setattr(usage_limits, "GetDB", SessionsGetDB)
+    monkeypatch.setattr(review_users, "general_settings", default_general)
+    monkeypatch.setattr(user_module, "general_settings", default_general)
     monkeypatch.setattr(review_users, "sync_users", job_push)
     monkeypatch.setattr(review_users, "_notify_next_plan", job_notify)
     monkeypatch.setattr(review_users, "_notify_status_change", job_notify)
