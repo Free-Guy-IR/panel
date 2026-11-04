@@ -20,6 +20,20 @@ TOKEN_CONTRACT_GLOBALS = ("_UNIX_EPOCH", "_READ_FROM_DATABASE")
 ROLLBACK_IMAGE_TOKEN_CONTRACT_SHA256 = "e07a78977a62374d05cc35a32e0890aa92f7c6d8ab6cd4ba112c22328140743e"
 
 
+def _module_names_bound_by(node: ast.stmt) -> set[str]:
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        names = {node.name}
+        inner_nodes = [inner for inner in ast.walk(node) if isinstance(inner, (ast.Global, ast.Nonlocal))]
+        for inner in inner_nodes:
+            names.update(inner.names)
+        return names
+    return {
+        inner.id
+        for inner in ast.walk(node)
+        if isinstance(inner, ast.Name) and isinstance(inner.ctx, (ast.Store, ast.Del))
+    } | {name for inner in ast.walk(node) if isinstance(inner, (ast.Global, ast.Nonlocal)) for name in inner.names}
+
+
 def token_contract_sha256(source: str) -> str:
     tree = ast.parse(source)
     lines = source.splitlines()
@@ -28,23 +42,25 @@ def token_contract_sha256(source: str) -> str:
         first = min([node.lineno, *(decorator.lineno for decorator in getattr(node, "decorator_list", ()))])
         return "\n".join(lines[first - 1 : node.end_lineno])
 
-    imports = [span(node) for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))]
-    assignments = {}
+    imports = [node for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))]
+    pinned_parts = []
+    pinned_nodes = set()
+    for name in (*TOKEN_CONTRACT_GLOBALS, *TOKEN_CONTRACT_FUNCTIONS):
+        bindings = [node for node in tree.body if node not in imports and name in _module_names_bound_by(node)]
+        if not bindings:
+            raise KeyError(name)
+        pinned_parts.extend(span(node) for node in bindings)
+        pinned_nodes.update(bindings)
+    other_parts = []
     for node in tree.body:
-        targets = (
-            node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
-        )
-        for target in targets:
-            if isinstance(target, ast.Name):
-                assignments[target.id] = span(node)
-    functions = {
-        node.name: span(node) for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
-    parts = [
-        *imports,
-        *(assignments[name] for name in TOKEN_CONTRACT_GLOBALS),
-        *(functions[name] for name in TOKEN_CONTRACT_FUNCTIONS),
-    ]
+        if node in imports or node in pinned_nodes:
+            continue
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.decorator_list:
+                other_parts.append("\n".join(lines[node.decorator_list[0].lineno - 1 : node.lineno - 1]))
+            continue
+        other_parts.append(span(node))
+    parts = [*(span(node) for node in imports), *pinned_parts, *other_parts]
     return hashlib.sha256("\n\n".join(parts).encode()).hexdigest()
 
 
