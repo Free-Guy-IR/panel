@@ -15,6 +15,7 @@ from app.db.compiles_types import WebAuthnBinary, WebAuthnChallenge, WebAuthnCre
 from app.db.crud import general, host, hwid, wireguard
 from app.db.models import UserHWID
 from app.jobs import cleanup_subscription_updates
+from app.models.settings import Subscription
 from app.models.stats import Period
 
 
@@ -127,7 +128,11 @@ async def test_subscription_update_cleanup_avoids_limit_subquery_on_mariadb(monk
     async def _no_flush():
         return None
 
+    async def _default_subscription():
+        return Subscription.model_construct()
+
     monkeypatch.setattr(cleanup_subscription_updates, "flush_user_sub_updates", _no_flush)
+    monkeypatch.setattr(cleanup_subscription_updates, "subscription_settings", _default_subscription)
     monkeypatch.setattr(cleanup_subscription_updates, "GetDB", lambda: db)
 
     await cleanup_subscription_updates.cleanup_user_subscription_updates()
