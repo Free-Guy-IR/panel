@@ -459,7 +459,7 @@ async def get_users(
     if load_lifetime_used_traffic:
         options.append(with_expression(User._reseted_usage_query, _user_reset_traffic_subquery()))
     stmt = select(User).options(*options)
-    if load_lifetime_used_traffic:
+    if load_lifetime_used_traffic or load_hwid_count:
         stmt = stmt.execution_options(populate_existing=True)
     if load_hwid_count:
         stmt = stmt.options(with_expression(User.hwid_count, _user_hwid_count_subquery()))
