@@ -104,3 +104,35 @@ def test_every_module_level_name_the_token_functions_read_is_pinned():
                 pending.append(node.id)
     pinned = set(TOKEN_CONTRACT_FUNCTIONS) | set(TOKEN_CONTRACT_GLOBALS)
     assert reached <= pinned, sorted(reached - pinned)
+
+
+@pytest.mark.parametrize(
+    "appended",
+    [
+        "get_secret_key = cached(ttl=86400)(get_secret_key.__wrapped__)\n",
+        "_issued_at = lambda payload: 0\n",
+        "class _issued_at:\n    pass\n",
+        "def create_subscription_token(*args, **kwargs):\n    return ''\n",
+        "(_READ_FROM_DATABASE, _x) = (None, None)\n",
+    ],
+    ids=["rebind-decorated", "rebind-lambda", "rebind-class", "rebind-def", "rebind-tuple"],
+)
+def test_the_pin_moves_when_a_pinned_name_is_rebound_later_at_top_level(appended):
+    source = JWT.read_text(encoding="utf-8")
+    assert token_contract_sha256(source + "\n" + appended) != token_contract_sha256(source)
+
+
+@pytest.mark.parametrize(
+    "appended",
+    [
+        "_UNIX_EPOCH += timedelta(days=1)\n",
+        "if True:\n    _UNIX_EPOCH = datetime(1971, 1, 1, tzinfo=UTC)\n",
+        "try:\n    get_secret_key = None\nexcept Exception:\n    pass\n",
+        "globals().update(_READ_FROM_DATABASE=None)\n",
+        "@globals().update\ndef _unpinned_helper():\n    pass\n",
+    ],
+    ids=["augassign", "if", "try", "bare-expression", "unpinned-decorator"],
+)
+def test_the_pin_moves_when_any_other_top_level_statement_is_added(appended):
+    source = JWT.read_text(encoding="utf-8")
+    assert token_contract_sha256(source + "\n" + appended) != token_contract_sha256(source)
