@@ -17,7 +17,7 @@ TOKEN_CONTRACT_FUNCTIONS = (
     "get_secret_key",
 )
 TOKEN_CONTRACT_GLOBALS = ("_UNIX_EPOCH", "_READ_FROM_DATABASE")
-ROLLBACK_IMAGE_TOKEN_CONTRACT_SHA256 = "e07a78977a62374d05cc35a32e0890aa92f7c6d8ab6cd4ba112c22328140743e"
+ROLLBACK_IMAGE_TOKEN_CONTRACT_SHA256 = "8366023831b2a950aef59ebdce5c7fdd677840a0ee78411cab15e9616fe674a1"
 
 
 def _module_names_bound_by(node: ast.stmt) -> set[str]:
@@ -26,12 +26,25 @@ def _module_names_bound_by(node: ast.stmt) -> set[str]:
         inner_nodes = [inner for inner in ast.walk(node) if isinstance(inner, (ast.Global, ast.Nonlocal))]
         for inner in inner_nodes:
             names.update(inner.names)
-        return names
+        return names | {inner.target.id for inner in ast.walk(node) if isinstance(inner, ast.NamedExpr)}
     return {
         inner.id
         for inner in ast.walk(node)
         if isinstance(inner, ast.Name) and isinstance(inner.ctx, (ast.Store, ast.Del))
     } | {name for inner in ast.walk(node) if isinstance(inner, (ast.Global, ast.Nonlocal)) for name in inner.names}
+
+
+def _function_header(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    return "\n".join(
+        [
+            type(node).__name__,
+            node.name,
+            *(ast.dump(decorator) for decorator in node.decorator_list),
+            ast.dump(node.args),
+            ast.dump(node.returns) if node.returns is not None else "",
+            *(ast.dump(parameter) for parameter in node.type_params),
+        ]
+    )
 
 
 def token_contract_sha256(source: str) -> str:
@@ -56,8 +69,7 @@ def token_contract_sha256(source: str) -> str:
         if node in imports or node in pinned_nodes:
             continue
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if node.decorator_list:
-                other_parts.append("\n".join(lines[node.decorator_list[0].lineno - 1 : node.lineno - 1]))
+            other_parts.append(_function_header(node))
             continue
         other_parts.append(span(node))
     parts = [*(span(node) for node in imports), *pinned_parts, *other_parts]
@@ -159,9 +171,11 @@ def test_the_pin_moves_when_any_other_top_level_statement_is_added(appended):
     [
         (
             "def get_admin_token_binding(hashed_password: str, secret_key: str) -> str:",
-            "def get_admin_token_binding(\n"
-            "    hashed_password: str, secret_key: str, _=(_UNIX_EPOCH := datetime(2030, 1, 1, tzinfo=UTC))\n"
-            ") -> str:",
+            (
+                "def get_admin_token_binding(\n"
+                "    hashed_password: str, secret_key: str, _=(_UNIX_EPOCH := datetime(2030, 1, 1, tzinfo=UTC))\n"
+                ") -> str:"
+            ),
         ),
         (
             "async def get_admin_payload(token: str, *, secret_key: str | None = None) -> dict | None:",
@@ -181,9 +195,11 @@ def test_the_pin_moves_when_any_other_top_level_statement_is_added(appended):
         ),
         (
             "def get_admin_token_binding(hashed_password: str, secret_key: str) -> str:",
-            "def get_admin_token_binding(\n"
-            "    hashed_password: str, secret_key: str, _=[(_UNIX_EPOCH := None) for _ in (0,)]\n"
-            ") -> str:",
+            (
+                "def get_admin_token_binding(\n"
+                "    hashed_password: str, secret_key: str, _=[(_UNIX_EPOCH := None) for _ in (0,)]\n"
+                ") -> str:"
+            ),
         ),
     ],
     ids=[
