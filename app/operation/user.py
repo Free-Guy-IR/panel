@@ -60,7 +60,12 @@ from app.db.crud.user import (
 from app.db.crud.wireguard import tags_from_groups  # noqa: F401
 from app.db.models import User, UserStatus, UserTemplate
 from app.fork.crud.bulk_result_bounds import BulkUserResultOutOfRange, bulk_final_value, out_of_range_detail
-from app.fork.crud.creator_admin import CREATOR_ADMIN_GONE_DETAIL, CreatorAdminGone, lock_creator_admin
+from app.fork.crud.creator_admin import (
+    CREATOR_ADMIN_GONE_DETAIL,
+    CreatorAdminGone,
+    committed_users_count_by_admin,
+    lock_creator_admin,
+)
 from app.fork.crud.owner_traffic import DestinationAdminGone
 from app.fork.crud.user_locks import (
     MODIFY_STATUS_KEYS,
@@ -386,7 +391,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             return
 
         await lock_admin_quota_row(db, admin.id)
-        current_count = await get_users_count_by_admin(db, admin.id)
+        current_count = await committed_users_count_by_admin(db, admin.id)
         if current_count + users_to_create_count > limits.max_users:
             await self.raise_error(message=refusal.format(limit=limits.max_users), code=400, db=db)
 
