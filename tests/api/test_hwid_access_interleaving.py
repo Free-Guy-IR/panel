@@ -66,18 +66,29 @@ def test_concurrent_restricted_hwid_actions_never_touch_another_admins_user(hwid
                     await db.rollback()
                     return f"{exc.status_code}:{exc.detail}"
 
+        committed = {hwid: asyncio.Event() for hwid in added}
+        for hwid in seeded:
+            committed[hwid] = asyncio.Event()
+            committed[hwid].set()
+
         async def _owner_adds(step: int) -> str:
             await asyncio.sleep(0.0015 * step)
             async with sessions() as db:
                 await register_user_hwid(db, victim_id, added[step])
                 await db.commit()
-                return "added"
+            committed[added[step]].set()
+            return "added"
 
         async def _owner_removes(hwid: str, step: int) -> str:
-            await asyncio.sleep(0.002 * step + 0.012)
+            await asyncio.wait_for(committed[hwid].wait(), timeout=30)
+            await asyncio.sleep(0.002 * step)
             async with sessions() as db:
-                await operation.delete_user_hwid(db, victim_id, hwid, owner)
-                return "removed"
+                try:
+                    await operation.delete_user_hwid(db, victim_id, hwid, owner)
+                    return "removed"
+                except HTTPException as exc:
+                    await db.rollback()
+                    return f"{exc.status_code}:{exc.detail}"
 
         try:
             results = await asyncio.gather(
