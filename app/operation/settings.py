@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.crud.settings import get_settings, modify_settings
 from app.db.models import Settings
+from app.fork.operation.settings_extras import keep_legacy_import_urls
 from app.models.settings import General, SettingsSchema, Subscription
 from app.nats.message import MessageTopic
 from app.nats.router import router
@@ -36,6 +37,7 @@ class SettingsOperation(BaseOperation):
             modify.subscription = subscription.model_copy(update={"custom_variables": modify.general.custom_variables})
             modify.general = modify.general.model_copy(update={"custom_variables": None})
 
+        keep_legacy_import_urls(modify, db_settings.subscription)
         db_settings = await modify_settings(db, db_settings, modify)
         new_settings = SettingsSchema.model_validate(db_settings)
         if new_settings.general and new_settings.subscription:
