@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 from app.db.base import Base
+from app.db.dialect import sql_family
 import app.db.models
 from app.db.compiles_types import SqliteCompatibleBigInteger, WebAuthnBinary, WebAuthnChallenge, WebAuthnCredentialId
 from config import database_settings
@@ -64,15 +65,15 @@ def _compare_type(context, inspected_column, metadata_column, inspected_type, me
 
     # MySQL reflects WebAuthnBinary as TINYBLOB for challenges and BLOB for
     # credential/public-key data. Both are intentional size-specific mappings.
-    if context.dialect.name == "mysql" and isinstance(metadata_type, WebAuthnBinary):
+    if sql_family(context.dialect.name) == "mysql" and isinstance(metadata_type, WebAuthnBinary):
         if isinstance(inspected_type, (mysql.TINYBLOB, mysql.BLOB)):
             return False
 
-    if context.dialect.name == "mysql" and isinstance(metadata_type, WebAuthnCredentialId):
+    if sql_family(context.dialect.name) == "mysql" and isinstance(metadata_type, WebAuthnCredentialId):
         if isinstance(inspected_type, mysql.VARBINARY) and inspected_type.length == metadata_type.length:
             return False
 
-    if context.dialect.name == "mysql" and isinstance(metadata_type, WebAuthnChallenge):
+    if sql_family(context.dialect.name) == "mysql" and isinstance(metadata_type, WebAuthnChallenge):
         if isinstance(inspected_type, mysql.VARBINARY) and inspected_type.length == metadata_type.length:
             return False
 

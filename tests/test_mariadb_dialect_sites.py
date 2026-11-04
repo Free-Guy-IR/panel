@@ -1,7 +1,11 @@
+import ast
+import re
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import Column, MetaData, Table, column
+from sqlalchemy.dialects import mysql
 from sqlalchemy.dialects.mysql import Insert as MySQLInsert
 from sqlalchemy.dialects.mysql.mariadb import MariaDBDialect
 from sqlalchemy.schema import CreateTable
@@ -130,3 +134,54 @@ async def test_subscription_update_cleanup_avoids_limit_subquery_on_mariadb(monk
 
     assert isinstance(db.statements[1], Select)
     assert not any(isinstance(stmt, Delete) for stmt in db.statements[1:])
+
+
+APP = Path(__file__).resolve().parents[1] / "app"
+MIGRATIONS_ENV = APP / "db" / "migrations" / "env.py"
+HISTORICAL_MIGRATIONS = APP / "db" / "migrations" / "versions"
+RAW_MYSQL_NAME_COMPARE = re.compile(r"""\.name\s*(==|!=)\s*["']mysql["']|["']mysql["']\s*(==|!=)\s*[\w.]+\.name\b""")
+
+
+def _migrations_env_compare_type():
+    tree = ast.parse(MIGRATIONS_ENV.read_text())
+    kept = [node for node in tree.body if isinstance(node, (ast.Import, ast.ImportFrom))]
+    kept += [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_compare_type"]
+    namespace = {}
+    exec(compile(ast.Module(body=kept, type_ignores=[]), str(MIGRATIONS_ENV), "exec"), namespace)  # noqa: S102
+    return namespace["_compare_type"]
+
+
+@pytest.mark.parametrize("dialect_name", ["mysql", "mariadb"])
+@pytest.mark.parametrize(
+    "inspected_type, metadata_type",
+    [
+        (mysql.TINYBLOB(), WebAuthnBinary(64)),
+        (mysql.BLOB(), WebAuthnBinary(1024)),
+        (mysql.VARBINARY(1024), WebAuthnCredentialId(1024)),
+        (mysql.VARBINARY(128), WebAuthnChallenge(128)),
+    ],
+)
+def test_migrations_env_accepts_reflected_webauthn_types_on_the_mysql_family(
+    dialect_name, inspected_type, metadata_type
+):
+    compare_type = _migrations_env_compare_type()
+    context = SimpleNamespace(dialect=SimpleNamespace(name=dialect_name))
+    assert compare_type(context, None, None, inspected_type, metadata_type) is False
+
+
+@pytest.mark.parametrize("dialect_name", ["mysql", "mariadb"])
+def test_migrations_env_still_reports_a_resized_webauthn_column_on_the_mysql_family(dialect_name):
+    compare_type = _migrations_env_compare_type()
+    context = SimpleNamespace(dialect=SimpleNamespace(name=dialect_name))
+    assert compare_type(context, None, None, mysql.VARBINARY(64), WebAuthnChallenge(128)) is None
+
+
+def test_no_live_code_compares_a_raw_dialect_name_to_mysql():
+    offenders = []
+    for path in sorted(APP.rglob("*.py")):
+        if HISTORICAL_MIGRATIONS in path.parents:
+            continue
+        for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+            if RAW_MYSQL_NAME_COMPARE.search(line):
+                offenders.append(f"{path.relative_to(APP.parent)}:{lineno}: {line.strip()}")
+    assert offenders == []
