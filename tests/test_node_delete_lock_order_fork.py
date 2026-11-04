@@ -153,7 +153,8 @@ async def test_node_delete_waits_for_the_usage_writer_lock_and_never_deadlocks_o
         retries.append(delay)
         return await real_sleep(delay, *args, **kwargs)
 
-    monkeypatch.setattr(fork_node_crud.asyncio, "sleep", counting_sleep)
+    monkeypatch.setattr(fork_node_crud, "NODE_DELETE_BACKOFF_SECONDS", 0.001)
+    monkeypatch.setattr(fork_node_crud, "asyncio", type("CountingAsyncio", (), {"sleep": staticmethod(counting_sleep)}))
     writer_engine = (
         engine.execution_options(isolation_level="READ COMMITTED") if dialect_name != "postgresql" else engine
     )

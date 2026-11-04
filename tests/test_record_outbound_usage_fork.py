@@ -277,7 +277,6 @@ class _PausingConnection:
         return result
 
 
-@pytest.mark.asyncio
 def _patch_two_node_job(monkeypatch: pytest.MonkeyPatch, doomed_id: int, kept_id: int) -> None:
     samples = {
         doomed_id: [{"tag": "direct", "up": 3, "down": 4}],
