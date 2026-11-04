@@ -18,7 +18,7 @@ CHILD_TAG = "vless-ws"
 SERVER_NAME = "fallback.example.com"
 NODE_CERT_FILE = "/opt/certs/missing/fullchain.pem"
 NODE_KEY_FILE = "/opt/certs/missing/privkey.pem"
-PKCS8_KEY_HEADER = " ".join(("-----BEGIN", "PRIVATE", "KEY-----"))
+PKCS8_KEY_HEADER = "-----BEGIN " + "PRIVATE KEY-----"
 
 
 @pytest.fixture(autouse=True)
