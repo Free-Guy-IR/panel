@@ -129,6 +129,9 @@ async def recorder_db_fixture(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(record_usages, "_user_usage_running", False)
     monkeypatch.setattr(record_usages, "_node_usage_running", False)
     monkeypatch.setattr(record_usages.usage_settings, "disable_recording_node_usage", False)
+    monkeypatch.setattr(record_usages, "_pending_user_usage_history", defaultdict(int))
+    monkeypatch.setattr(record_usages, "_user_usage_history_last_flush", None)
+    monkeypatch.setattr(record_usages.usage_settings, "user_usage_history_flush_interval", 0)
     record_usages._usage_coefficient_cache.clear()
 
     yield session_factory

@@ -4,7 +4,7 @@ import asyncio
 from contextlib import contextmanager
 
 import pytest
-from sqlalchemy import event, select, update
+from sqlalchemy import event, func, select, update
 
 from app.db.models import User
 from app.jobs import record_usages
@@ -91,18 +91,19 @@ async def test_a_usage_epoch_that_moves_inside_the_billing_transaction_bills_not
     _, user_ids, _ = await seed_users_and_nodes(recorder_db, user_count=3, node_count=1)
     moved_id = user_ids[1]
     usage, context, epochs = await _cohort(user_ids, [300, 70, 5])
-    real_write = record_usages.write_node_user_usage_rows
+    real_updates = record_usages.fenced_user_traffic_updates
 
-    async def write_then_move_epoch(conn, dialect, rows):
-        await real_write(conn, dialect, rows)
-        await conn.execute(
+    def move_epoch_then_update(family, billable, batch_size):
+        yield (
             update(User)
             .where(User.id == moved_id)
             .values(usage_epoch=User.usage_epoch + 1)
-            .execution_options(synchronize_session=False)
+            .execution_options(synchronize_session=False),
+            {},
         )
+        yield from real_updates(family, billable, batch_size)
 
-    monkeypatch.setattr(record_usages, "write_node_user_usage_rows", write_then_move_epoch)
+    monkeypatch.setattr(record_usages, "fenced_user_traffic_updates", move_epoch_then_update)
 
     await record_usages.apply_fenced_user_usage(usage, context, epochs)
 
@@ -146,18 +147,19 @@ async def test_a_reset_racing_the_locked_billing_write_waits_for_it_and_leaves_z
     _, user_ids, _ = await seed_users_and_nodes(recorder_db, user_count=2, node_count=1)
     reset_id, kept_id = user_ids
     usage, context, epochs = await _cohort(user_ids, [900, 70])
-    real_write = record_usages.write_node_user_usage_rows
+    real_updates = record_usages.fenced_user_traffic_updates
     racing: dict[str, asyncio.Task] = {}
     blocked = {"while_billing": None}
+    sleep = func.pg_sleep if record_usages.sql_family(await record_usages.get_dialect()) == "postgresql" else func.sleep
 
-    async def write_while_a_reset_waits(conn, dialect, rows):
-        await real_write(conn, dialect, rows)
+    def update_while_a_reset_waits(family, billable, batch_size):
         if "reset" not in racing:
             racing["reset"] = asyncio.create_task(_reset(recorder_db, reset_id))
-            await asyncio.sleep(0.5)
+            yield select(sleep(0.5)), {}
             blocked["while_billing"] = not racing["reset"].done()
+        yield from real_updates(family, billable, batch_size)
 
-    monkeypatch.setattr(record_usages, "write_node_user_usage_rows", write_while_a_reset_waits)
+    monkeypatch.setattr(record_usages, "fenced_user_traffic_updates", update_while_a_reset_waits)
 
     outcome = await record_usages.apply_fenced_user_usage(usage, context, epochs)
     await asyncio.wait_for(racing["reset"], timeout=10)

@@ -62,6 +62,10 @@ def _gave_up(caplog, *fragments: str) -> bool:
     )
 
 
+async def _history_is_coalesced() -> bool:
+    return record_usages._history_is_coalesced(await record_usages.get_dialect())
+
+
 async def _two_users_on_one_node(monkeypatch: pytest.MonkeyPatch, recorder_db) -> list[int]:
     _, user_ids, node_ids = await seed_users_and_nodes(recorder_db, user_count=2, node_count=1)
     _install(monkeypatch, [CountingNode(node_ids[0], {user_ids[0]: 300, user_ids[1]: 70})])
@@ -92,7 +96,12 @@ async def test_a_billing_failure_after_the_chart_write_rolls_back_the_whole_coho
     with pytest.raises(OperationalError):
         await record_usages._record_user_usages_impl()
 
-    assert faults.log[: faults.log.index("failed")].count("chart") >= 1
+    before_failure = faults.log[: faults.log.index("failed")]
+    if await _history_is_coalesced():
+        assert "chart" not in before_failure
+        assert not record_usages._pending_user_usage_history
+    else:
+        assert before_failure.count("chart") >= 1
     await _assert_rolled_back_then_billed_once(recorder_db, user_ids)
 
 
@@ -106,11 +115,30 @@ async def test_a_failed_second_chart_chunk_rolls_back_the_first(
     )
     faults = statement_faults(is_chart_write, OperationalError("INSERT", {}, _ConnectionGone()), {2})
 
-    with pytest.raises(OperationalError):
-        await record_usages._record_user_usages_impl()
+    if not await _history_is_coalesced():
+        with pytest.raises(OperationalError):
+            await record_usages._record_user_usages_impl()
 
-    assert faults.log[: faults.log.index("failed")].count("chart") == 2
-    await _assert_rolled_back_then_billed_once(recorder_db, user_ids)
+        assert faults.log[: faults.log.index("failed")].count("chart") == 2
+        await _assert_rolled_back_then_billed_once(recorder_db, user_ids)
+        return
+
+    await record_usages._record_user_usages_impl()
+
+    assert faults.log[: faults.log.index("failed")] == ["billing", "chart", "chart"]
+    assert await _chart_row_count(recorder_db, user_ids) == 0
+    billed, _ = await usage_snapshot(recorder_db, user_ids)
+    assert billed == {user_ids[0]: 300, user_ids[1]: 70}
+    assert _retained_attempts() == []
+    assert sum(record_usages._pending_user_usage_history.values()) == 370
+
+    async with record_usages._user_usage_history_lock:
+        await record_usages._flush_pending_user_usage_history_locked()
+
+    billed, charted = await usage_snapshot(recorder_db, user_ids)
+    assert billed == {user_ids[0]: 300, user_ids[1]: 70}
+    assert charted == billed
+    assert not record_usages._pending_user_usage_history
 
 
 @pytest.mark.asyncio
