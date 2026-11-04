@@ -40,7 +40,9 @@ async def _detach_committed_owners(db: AsyncSession, admin_ids: list[int], *, no
     candidates = [user_id for (user_id,) in await read_committed_rows(db, owned)]
     await lock_user_rows(db, candidates, nowait=nowait)
     for user_id in sorted(set(candidates)):
-        await db.execute(update(User).where(User.id == user_id, User.admin_id.in_(admin_ids)).values(admin_id=None))
+        await db.execute(
+            on_primary_key(update(User)).where(User.id == user_id, User.admin_id.in_(admin_ids)).values(admin_id=None)
+        )
 
 
 async def detach_admin_users(db: AsyncSession, admin_ids: list[int]) -> None:

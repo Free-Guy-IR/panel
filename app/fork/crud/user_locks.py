@@ -59,7 +59,7 @@ async def lock_user_rows(db: AsyncSession, user_ids: Iterable[int], *, nowait: b
     ordered_ids = sorted({int(user_id) for user_id in user_ids if user_id is not None})
     for start in range(0, len(ordered_ids), USER_LOCK_BATCH_SIZE):
         for user_id in ordered_ids[start : start + USER_LOCK_BATCH_SIZE]:
-            statement = select(User.id).where(User.id == user_id)
+            statement = on_primary_key(select(User.id)).where(User.id == user_id)
             try:
                 await db.execute(statement.with_for_update(nowait=nowait))
             except DBAPIError as exc:
