@@ -368,7 +368,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
     async def _lock_creator_admin(self, db: AsyncSession, admin: AdminDetails, db_admin) -> None:
         if admin.id is None:
             return
-        if db_admin is None:
+        if db_admin is None or db_admin.id != admin.id:
             await self.raise_error(message=CREATOR_ADMIN_GONE_DETAIL, code=404, db=db)
         try:
             await lock_creator_admin(db, db_admin.id)
@@ -409,6 +409,10 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         if existing_usernames:
             await self.raise_error(message="User already exists", code=409, db=db)
 
+        try:
+            await acquire_proxy_secrets_lock(db)
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc)
         await self._enforce_bulk_create_quota(db, admin, len(users_to_create))
 
         if not skip_per_user_limits:
