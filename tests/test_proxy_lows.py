@@ -465,6 +465,10 @@ async def test_r2_bulk_connect_isolates_a_node_with_bad_stored_proxy(monkeypatch
         )
         for i in range(3)
     ]
+    by_id = {node.id: node for node in nodes}
+    monkeypatch.setattr(
+        op_module, "get_node_by_id", AsyncMock(side_effect=lambda db, node_id, **kwargs: by_id.get(node_id))
+    )
     await NodeOperation.__new__(NodeOperation)._connect_nodes_bulk_local(MagicMock(), nodes)
     results = {result["node_id"]: result for result in status_update.await_args.args[1]}
     assert results[0]["status"] == NodeStatus.error
