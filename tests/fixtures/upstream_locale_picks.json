@@ -1943,6 +1943,1144 @@
           "removed": []
         }
       }
+    },
+    {
+      "upstream": "f6ebdf0fea4e493728a025a1fbd439577f511edc",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "description"
+              ],
+              "When a node is reported as down or back up"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "failThreshold",
+                "description"
+              ],
+              "Failed checks in a row before a node is marked as error"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "failThreshold",
+                "title"
+              ],
+              "Failure threshold"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "maxBackoff",
+                "description"
+              ],
+              "Longest wait between probes of a node in error. 0 probes it on every check"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "maxBackoff",
+                "title"
+              ],
+              "Maximum backoff (seconds)"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "probeTimeout",
+                "description"
+              ],
+              "How long a health probe waits for a node, never longer than the node's own timeout"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "probeTimeout",
+                "title"
+              ],
+              "Probe timeout (seconds)"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "recoverThreshold",
+                "description"
+              ],
+              "Good checks in a row before a node is marked as connected again"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "recoverThreshold",
+                "title"
+              ],
+              "Recovery threshold"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "title"
+              ],
+              "Node health checks"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "stopNodesOnShutdown",
+                "description"
+              ],
+              "Stop the cores of all nodes when the panel shuts down. Only with a single worker"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "stopNodesOnShutdown",
+                "title"
+              ],
+              "Stop node cores on shutdown"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "description"
+              ],
+              "Choose which usage data the panel stores"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeStats",
+                "description"
+              ],
+              "Store CPU, memory and bandwidth history of nodes. PostgreSQL and TimescaleDB only"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeStats",
+                "title"
+              ],
+              "Record node system stats"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeUsage",
+                "description"
+              ],
+              "Store traffic per node for users and nodes. User and admin usage is counted either way"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeUsage",
+                "title"
+              ],
+              "Record node usage"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "resetUsageCleanChartData",
+                "description"
+              ],
+              "Delete a user's usage chart history when their data usage is reset"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "resetUsageCleanChartData",
+                "title"
+              ],
+              "Clear charts on usage reset"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "title"
+              ],
+              "Usage recording"
+            ],
+            [
+              [
+                "settings",
+                "subscriptions",
+                "general",
+                "clientsLimit"
+              ],
+              "Client updates kept per user"
+            ],
+            [
+              [
+                "settings",
+                "subscriptions",
+                "general",
+                "clientsLimitDescription"
+              ],
+              "How many recent subscription updates (client apps) are kept per user. 0 or less keeps all"
+            ],
+            [
+              [
+                "statistics.subscriptionDistributionRetentionNote"
+              ],
+              "By default only the latest {{limit}} subscription updates are kept per user. Change this in the subscription settings."
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "description"
+              ],
+              "چه زمانی یک نود قطع یا دوباره وصل اعلام شود"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "failThreshold",
+                "description"
+              ],
+              "تعداد بررسی ناموفق پشت سر هم پیش از آن‌که نود در وضعیت خطا قرار گیرد"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "failThreshold",
+                "title"
+              ],
+              "آستانه خطا"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "maxBackoff",
+                "description"
+              ],
+              "بیشترین فاصله بین بررسی‌های نودی که در خطاست. عدد 0 یعنی در هر بار بررسی شود"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "maxBackoff",
+                "title"
+              ],
+              "حداکثر فاصله بررسی (ثانیه)"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "probeTimeout",
+                "description"
+              ],
+              "مدت انتظار بررسی سلامت برای پاسخ نود، هرگز بیشتر از مهلت خود نود"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "probeTimeout",
+                "title"
+              ],
+              "مهلت بررسی (ثانیه)"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "recoverThreshold",
+                "description"
+              ],
+              "تعداد بررسی موفق پشت سر هم پیش از آن‌که نود دوباره متصل اعلام شود"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "recoverThreshold",
+                "title"
+              ],
+              "آستانه بازیابی"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "title"
+              ],
+              "بررسی سلامت نودها"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "stopNodesOnShutdown",
+                "description"
+              ],
+              "هنگام خاموش شدن پنل، هسته همه نودها متوقف شود. فقط با یک worker"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "stopNodesOnShutdown",
+                "title"
+              ],
+              "توقف هسته نودها هنگام خاموشی"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "description"
+              ],
+              "انتخاب کنید پنل کدام داده‌های مصرف را ذخیره کند"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeStats",
+                "description"
+              ],
+              "تاریخچه پردازنده، حافظه و پهنای باند نودها ذخیره شود. فقط PostgreSQL و TimescaleDB"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeStats",
+                "title"
+              ],
+              "ثبت آمار سیستم نودها"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeUsage",
+                "description"
+              ],
+              "ترافیک هر نود برای کاربران و نودها ذخیره شود. مصرف کاربران و ادمین‌ها در هر حالت شمرده می‌شود"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeUsage",
+                "title"
+              ],
+              "ثبت مصرف نودها"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "resetUsageCleanChartData",
+                "description"
+              ],
+              "با ریست مصرف کاربر، تاریخچه نمودار مصرف او هم حذف شود"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "resetUsageCleanChartData",
+                "title"
+              ],
+              "پاک کردن نمودار هنگام ریست مصرف"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "title"
+              ],
+              "ثبت مصرف"
+            ],
+            [
+              [
+                "settings",
+                "subscriptions",
+                "general",
+                "clientsLimit"
+              ],
+              "تعداد به‌روزرسانی‌های نگه‌داری‌شده برای هر کاربر"
+            ],
+            [
+              [
+                "settings",
+                "subscriptions",
+                "general",
+                "clientsLimitDescription"
+              ],
+              "چند به‌روزرسانی اخیر اشتراک (برنامه‌های کلاینت) برای هر کاربر نگه داشته شود. 0 یا کمتر یعنی همه نگه داشته شوند"
+            ],
+            [
+              [
+                "statistics.subscriptionDistributionRetentionNote"
+              ],
+              "به‌طور پیش‌فرض فقط {{limit}} به‌روزرسانی اخیر اشتراک برای هر کاربر نگه داشته می‌شود. این مقدار را در تنظیمات اشتراک تغییر دهید."
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "description"
+              ],
+              "Когда нода считается недоступной или снова рабочей"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "failThreshold",
+                "description"
+              ],
+              "Сколько неудачных проверок подряд нужно, чтобы нода получила статус ошибки"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "failThreshold",
+                "title"
+              ],
+              "Порог ошибок"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "maxBackoff",
+                "description"
+              ],
+              "Наибольшая пауза между проверками ноды в ошибке. 0 проверяет её при каждом запуске"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "maxBackoff",
+                "title"
+              ],
+              "Максимальная пауза (секунды)"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "probeTimeout",
+                "description"
+              ],
+              "Сколько проверка ждёт ответа ноды, не дольше собственного тайм-аута ноды"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "probeTimeout",
+                "title"
+              ],
+              "Тайм-аут проверки (секунды)"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "recoverThreshold",
+                "description"
+              ],
+              "Сколько успешных проверок подряд нужно, чтобы нода снова считалась подключённой"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "recoverThreshold",
+                "title"
+              ],
+              "Порог восстановления"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "title"
+              ],
+              "Проверки состояния нод"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "stopNodesOnShutdown",
+                "description"
+              ],
+              "Останавливать ядра всех нод при выключении панели. Только с одним воркером"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "stopNodesOnShutdown",
+                "title"
+              ],
+              "Останавливать ядра нод при выключении"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "description"
+              ],
+              "Выберите, какие данные об использовании сохраняет панель"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeStats",
+                "description"
+              ],
+              "Сохранять историю CPU, памяти и пропускной способности нод. Только PostgreSQL и TimescaleDB"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeStats",
+                "title"
+              ],
+              "Сохранять системную статистику нод"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeUsage",
+                "description"
+              ],
+              "Сохранять трафик по каждой ноде для пользователей и нод. Трафик пользователей и админов учитывается в любом случае"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeUsage",
+                "title"
+              ],
+              "Учитывать трафик по нодам"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "resetUsageCleanChartData",
+                "description"
+              ],
+              "Удалять историю графика трафика пользователя при сбросе его трафика"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "resetUsageCleanChartData",
+                "title"
+              ],
+              "Очищать графики при сбросе трафика"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "title"
+              ],
+              "Учёт трафика"
+            ],
+            [
+              [
+                "settings",
+                "subscriptions",
+                "general",
+                "clientsLimit"
+              ],
+              "Хранить обновлений на пользователя"
+            ],
+            [
+              [
+                "settings",
+                "subscriptions",
+                "general",
+                "clientsLimitDescription"
+              ],
+              "Сколько последних обновлений подписки (клиентских приложений) хранить для каждого пользователя. 0 или меньше хранит все"
+            ],
+            [
+              [
+                "statistics.subscriptionDistributionRetentionNote"
+              ],
+              "По умолчанию для каждого пользователя хранятся только последние {{limit}} обновлений подписки. Измените это в настройках подписки."
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "description"
+              ],
+              "节点何时被判定为离线或恢复"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "failThreshold",
+                "description"
+              ],
+              "连续失败多少次检查后将节点标记为错误"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "failThreshold",
+                "title"
+              ],
+              "失败阈值"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "maxBackoff",
+                "description"
+              ],
+              "处于错误状态的节点两次探测之间的最长间隔。0 表示每次检查都探测"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "maxBackoff",
+                "title"
+              ],
+              "最大退避（秒）"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "probeTimeout",
+                "description"
+              ],
+              "健康探测等待节点响应的时间，不会超过节点自身的超时"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "probeTimeout",
+                "title"
+              ],
+              "探测超时（秒）"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "recoverThreshold",
+                "description"
+              ],
+              "连续成功多少次检查后将节点重新标记为已连接"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "recoverThreshold",
+                "title"
+              ],
+              "恢复阈值"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "nodeHealth",
+                "title"
+              ],
+              "节点健康检查"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "stopNodesOnShutdown",
+                "description"
+              ],
+              "面板关闭时停止所有节点的核心。仅在单个 worker 时生效"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "stopNodesOnShutdown",
+                "title"
+              ],
+              "关闭时停止节点核心"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "description"
+              ],
+              "选择面板保存哪些用量数据"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeStats",
+                "description"
+              ],
+              "保存节点的 CPU、内存和带宽历史。仅支持 PostgreSQL 和 TimescaleDB"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeStats",
+                "title"
+              ],
+              "记录节点系统统计"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeUsage",
+                "description"
+              ],
+              "按节点保存用户和节点的流量。用户和管理员的用量始终会统计"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordNodeUsage",
+                "title"
+              ],
+              "记录节点用量"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "resetUsageCleanChartData",
+                "description"
+              ],
+              "重置用户流量时删除其用量图表历史"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "resetUsageCleanChartData",
+                "title"
+              ],
+              "重置用量时清除图表"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "title"
+              ],
+              "用量记录"
+            ],
+            [
+              [
+                "settings",
+                "subscriptions",
+                "general",
+                "clientsLimit"
+              ],
+              "每位用户保留的更新数"
+            ],
+            [
+              [
+                "settings",
+                "subscriptions",
+                "general",
+                "clientsLimitDescription"
+              ],
+              "每位用户保留多少条最近的订阅更新（客户端应用）。0 或更小表示全部保留"
+            ],
+            [
+              [
+                "statistics.subscriptionDistributionRetentionNote"
+              ],
+              "默认每位用户仅保留最近 {{limit}} 条订阅更新记录。可在订阅设置中修改。"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    },
+    {
+      "upstream": "b063e098e90e1aa25664cf4ae0af2f6a95a2fb1f",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "settings",
+                "cleanup",
+                "clearUsageData",
+                "tables",
+                "nodeOutboundUsages"
+              ],
+              "Node Outbound Usages"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordOutboundUsage",
+                "description"
+              ],
+              "Store traffic per outbound tag for each node to show the Outbound Usage chart. Adds rows to the database, more with many outbounds."
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordOutboundUsage",
+                "title"
+              ],
+              "Record usage per outbound"
+            ],
+            [
+              [
+                "statistics.outboundUsage"
+              ],
+              "Outbound Usage"
+            ],
+            [
+              [
+                "statistics.outboundUsageDescription"
+              ],
+              "Traffic per outbound tag (direct, warp, block, ...)"
+            ],
+            [
+              [
+                "statistics.outboundUsageEmpty"
+              ],
+              "No outbound usage in this period. It is recorded only while \"Record usage per outbound\" is on in Settings > General."
+            ],
+            [
+              [
+                "statistics.outboundUsageOther"
+              ],
+              "Other"
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "settings",
+                "cleanup",
+                "clearUsageData",
+                "tables",
+                "nodeOutboundUsages"
+              ],
+              "مصرف خروجی‌های گره"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordOutboundUsage",
+                "description"
+              ],
+              "ترافیک هر تگ خروجی برای هر گره ذخیره می‌شود تا نمودار مصرف خروجی‌ها نمایش داده شود. ردیف‌های بیشتری به پایگاه داده اضافه می‌کند، به‌ویژه با خروجی‌های زیاد."
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordOutboundUsage",
+                "title"
+              ],
+              "ثبت مصرف هر خروجی"
+            ],
+            [
+              [
+                "statistics.outboundUsage"
+              ],
+              "مصرف خروجی‌ها"
+            ],
+            [
+              [
+                "statistics.outboundUsageDescription"
+              ],
+              "ترافیک هر تگ خروجی (direct، warp، block و ...)"
+            ],
+            [
+              [
+                "statistics.outboundUsageEmpty"
+              ],
+              "در این بازه مصرف خروجی ثبت نشده است. این مصرف فقط زمانی ثبت می‌شود که «ثبت مصرف هر خروجی» در تنظیمات > عمومی روشن باشد."
+            ],
+            [
+              [
+                "statistics.outboundUsageOther"
+              ],
+              "سایر"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "settings",
+                "cleanup",
+                "clearUsageData",
+                "tables",
+                "nodeOutboundUsages"
+              ],
+              "Использование outbound узлов"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordOutboundUsage",
+                "description"
+              ],
+              "Сохранять трафик по каждому тегу outbound для каждого узла, чтобы показывать график. Добавляет строки в базу данных, больше при многих outbound."
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordOutboundUsage",
+                "title"
+              ],
+              "Учитывать трафик по outbound"
+            ],
+            [
+              [
+                "statistics.outboundUsage"
+              ],
+              "Использование outbound"
+            ],
+            [
+              [
+                "statistics.outboundUsageDescription"
+              ],
+              "Трафик по тегам outbound (direct, warp, block и т. д.)"
+            ],
+            [
+              [
+                "statistics.outboundUsageEmpty"
+              ],
+              "За этот период нет данных по outbound. Они записываются, только пока включено «Учитывать трафик по outbound» в Настройки > Общие."
+            ],
+            [
+              [
+                "statistics.outboundUsageOther"
+              ],
+              "Другое"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "settings",
+                "cleanup",
+                "clearUsageData",
+                "tables",
+                "nodeOutboundUsages"
+              ],
+              "节点出站使用情况"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordOutboundUsage",
+                "description"
+              ],
+              "为每个节点按出站标签保存流量，用于显示出站使用情况图表。会增加数据库行数，出站较多时更多。"
+            ],
+            [
+              [
+                "settings",
+                "general",
+                "usage",
+                "recordOutboundUsage",
+                "title"
+              ],
+              "按出站记录使用量"
+            ],
+            [
+              [
+                "statistics.outboundUsage"
+              ],
+              "出站使用情况"
+            ],
+            [
+              [
+                "statistics.outboundUsageDescription"
+              ],
+              "按出站标签统计的流量（direct、warp、block 等）"
+            ],
+            [
+              [
+                "statistics.outboundUsageEmpty"
+              ],
+              "此时间段内没有出站使用数据。仅在 设置 > 常规 中开启“按出站记录使用量”时才会记录。"
+            ],
+            [
+              [
+                "statistics.outboundUsageOther"
+              ],
+              "其他"
+            ]
+          ],
+          "removed": []
+        }
+      }
     }
   ]
 }
