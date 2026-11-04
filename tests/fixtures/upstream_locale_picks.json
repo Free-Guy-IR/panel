@@ -382,6 +382,1567 @@
           "removed": []
         }
       }
+    },
+    {
+      "upstream": "7f670cf30f62e30a4ab671bf3549fcbe768db703",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpPlaceholder"
+              ],
+              "e.g. <b 0d0a><t><r 24-48>"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udpHopLegacyHint"
+              ],
+              "Xray 26.9.9+ clients ignore this and use the udphop UDP mask; Hysteria2 links, sing-box and Clash still read it."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopLastLayerHint"
+              ],
+              "Must be the last UDP layer; cannot be combined with xicmp."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopMode"
+              ],
+              "Mode"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopRemoteIps"
+              ],
+              "Remote IPs"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopRemoteIpsPlaceholder"
+              ],
+              "e.g. 203.0.113.0/24"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopRemotePorts"
+              ],
+              "Remote ports"
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpPlaceholder"
+              ],
+              "مثلاً <b 0d0a><t><r 24-48>"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udpHopLegacyHint"
+              ],
+              "کلاینت‌های Xray 26.9.9+ این را نادیده می‌گیرند و از ماسک UDP به نام udphop استفاده می‌کنند؛ لینک‌های Hysteria2، sing-box و Clash همچنان آن را می‌خوانند."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopLastLayerHint"
+              ],
+              "باید آخرین لایه UDP باشد و با xicmp قابل ترکیب نیست."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopMode"
+              ],
+              "حالت"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopRemoteIps"
+              ],
+              "آی‌پی‌های مقصد"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopRemoteIpsPlaceholder"
+              ],
+              "مثلاً 203.0.113.0/24"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopRemotePorts"
+              ],
+              "پورت‌های مقصد"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpPlaceholder"
+              ],
+              "например <b 0d0a><t><r 24-48>"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udpHopLegacyHint"
+              ],
+              "Клиенты на Xray 26.9.9+ это игнорируют и используют UDP-маску udphop; ссылки Hysteria2, sing-box и Clash по-прежнему это читают."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopLastLayerHint"
+              ],
+              "Должен быть последним UDP-слоем; несовместим с xicmp."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopMode"
+              ],
+              "Режим"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopRemoteIps"
+              ],
+              "Удалённые IP"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopRemoteIpsPlaceholder"
+              ],
+              "например 203.0.113.0/24"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopRemotePorts"
+              ],
+              "Удалённые порты"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpPlaceholder"
+              ],
+              "例如 <b 0d0a><t><r 24-48>"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udpHopLegacyHint"
+              ],
+              "Xray 26.9.9+ 客户端会忽略此项并使用 udphop UDP 掩码；Hysteria2 链接、sing-box 和 Clash 仍会读取它。"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopLastLayerHint"
+              ],
+              "必须是最后一个 UDP 层，且不能与 xicmp 同时使用。"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopMode"
+              ],
+              "模式"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopRemoteIps"
+              ],
+              "远程 IP"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopRemoteIpsPlaceholder"
+              ],
+              "例如 203.0.113.0/24"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopRemotePorts"
+              ],
+              "远程端口"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    },
+    {
+      "upstream": "dba231e8d4398d6316f8c5e1e553458e8e07632c",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpVersionHint"
+              ],
+              "exp needs Xray 26.9.30 or newer (a pre-release); an older Xray rejects the whole config."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopVersionHint"
+              ],
+              "Needs Xray 26.9.9 or newer (a pre-release); an older Xray rejects the whole config."
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpVersionHint"
+              ],
+              "exp به Xray نسخه 26.9.30 یا جدیدتر (نسخه پیش‌انتشار) نیاز دارد؛ Xray قدیمی‌تر کل پیکربندی را رد می‌کند."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopVersionHint"
+              ],
+              "به Xray نسخه 26.9.9 یا جدیدتر (نسخه پیش‌انتشار) نیاز دارد؛ Xray قدیمی‌تر کل پیکربندی را رد می‌کند."
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpVersionHint"
+              ],
+              "exp требует Xray 26.9.30 или новее (предварительная версия); более старый Xray отклоняет всю конфигурацию."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopVersionHint"
+              ],
+              "Требуется Xray 26.9.9 или новее (предварительная версия); более старый Xray отклоняет всю конфигурацию."
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpVersionHint"
+              ],
+              "exp 需要 Xray 26.9.30 或更高版本（预发布版）；旧版 Xray 会拒绝整个配置。"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "udphopVersionHint"
+              ],
+              "需要 Xray 26.9.9 或更高版本（预发布版）；旧版 Xray 会拒绝整个配置。"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    },
+    {
+      "upstream": "73915839bf5f24134436856a940b8ebb57c7ba03",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseRandRange"
+              ],
+              "Random range"
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseRandRange"
+              ],
+              "بازه تصادفی"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseRandRange"
+              ],
+              "Случайный диапазон"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseRandRange"
+              ],
+              "随机范围"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    },
+    {
+      "upstream": "9480defb699d108a757ce04c0954fcbb3c3ba796",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsDomainsHint"
+              ],
+              "JSON objects, e.g. [{\"names\":[\"t.example.com\"]}]. Optional: lenLimit, labelLimit, types, edns0."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsExtraPoll"
+              ],
+              "Extra Poll (0–3)"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsInvalidArray"
+              ],
+              "Enter a JSON array of objects"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsResolversHint"
+              ],
+              "JSON objects, e.g. [{\"addrs\":[\"https://dns.example/dns-query\"],\"tlsConfig\":{}}]. Optional: worker, quicConfig. Use tlsConfig.alpn=[\"h3\"] for HTTP/3."
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsDomainsHint"
+              ],
+              "آرایه‌ای از اشیای JSON، مانند [{\"names\":[\"t.example.com\"]}]. اختیاری: lenLimit، labelLimit، types، edns0."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsExtraPoll"
+              ],
+              "Extra Poll (۰ تا ۳)"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsInvalidArray"
+              ],
+              "یک آرایهٔ JSON از اشیا وارد کنید"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsResolversHint"
+              ],
+              "آرایه‌ای از اشیای JSON، مانند [{\"addrs\":[\"https://dns.example/dns-query\"],\"tlsConfig\":{}}]. اختیاری: worker، quicConfig. برای HTTP/3 از tlsConfig.alpn=[\"h3\"] استفاده کنید."
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsDomainsHint"
+              ],
+              "Массив JSON-объектов, например [{\"names\":[\"t.example.com\"]}]. Дополнительно: lenLimit, labelLimit, types, edns0."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsExtraPoll"
+              ],
+              "Extra Poll (0–3)"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsInvalidArray"
+              ],
+              "Введите JSON-массив объектов"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsResolversHint"
+              ],
+              "Массив JSON-объектов, например [{\"addrs\":[\"https://dns.example/dns-query\"],\"tlsConfig\":{}}]. Дополнительно: worker, quicConfig. Для HTTP/3 задайте tlsConfig.alpn=[\"h3\"]."
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsDomainsHint"
+              ],
+              "JSON 对象数组，例如 [{\"names\":[\"t.example.com\"]}]。可选：lenLimit、labelLimit、types、edns0。"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsExtraPoll"
+              ],
+              "Extra Poll（0–3）"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsInvalidArray"
+              ],
+              "请输入 JSON 对象数组"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xdnsResolversHint"
+              ],
+              "JSON 对象数组，例如 [{\"addrs\":[\"https://dns.example/dns-query\"],\"tlsConfig\":{}}]。可选：worker、quicConfig。HTTP/3 使用 tlsConfig.alpn=[\"h3\"]。"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    },
+    {
+      "upstream": "796edfd896d8e0d6f76e1352b4c87f7383d65a04",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xicmpIpsHint"
+              ],
+              "Optional IP literals: client target addresses or server allowed source addresses. Supports multiple IPv4 and IPv6 addresses."
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xicmpIpsHint"
+              ],
+              "آدرس‌های IP اختیاری: مقصدهای کلاینت یا مبدأهای مجاز سرور. چند آدرس IPv4 و IPv6 پشتیبانی می‌شود."
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xicmpIpsHint"
+              ],
+              "Необязательные IP-адреса: адреса назначения клиента или разрешённые адреса источника сервера. Поддерживаются несколько IPv4 и IPv6 адресов."
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "xicmpIpsHint"
+              ],
+              "可选 IP 地址：客户端目标地址或服务端允许的来源地址。支持多个 IPv4 和 IPv6 地址。"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    },
+    {
+      "upstream": "5aa1415bbdebabc3063128fac09e619e2dc7a4fd",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "userDialog",
+                "proxySettings.masque"
+              ],
+              "MASQUE"
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "userDialog.proxySettings.masque"
+              ],
+              "MASQUE"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "userDialog",
+                "proxySettings.masque"
+              ],
+              "MASQUE"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "userDialog.proxySettings.masque"
+              ],
+              "MASQUE"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    },
+    {
+      "upstream": "1bf4af39b5bf98e071832a83cc08f9716abc74cb",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressInvalid"
+              ],
+              "Not an IP address or CIDR: {{values}}"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressNoPool"
+              ],
+              "No client subnet: the panel will not manage this inbound, so users get no WireGuard config from it."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressPoolHint"
+              ],
+              "Clients get IPs from subnets with room for 4 or more addresses (IPv4 /30 or wider, IPv6 /126 or wider). Bare IPs and /31, /32, /127, /128 stay in the Xray config but give no client pool."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "mtuHint"
+              ],
+              "576 to 9000. Leave empty for 1420."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "publicKeyHint"
+              ],
+              "Derived from the secret key. The panel puts it in client configs."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "publicKeyUnavailable"
+              ],
+              "Enter a valid secret key to see the public key."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "reserved"
+              ],
+              "Reserved"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "reservedHint"
+              ],
+              "Optional. Three bytes from 0 to 255 that clients put in every packet, for example 1, 2, 3 or [1,2,3]."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "mtuRange"
+              ],
+              "MTU must be a whole number from 576 to 9000."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "portSingle"
+              ],
+              "WireGuard needs one port from 1 to 65535."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "reservedFormat"
+              ],
+              "Reserved must be three numbers from 0 to 255, for example 1, 2, 3."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "secretKeyInvalid"
+              ],
+              "Secret key must be a 32-byte WireGuard key (base64 or 64 hex characters)."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsAddPlaceholder"
+              ],
+              "Add DNS server"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsHint"
+              ],
+              "IP addresses only. Read by Xray v26.9.8 and newer."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsInvalid"
+              ],
+              "DNS servers must be IP addresses: {{values}}"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsItems"
+              ],
+              "DNS servers"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsNotList"
+              ],
+              "DNS servers must be a list of IP addresses. Edit the list to save it as one."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "kernelModeHint"
+              ],
+              "Saved as noKernelTun. Kernel TUN needs Linux and CAP_NET_ADMIN; otherwise Xray uses userspace. Default behaves like Kernel TUN: Xray uses kernel TUN when supported, otherwise userspace."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "kernelModeKernel"
+              ],
+              "Kernel TUN"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "kernelModeUserspace"
+              ],
+              "Userspace (gVisor)"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "legacyFieldHint"
+              ],
+              "Only Xray {{lastRelease}} and older read this; {{removedIn}} removed it."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "noDns"
+              ],
+              "No DNS server added."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "reservedHint"
+              ],
+              "Three bytes from 0 to 255, for example 1, 2, 3 or [1,2,3]."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "reservedInvalid"
+              ],
+              "Reserved must be three numbers from 0 to 255, for example 1, 2, 3."
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressInvalid"
+              ],
+              "آدرس IP یا CIDR معتبر نیست: {{values}}"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressNoPool"
+              ],
+              "زیرشبکه‌ای برای کاربران نیست: پنل این ورودی را مدیریت نمی‌کند و کاربران از آن پیکربندی WireGuard نمی‌گیرند."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressPoolHint"
+              ],
+              "کاربران از زیرشبکه‌هایی IP می‌گیرند که دست‌کم 4 آدرس جا دارند (IPv4 با /30 یا بزرگ‌تر، IPv6 با /126 یا بزرگ‌تر). IPهای تکی و /31، /32، /127، /128 در پیکربندی Xray می‌مانند اما مخزن آدرسی برای کاربران نمی‌سازند."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "mtuHint"
+              ],
+              "از 576 تا 9000. برای 1420 خالی بگذارید."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "publicKeyHint"
+              ],
+              "از کلید محرمانه ساخته می‌شود. پنل آن را در پیکربندی کاربران قرار می‌دهد."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "publicKeyUnavailable"
+              ],
+              "برای دیدن کلید عمومی، یک کلید محرمانه معتبر وارد کنید."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "reserved"
+              ],
+              "Reserved"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "reservedHint"
+              ],
+              "اختیاری. سه بایت از 0 تا 255 که کاربران در هر بسته قرار می‌دهند، مثلاً 1, 2, 3 یا [1,2,3]."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "mtuRange"
+              ],
+              "MTU باید عددی صحیح از 576 تا 9000 باشد."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "portSingle"
+              ],
+              "WireGuard به یک پورت از 1 تا 65535 نیاز دارد."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "reservedFormat"
+              ],
+              "Reserved باید سه عدد از 0 تا 255 باشد، مثلاً 1, 2, 3."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "secretKeyInvalid"
+              ],
+              "کلید محرمانه باید یک کلید 32 بایتی WireGuard باشد (base64 یا 64 نویسه هگز)."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsAddPlaceholder"
+              ],
+              "افزودن سرور DNS"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsHint"
+              ],
+              "فقط آدرس IP. Xray نسخه v26.9.8 و جدیدتر آن را می‌خواند."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsInvalid"
+              ],
+              "سرورهای DNS باید آدرس IP باشند: {{values}}"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsItems"
+              ],
+              "سرورهای DNS"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsNotList"
+              ],
+              "سرورهای DNS باید فهرستی از آدرس‌های IP باشند. فهرست را ویرایش کنید تا به صورت فهرست ذخیره شود."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "kernelModeHint"
+              ],
+              "به صورت noKernelTun ذخیره می‌شود. TUN کرنل به لینوکس و CAP_NET_ADMIN نیاز دارد؛ در غیر این صورت Xray از فضای کاربر استفاده می‌کند. حالت پیش‌فرض مانند TUN کرنل رفتار می‌کند: Xray در صورت پشتیبانی از TUN کرنل استفاده می‌کند، در غیر این صورت از فضای کاربر."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "kernelModeKernel"
+              ],
+              "TUN کرنل"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "kernelModeUserspace"
+              ],
+              "فضای کاربر (gVisor)"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "legacyFieldHint"
+              ],
+              "فقط Xray {{lastRelease}} و نسخه‌های قدیمی‌تر این را می‌خوانند؛ در {{removedIn}} حذف شد."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "noDns"
+              ],
+              "هیچ سرور DNSی اضافه نشده است."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "reservedHint"
+              ],
+              "سه بایت از 0 تا 255، مثلاً 1, 2, 3 یا [1,2,3]."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "reservedInvalid"
+              ],
+              "Reserved باید سه عدد از 0 تا 255 باشد، مثلاً 1, 2, 3."
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressInvalid"
+              ],
+              "Не IP-адрес и не CIDR: {{values}}"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressNoPool"
+              ],
+              "Нет подсети для клиентов: панель не будет управлять этим входящим, и пользователи не получат из него конфигурацию WireGuard."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressPoolHint"
+              ],
+              "Клиенты получают IP из подсетей минимум на 4 адреса (IPv4 /30 и шире, IPv6 /126 и шире). Одиночные IP и /31, /32, /127, /128 остаются в конфигурации Xray, но не дают пула адресов для клиентов."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "mtuHint"
+              ],
+              "От 576 до 9000. Оставьте пустым для 1420."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "publicKeyHint"
+              ],
+              "Вычисляется из секретного ключа. Панель добавляет его в конфигурации клиентов."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "publicKeyUnavailable"
+              ],
+              "Введите корректный секретный ключ, чтобы увидеть публичный ключ."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "reserved"
+              ],
+              "Зарезервировано"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "reservedHint"
+              ],
+              "Необязательно. Три байта от 0 до 255, которые клиенты добавляют в каждый пакет, например 1, 2, 3 или [1,2,3]."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "mtuRange"
+              ],
+              "MTU должен быть целым числом от 576 до 9000."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "portSingle"
+              ],
+              "Для WireGuard нужен один порт от 1 до 65535."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "reservedFormat"
+              ],
+              "Поле «Зарезервировано» должно содержать три числа от 0 до 255, например 1, 2, 3."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "secretKeyInvalid"
+              ],
+              "Секретный ключ должен быть 32-байтным ключом WireGuard (base64 или 64 шестнадцатеричных символа)."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsAddPlaceholder"
+              ],
+              "Добавить DNS-сервер"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsHint"
+              ],
+              "Только IP-адреса. Поддерживается Xray v26.9.8 и новее."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsInvalid"
+              ],
+              "DNS-серверы должны быть IP-адресами: {{values}}"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsItems"
+              ],
+              "DNS-серверы"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsNotList"
+              ],
+              "DNS-серверы должны быть списком IP-адресов. Измените список, чтобы сохранить его как список."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "kernelModeHint"
+              ],
+              "Сохраняется как noKernelTun. Для TUN ядра нужны Linux и CAP_NET_ADMIN; иначе Xray работает в пользовательском режиме. Значение по умолчанию ведет себя как TUN ядра: Xray использует TUN ядра, если он поддерживается, иначе пользовательский режим."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "kernelModeKernel"
+              ],
+              "TUN ядра"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "kernelModeUserspace"
+              ],
+              "Пользовательский режим (gVisor)"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "legacyFieldHint"
+              ],
+              "Это поле читают только Xray {{lastRelease}} и более ранние версии; в {{removedIn}} оно удалено."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "noDns"
+              ],
+              "DNS-сервер не добавлен."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "reservedHint"
+              ],
+              "Три байта от 0 до 255, например 1, 2, 3 или [1,2,3]."
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "reservedInvalid"
+              ],
+              "Поле «Зарезервировано» должно содержать три числа от 0 до 255, например 1, 2, 3."
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressInvalid"
+              ],
+              "不是 IP 地址或 CIDR：{{values}}"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressNoPool"
+              ],
+              "没有客户端子网：面板不会管理此入站，用户也不会从中获得 WireGuard 配置。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "addressPoolHint"
+              ],
+              "客户端从至少容纳 4 个地址的子网获取 IP（IPv4 为 /30 或更大，IPv6 为 /126 或更大）。单个 IP 以及 /31、/32、/127、/128 会保留在 Xray 配置中，但不提供客户端地址池。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "mtuHint"
+              ],
+              "576 到 9000。留空则使用 1420。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "publicKeyHint"
+              ],
+              "由密钥推导得出，面板会将其写入客户端配置。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "publicKeyUnavailable"
+              ],
+              "输入有效的密钥后即可看到公钥。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "reserved"
+              ],
+              "保留值"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "reservedHint"
+              ],
+              "可选。客户端写入每个数据包的三个字节（0 到 255），例如 1, 2, 3 或 [1,2,3]。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "mtuRange"
+              ],
+              "MTU 必须是 576 到 9000 之间的整数。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "portSingle"
+              ],
+              "WireGuard 需要一个 1 到 65535 之间的端口。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "reservedFormat"
+              ],
+              "保留值必须是三个 0 到 255 之间的数字，例如 1, 2, 3。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "wireguard",
+                "validation",
+                "secretKeyInvalid"
+              ],
+              "密钥必须是 32 字节的 WireGuard 密钥（base64 或 64 个十六进制字符）。"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsAddPlaceholder"
+              ],
+              "添加 DNS 服务器"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsHint"
+              ],
+              "仅限 IP 地址。Xray v26.9.8 及更新版本读取此项。"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsInvalid"
+              ],
+              "DNS 服务器必须是 IP 地址：{{values}}"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsItems"
+              ],
+              "DNS 服务器"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "dnsNotList"
+              ],
+              "DNS 服务器必须是 IP 地址列表。编辑列表即可将其保存为列表。"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "kernelModeHint"
+              ],
+              "保存为 noKernelTun。内核 TUN 需要 Linux 和 CAP_NET_ADMIN，否则 Xray 使用用户态。默认行为与内核 TUN 相同：Xray 在支持时使用内核 TUN，否则使用用户态。"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "kernelModeKernel"
+              ],
+              "内核 TUN"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "kernelModeUserspace"
+              ],
+              "用户态 (gVisor)"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "legacyFieldHint"
+              ],
+              "仅 Xray {{lastRelease}} 及更早版本读取此项；{{removedIn}} 已将其移除。"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "noDns"
+              ],
+              "未添加 DNS 服务器。"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "reservedHint"
+              ],
+              "三个 0 到 255 之间的字节，例如 1, 2, 3 或 [1,2,3]。"
+            ],
+            [
+              [
+                "coreEditor",
+                "outbound",
+                "wireguard",
+                "reservedInvalid"
+              ],
+              "保留值必须是三个 0 到 255 之间的数字，例如 1, 2, 3。"
+            ]
+          ],
+          "removed": []
+        }
+      }
     }
   ]
 }
