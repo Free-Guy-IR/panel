@@ -1,7 +1,7 @@
 import ast
 import pathlib
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -342,3 +342,81 @@ async def test_hwid_actions_reach_a_user_every_scope_allows(
         assert (result.count, result.hwids) == (0, [])
     else:
         assert result == expected
+
+
+ALLOWED_GROUP_ID = 5
+
+HWID_ACTIONS = [
+    pytest.param("get_user_hwids", (), "get_user_hwids", [], 2, id="read"),
+    pytest.param("delete_user_hwid", ("hwid",), "delete_user_hwid", True, 3, id="delete"),
+    pytest.param("reset_user_hwids", (), "reset_user_hwids", 0, 3, id="reset"),
+]
+
+
+def _group_restricted_admin() -> AdminDetails:
+    return AdminDetails(
+        id=7,
+        username="reseller",
+        role=AdminRoleData(
+            id=3,
+            name="reseller",
+            is_owner=False,
+            permissions={
+                "users": {"read": {"scope": 2}, "delete": {"scope": 2}},
+                "hwids": {"read": {"scope": 2}, "delete": {"scope": 2}},
+            },
+            access={"allowed_group_ids": [ALLOWED_GROUP_ID]},
+        ),
+    )
+
+
+def _db_where_user_is_in_allowed_group(is_member: bool) -> AsyncMock:
+    db = AsyncMock()
+    db.execute.return_value = MagicMock(first=MagicMock(return_value=(1,) if is_member else None))
+    return db
+
+
+def _membership_query_groups(db) -> list[list[int]]:
+    return [
+        next(value for value in call.args[0].compile().params.values() if isinstance(value, list))
+        for call in db.execute.await_args_list
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method, args, crud, crud_result, lookups", HWID_ACTIONS)
+async def test_hwid_actions_hide_users_outside_the_admin_groups(method, args, crud, crud_result, lookups):
+    op = HWIDOperation(OperatorType.API)
+    admin = _group_restricted_admin()
+    db = _db_where_user_is_in_allowed_group(False)
+
+    with (
+        patch("app.operation.get_user_by_id", new_callable=AsyncMock, side_effect=_user_owned_by(FOREIGN_OWNER_ID)),
+        patch(f"app.operation.hwid.{crud}", new_callable=AsyncMock, return_value=crud_result) as hwid_crud,
+        patch("app.operation.hwid._clear_connection_state", new_callable=AsyncMock) as clear_state,
+        pytest.raises(HTTPException) as exc,
+    ):
+        await getattr(op, method)(db, 1, *args, admin)
+
+    assert (exc.value.status_code, exc.value.detail) == (404, "User not found")
+    assert _membership_query_groups(db) == [[ALLOWED_GROUP_ID]]
+    hwid_crud.assert_not_awaited()
+    clear_state.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method, args, crud, crud_result, lookups", HWID_ACTIONS)
+async def test_hwid_actions_reach_users_inside_the_admin_groups(method, args, crud, crud_result, lookups):
+    op = HWIDOperation(OperatorType.API)
+    admin = _group_restricted_admin()
+    db = _db_where_user_is_in_allowed_group(True)
+
+    with (
+        patch("app.operation.get_user_by_id", new_callable=AsyncMock, side_effect=_user_owned_by(FOREIGN_OWNER_ID)),
+        patch(f"app.operation.hwid.{crud}", new_callable=AsyncMock, return_value=crud_result) as hwid_crud,
+        patch("app.operation.hwid._clear_connection_state", new_callable=AsyncMock),
+    ):
+        await getattr(op, method)(db, 1, *args, admin)
+
+    assert _membership_query_groups(db) == [[ALLOWED_GROUP_ID]] * lookups
+    hwid_crud.assert_awaited_once()

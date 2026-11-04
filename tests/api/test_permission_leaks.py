@@ -7,6 +7,7 @@ from fastapi import status
 from sqlalchemy import select
 
 from app.db.crud.admin import build_admin_details, get_admin_by_id
+from app.db.crud.hwid import register_user_hwid
 from app.db.models import Admin
 from app.models.admin import hash_password
 from app.models.user import UserListQuery
@@ -417,6 +418,79 @@ def test_hwid_endpoints_only_reach_users_the_admin_can_see(scoped_actor, method,
 
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.json()["detail"] == "User not found"
+
+
+SEEDED_HWID = "seeded-device"
+
+
+async def _seed_hwid(user_id: int) -> None:
+    async with TestSession() as session:
+        await register_user_hwid(session, user_id, SEEDED_HWID)
+        await session.commit()
+
+
+def _stored_hwids(access_token: str, user_id: int) -> list[str]:
+    response = client.get(f"/api/user/{user_id}/hwids", headers=auth_headers(access_token))
+    assert response.status_code == status.HTTP_200_OK, response.text
+    return [item["hwid"] for item in response.json()["hwids"]]
+
+
+@pytest.fixture
+def group_restricted_hwid_actor(access_token):
+    core = create_core(access_token)
+    allowed_group = create_group(access_token)
+    hidden_group = create_group(access_token)
+    role = _create_role(
+        access_token,
+        {"users": {"read": SCOPE_ALL, "delete": SCOPE_ALL}, "hwids": {"read": True, "delete": True}},
+        access={"allowed_group_ids": [allowed_group["id"]]},
+    )
+    actor = create_admin(access_token, role_id=role["id"])
+    users = []
+    try:
+        visible = create_user(access_token, group_ids=[allowed_group["id"]])
+        users.append(visible)
+        hidden = create_user(access_token, group_ids=[hidden_group["id"]])
+        users.append(hidden)
+        for user in users:
+            asyncio.run(_seed_hwid(user["id"]))
+        yield {"token": _login(actor["username"], actor["password"]), "visible": visible, "hidden": hidden}
+    finally:
+        for user in users:
+            client.post(f"/api/user/{user['id']}/hwids/reset", headers=auth_headers(access_token))
+            client.delete(f"/api/user/by-id/{user['id']}", headers=auth_headers(access_token))
+        delete_admin(access_token, actor["username"])
+        _delete_role(access_token, role["id"])
+        for group in (allowed_group, hidden_group):
+            delete_group(access_token, group["id"])
+        delete_core(access_token, core["id"])
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "visible_hwids_after"),
+    [
+        pytest.param("GET", "/api/user/{user_id}/hwids", [SEEDED_HWID], id="list-hidden-group"),
+        pytest.param("DELETE", f"/api/user/{{user_id}}/hwids/{SEEDED_HWID}", [], id="delete-hidden-group"),
+        pytest.param("POST", "/api/user/{user_id}/hwids/reset", [], id="reset-hidden-group"),
+    ],
+)
+def test_hwid_endpoints_only_reach_users_in_the_admin_groups(
+    access_token, group_restricted_hwid_actor, method, path, visible_hwids_after
+):
+    context = group_restricted_hwid_actor
+    headers = auth_headers(context["token"])
+    hidden_id, visible_id = context["hidden"]["id"], context["visible"]["id"]
+
+    hidden = client.request(method, path.format(user_id=hidden_id), headers=headers)
+
+    assert hidden.status_code == status.HTTP_404_NOT_FOUND
+    assert hidden.json()["detail"] == "User not found"
+    assert _stored_hwids(access_token, hidden_id) == [SEEDED_HWID]
+
+    visible = client.request(method, path.format(user_id=visible_id), headers=headers)
+
+    assert visible.status_code == status.HTTP_200_OK, visible.text
+    assert _stored_hwids(access_token, visible_id) == visible_hwids_after
 
 
 # --- Group / template access lists ---
