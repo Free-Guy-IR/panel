@@ -578,3 +578,20 @@ def test_a_list_item_whose_class_lookup_raises_is_still_scrubbed():
     record = _scrubbed(_record("password=%s %s", (SECRET, [_Broken()])))
     assert SECRET not in record.getMessage()
     assert SECRET not in repr(record.args)
+
+
+@pytest.mark.parametrize(
+    ("message", "secret_argument"),
+    [("x%s %s", "password=" + SECRET), ("id%s %s", "pwd: " + SECRET), ("x%(a)s %(b)s", "password=" + SECRET)],
+)
+def test_freezing_that_raises_masks_every_argument_even_beside_glued_template_text(message, secret_argument):
+    class _Broken:
+        __class__ = property(lambda self: 1 / 0)
+
+        def __repr__(self) -> str:
+            return "Broken()"
+
+    args = {"a": secret_argument, "b": [_Broken()]} if "%(" in message else (secret_argument, [_Broken()])
+    record = _scrubbed(_record(message, (args,) if isinstance(args, dict) else args))
+    assert SECRET not in record.getMessage()
+    assert SECRET not in repr(record.args)

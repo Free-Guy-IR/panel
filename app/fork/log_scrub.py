@@ -155,17 +155,22 @@ def _directives(message: str) -> list[tuple[str | None, str]]:
     return found
 
 
-def _frozen_arguments(message: str, arguments: object) -> tuple | dict:
+def _frozen_arguments(message: str, arguments: object, freeze=None) -> tuple | dict:
+    freeze = freeze or _frozen
     directives = _directives(message)
     if isinstance(arguments, Mapping) and (not directives or any(key is not None for key, _ in directives)):
         conversions: dict = {}
         for key, conversion in directives:
             conversions.setdefault(key, set()).add(conversion)
-        return {key: _frozen(value, conversions.get(key, {"s"})) for key, value in arguments.items()}
+        return {key: freeze(value, conversions.get(key, {"s"})) for key, value in arguments.items()}
     positional = arguments if isinstance(arguments, tuple) else (arguments,)
     if len(directives) != len(positional):
-        return tuple(_frozen(argument, {"r"}) for argument in positional)
-    return tuple(_frozen(argument, {conversion}) for argument, (_, conversion) in zip(positional, directives))
+        return tuple(freeze(argument, {"r"}) for argument in positional)
+    return tuple(freeze(argument, {conversion}) for argument, (_, conversion) in zip(positional, directives))
+
+
+def _fully_masked(argument: object, conversions: set[str]) -> object:
+    return _FrozenText(_MASK)
 
 
 def _text_of(value: object) -> str:
@@ -188,6 +193,10 @@ def _scrub_message(record: logging.LogRecord) -> None:
         return
     try:
         arguments = _frozen_arguments(message, record.args)
+    except Exception:
+        _mask_every_argument(record, message)
+        return
+    try:
         rendered = message % arguments
     except Exception:
         record.msg, record.args = scrub_credentials(first), None
@@ -203,10 +212,23 @@ def _scrub_message(record: logging.LogRecord) -> None:
     else:
         masked = tuple(_masked(argument, renders) for argument in arguments)
     text = scrubbed if original == scrubbed else _template_with_masked_arguments(message, masked)
+    _store_masked(record, text, masked)
+
+
+def _store_masked(record: logging.LogRecord, text: str, masked: tuple | dict) -> None:
     if isinstance(masked, dict):
         record.msg, record.args = text.replace("%", "%%"), masked
     else:
         record.msg, record.args = text.replace("%", "%%") + "%.0s" * len(masked), masked
+
+
+def _mask_every_argument(record: logging.LogRecord, message: str) -> None:
+    try:
+        masked = _frozen_arguments(message, record.args, _fully_masked)
+    except Exception:
+        record.msg, record.args = _MASK, None
+        return
+    _store_masked(record, _template_with_masked_arguments(message, masked), masked)
 
 
 def _template_with_masked_arguments(message: str, masked: tuple | dict) -> str:
