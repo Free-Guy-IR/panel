@@ -1739,10 +1739,11 @@ def later_hunk_brought(fork_sha, path, hunk):
         if split is None:
             continue
         lines = normalised_file(ref, path)
-        if lines is None or not any(
-            core_at_spot(lines, i, split) and all(i + offset in changes for offset in changed_offsets(path, side))
-            for i in range(len(lines) - len(split[1]) + 1)
-        ):
+        if lines is None:
+            return False
+        spots = [i for i in range(len(lines) - len(split[1]) + 1) if core_at_spot(lines, i, split)]
+        offsets = changed_offsets(path, side)
+        if len(spots) != 1 or not all(spots[0] + offset in changes for offset in offsets):
             return False
     return True
 
@@ -1750,7 +1751,7 @@ def later_hunk_brought(fork_sha, path, hunk):
 def core_at_spot(lines, i, split):
     before, core, after = split
     end = i + len(core)
-    if lines[i:end] != core:
+    if tuple(lines[i:end]) != core:
         return False
     if (lines[i - 1] if i > 0 else None) != (before[-1] if before else None):
         return False
