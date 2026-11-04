@@ -1702,6 +1702,57 @@ def superseding_pick(reason, head, upstream_sha):
     return None
 
 
+@functools.lru_cache(maxsize=256)
+def ported_later_changes(upstream_sha, head, path):
+    changes = []
+    for record in git("log", "--no-merges", "--format=%H%x1f%B%x1e", head, "--", path).split("\x1e"):
+        fork_sha, _, body = record.strip().partition("\x1f")
+        if not fork_sha:
+            continue
+        laters = set(CHERRY_PICK_RE.findall(body)) | set(UPSTREAM_TRAILER_RE.findall(body))
+        for later in sorted(laters - {upstream_sha, fork_sha}):
+            if not commit_exists(later) or not on_upstream_ref(later) or not is_ancestor(upstream_sha, later):
+                continue
+            if on_upstream_ref(fork_sha):
+                continue
+            removed = commit_line_texts(later, path, "-")
+            if not removed or paths_bringing_upstream_change(later, fork_sha, {path}) != {path}:
+                continue
+            _, missing = own_lines_missing(fork_sha, head, {path})
+            if not missing:
+                changes.append((frozenset(removed), frozenset(commit_line_texts(later, path, "+") or ())))
+    return tuple(changes)
+
+
+def superseded_block_in_place(lines, path, side, removed, inserted):
+    marked = [(text, changed) for text, changed in ((normalise_line(path, t), c) for t, c in side) if text]
+    kept = [text for text, _ in marked if text not in removed]
+    if lines is None or not kept or len(kept) == len(marked):
+        return False
+    if not any(changed and text in removed for text, changed in marked):
+        return False
+    for start in range(len(lines)):
+        if lines[start] != kept[0]:
+            continue
+        index = start + 1
+        for text in kept[1:]:
+            while index < len(lines) and lines[index] != text and lines[index] in inserted:
+                index += 1
+            if index >= len(lines) or lines[index] != text:
+                break
+            index += 1
+        else:
+            return True
+    return False
+
+
+def superseded_by_ported_later(upstream_sha, head, path, hunk, here):
+    return any(
+        superseded_block_in_place(here, path, hunk["post"], removed, added)
+        for removed, added in ported_later_changes(upstream_sha, head, path)
+    )
+
+
 @functools.lru_cache(maxsize=4096)
 def resolve_commit(token):
     result = subprocess.run(
@@ -2775,6 +2826,13 @@ def security_design_problems(reason, head, upstream_sha, decision_covers):
         seen.add(ident)
         here = normalised_file(head, path)
         absent = (check_post and not block_in_place(here, post)) or (check_pre and block_in_place(here, pre))
+        if (
+            absent
+            and check_post
+            and any(hunk_brought(sha, hunk) for sha in carriers)
+            and superseded_by_ported_later(upstream_sha, head, path, hunk, here)
+        ):
+            absent = False
         brought = not absent and any(hunk_brought(sha, hunk) for sha in carriers)
         carried += brought
         if ident in named:
