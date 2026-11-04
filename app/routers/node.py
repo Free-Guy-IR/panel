@@ -160,10 +160,10 @@ async def get_usage(
 async def get_outbound_usage(
     query: Annotated[NodeOutboundUsageQuery, Depends(get_node_outbound_usage_query)],
     db: AsyncSession = Depends(get_db),
-    _: AdminDetails = Depends(require_permission("nodes", "stats")),
+    admin: AdminDetails = Depends(require_permission("nodes", "stats")),
 ):
     """Retrieve usage per outbound tag, over all nodes or one, within a date range."""
-    return await node_operator.get_outbound_usage(db=db, query=query)
+    return await node_operator.get_outbound_usage(db=db, query=query, admin=admin)
 
 
 @router.get("/user_counts/{metric}", response_model=UserCountMetricStatsList)

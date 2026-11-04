@@ -1452,6 +1452,7 @@ def test_get_outbound_usage_passes_filters(access_token, node_operator_mock):
     assert response.json() == usage.model_dump(mode="json")
 
     query = node_operator_mock.get_outbound_usage.await_args.kwargs["query"]
+    assert node_operator_mock.get_outbound_usage.await_args.kwargs["admin"].username == "testadmin"
     assert query.node_id == 5
     assert query.period == Period.day
     assert query.start == start

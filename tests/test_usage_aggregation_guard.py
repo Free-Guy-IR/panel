@@ -8,12 +8,15 @@ from sqlalchemy import column, select, table
 from sqlalchemy.dialects import mysql
 from sqlalchemy.exc import OperationalError
 
+import app.operation.node as node_operation
 import app.operation.user as user_operation
 from app.fork.operation import usage_guard
 from app.models.admin import AdminDetails, AdminRoleData
+from app.models.node import NodeOutboundUsageQuery, NodeUsageQuery
 from app.models.stats import Period
 from app.models.user import UsersUsageBreakdownQuery
 from app.operation import OperatorType
+from app.operation.node import NodeOperation
 from app.operation.user import UserOperation
 
 USAGE = table("node_user_usages", column("used_traffic"))
@@ -136,3 +139,104 @@ async def test_the_usage_chart_and_the_count_chart_of_one_admin_load_side_by_sid
     assert await operation.get_users_count_metric(None, _owner(1), "online", _query()) == "count"
     released.set()
     assert await usage == "usage"
+
+
+def _outbound_query() -> NodeOutboundUsageQuery:
+    now = datetime.now(UTC)
+    return NodeOutboundUsageQuery(start=now - timedelta(days=1), end=now, period=Period.hour)
+
+
+def _outbound_call(operation: NodeOperation, admin_id: int | None):
+    if admin_id is None:
+        return operation.get_outbound_usage(None, _outbound_query())
+    return operation.get_outbound_usage(None, _outbound_query(), admin=_owner(admin_id))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("admin_id", [1, None])
+async def test_a_second_outbound_usage_aggregation_for_the_same_admin_is_refused_while_the_first_runs(
+    monkeypatch, admin_id
+):
+    started = asyncio.Event()
+    released = asyncio.Event()
+    running = 0
+    peak = 0
+
+    async def slow_outbound(*_args, **_kwargs):
+        nonlocal running, peak
+        running += 1
+        peak = max(peak, running)
+        started.set()
+        try:
+            await released.wait()
+        finally:
+            running -= 1
+        return "outbound"
+
+    monkeypatch.setattr(node_operation, "get_nodes_outbound_usage", slow_outbound)
+    operation = NodeOperation(OperatorType.API)
+
+    first = asyncio.create_task(_outbound_call(operation, admin_id))
+    try:
+        await asyncio.wait_for(started.wait(), timeout=5)
+        piled = [asyncio.create_task(_outbound_call(operation, admin_id)) for _ in range(5)]
+        done, pending = await asyncio.wait(piled, timeout=1)
+        assert peak == 1
+        assert not pending
+        for task in done:
+            with pytest.raises(HTTPException) as refused:
+                task.result()
+            assert refused.value.status_code == 429
+
+        other_admin = asyncio.create_task(_outbound_call(operation, 2))
+        await asyncio.sleep(0)
+    finally:
+        released.set()
+    assert await first == "outbound"
+    assert await other_admin == "outbound"
+    assert peak == 2
+    assert await _outbound_call(operation, admin_id) == "outbound"
+
+
+@pytest.mark.asyncio
+async def test_the_node_usage_chart_and_the_outbound_chart_of_one_admin_load_side_by_side(monkeypatch):
+    started = asyncio.Event()
+    released = asyncio.Event()
+
+    async def slow_outbound(*_args, **_kwargs):
+        started.set()
+        await released.wait()
+        return "outbound"
+
+    async def quick_usage(*_args, **_kwargs):
+        return "usage"
+
+    monkeypatch.setattr(node_operation, "get_nodes_outbound_usage", slow_outbound)
+    monkeypatch.setattr(node_operation, "get_nodes_usage", quick_usage)
+    operation = NodeOperation(OperatorType.API)
+    now = datetime.now(UTC)
+    node_query = NodeUsageQuery(start=now - timedelta(days=1), end=now, period=Period.hour)
+
+    outbound = asyncio.create_task(operation.get_outbound_usage(None, _outbound_query(), admin=_owner(1)))
+    await asyncio.wait_for(started.wait(), timeout=5)
+    assert await operation.get_usage(None, node_query, admin=_owner(1)) == "usage"
+    released.set()
+    assert await outbound == "outbound"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_outbound_aggregation_frees_the_admin_slot(monkeypatch):
+    calls = 0
+
+    async def failing_then_ok(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("database gone")
+        return "outbound"
+
+    monkeypatch.setattr(node_operation, "get_nodes_outbound_usage", failing_then_ok)
+    operation = NodeOperation(OperatorType.API)
+    with pytest.raises(RuntimeError):
+        await operation.get_outbound_usage(None, _outbound_query(), admin=_owner(1))
+    assert await operation.get_outbound_usage(None, _outbound_query(), admin=_owner(1)) == "outbound"

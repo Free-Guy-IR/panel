@@ -940,9 +940,11 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         self,
         db: AsyncSession,
         query: NodeOutboundUsageQuery,
+        admin: AdminDetails | None = None,
     ) -> NodeOutboundUsageStatsList:
         start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
-        return await get_nodes_outbound_usage(db, start, end, period=query.period, node_id=query.node_id)
+        async with usage_aggregation_guard(("nodes_outbound_usage", admin.id if admin else None)):
+            return await get_nodes_outbound_usage(db, start, end, period=query.period, node_id=query.node_id)
 
     async def get_user_count_metric(
         self,
