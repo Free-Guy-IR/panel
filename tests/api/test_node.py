@@ -534,7 +534,7 @@ async def test_current_state_reads_at_burst_scale_use_few_indexed_statements(mon
 
     event.listen(engine.sync_engine, "before_cursor_execute", before_cursor_execute)
     monkeypatch.setattr(node_sync, "GetDB", GetTestDB)
-    reader = node_sync.CurrentStateReader(gather_seconds=0.005, max_ids_per_query=400)
+    reader = node_sync.CurrentStateReader(gather_seconds=0.005, max_ids_per_query=400, query_timeout=300.0)
     monkeypatch.setattr(node_sync, "_current_state", reader)
     try:
         # Same 100 users delivered to 12 nodes at once (one API burst fanning out).
