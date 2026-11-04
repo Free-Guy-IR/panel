@@ -4,7 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import OperationalError
 
 from app.db.crud.node import remove_node, reset_node_usage
@@ -282,8 +282,14 @@ async def test_a_node_deleted_inside_the_write_transaction_after_the_existence_c
     monkeypatch: pytest.MonkeyPatch, session_factory
 ):
     async with session_factory() as session:
-        if session.bind.dialect.name == "sqlite":
-            pytest.skip("needs a real database with row locks and concurrent writers")
+        dialect_name = session.bind.dialect.name
+    if dialect_name == "sqlite":
+        pytest.skip("needs a real database with row locks and concurrent writers")
+    lock_waits_sql = text(
+        "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'"
+        if dialect_name == "postgresql"
+        else "SELECT count(*) FROM information_schema.innodb_trx WHERE trx_state = 'LOCK WAIT'"
+    )
     doomed_id, kept_id = await _seed_two_nodes(session_factory)
     samples = {
         doomed_id: [{"tag": "direct", "up": 3, "down": 4}],
@@ -307,12 +313,18 @@ async def test_a_node_deleted_inside_the_write_transaction_after_the_existence_c
     real_run = record_usages.run_in_retried_transaction
     deletes: list[asyncio.Task] = []
     attempts = {"n": 0}
+    delete_blocked_inside_the_write = []
 
     async def delete_once_after_the_existence_check():
         if deletes:
             return
         deletes.append(asyncio.create_task(_delete_node(session_factory, doomed_id)))
-        await asyncio.sleep(1.5)
+        for _ in range(50):
+            await asyncio.sleep(0.1)
+            async with session_factory() as probe:
+                if (await probe.execute(lock_waits_sql)).scalar_one() > 0:
+                    delete_blocked_inside_the_write.append(not deletes[0].done())
+                    return
 
     async def run_with_a_concurrent_delete(operation, *args, **kwargs):
         async def paused(conn):
@@ -325,6 +337,7 @@ async def test_a_node_deleted_inside_the_write_transaction_after_the_existence_c
 
     await asyncio.wait_for(record_usages.record_node_usages(), timeout=30)
     assert len(deletes) == 1
+    assert delete_blocked_inside_the_write == [True]
     await asyncio.wait_for(deletes[0], timeout=30)
 
     assert record_usages._retained_node_usage == []
