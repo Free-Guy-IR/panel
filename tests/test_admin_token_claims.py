@@ -69,3 +69,10 @@ async def test_an_out_of_range_iat_is_rejected_instead_of_crashing(monkeypatch, 
     monkeypatch.setattr(jwt_utils.jwt_settings, "access_token_expire_minutes", 0)
     assert jwt.decode(_token(iat=iat), SECRET, algorithms=["HS256"])["iat"] == iat
     assert await jwt_utils.get_admin_payload(_token(iat=iat)) is None
+
+
+@pytest.mark.parametrize("iat", [[1700000000], {"t": 1700000000}, "1700000000"])
+@pytest.mark.asyncio
+async def test_a_non_numeric_iat_is_rejected_instead_of_crashing(monkeypatch, iat):
+    monkeypatch.setattr(jwt_utils.jwt_settings, "access_token_expire_minutes", 0)
+    assert await jwt_utils.get_admin_payload(_token(iat=iat)) is None
