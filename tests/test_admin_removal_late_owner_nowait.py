@@ -27,15 +27,17 @@ async def _production_sized_user_table(recorder_db) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("table", ["tiny", "production_sized"])
 @pytest.mark.parametrize("mover", ["set_owner", "bulk_set_owner"])
 async def test_a_user_carried_onto_a_removed_admin_between_its_passes_and_moved_away_never_deadlocks(
-    monkeypatch: pytest.MonkeyPatch, recorder_db, mover
+    monkeypatch: pytest.MonkeyPatch, recorder_db, mover, table
 ):
     gone, gone_ids, _ = await seed_users_and_nodes(recorder_db, user_count=2, node_count=0)
     away, (late,), _ = await seed_users_and_nodes(recorder_db, user_count=1, node_count=0)
     target, target_ids, _ = await seed_users_and_nodes(recorder_db, user_count=1, node_count=0)
     everyone = [*gone_ids, late, *target_ids]
-    await _production_sized_user_table(recorder_db)
+    if table == "production_sized":
+        await _production_sized_user_table(recorder_db)
     async with recorder_db() as session:
         await session.execute(update(User).where(User.id.in_(everyone)).values(used_traffic=0))
         await session.execute(update(Admin).where(Admin.id.in_([gone, away, target])).values(used_traffic=0))
