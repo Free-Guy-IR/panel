@@ -13,35 +13,46 @@ from app.models.settings import SettingsSchema, SettingsSchemaInput
 
 PASSWORD = "s" + "3" + "cr" + "et" + "PW"
 PUNYCODE = "xn--bcher-kva.example"
+UPPERCASE_PUNYCODE = "XN--BCHER-KVA.example"
+
+
+def _with_userinfo(scheme: str, userinfo: str, host_and_port: str) -> str:
+    return f"{scheme}://{userinfo}@{host_and_port}"
+
+
 UNUSABLE = [
-    pytest.param(f"http://us\\er:{PASSWORD}@proxy.example.com:9", id="backslash-in-user"),
-    pytest.param(f"http://user:{PASSWORD}\\x@proxy.example.com:9", id="backslash-in-password"),
-    pytest.param(f"http://us]er:s3c[{PASSWORD}@proxy.example.com:9", id="bracket-user-and-password"),
-    pytest.param(f"socks5://us\\er:{PASSWORD}@proxy.example.com:1080", id="backslash-socks5"),
-    pytest.param(f"http://us/er:{PASSWORD}@proxy.example.com:9", id="slash-sends-to-another-host"),
-    pytest.param(f"http://us?er:{PASSWORD}@proxy.example.com:9", id="question-mark-sends-to-another-host"),
-    pytest.param(f"http://us#er:{PASSWORD}@proxy.example.com:9", id="hash-sends-to-another-host"),
-    pytest.param(f"http://user:{PASSWORD}@proxy.example.com:3128\n", id="trailing-newline"),
-    pytest.param(f"http://user:{PASSWORD}@proxy.example.com:٣١٢٨", id="arabic-indic-port"),
-    pytest.param(f"socks5://user:{PASSWORD}@proxy.example.com:١٠٨٠", id="arabic-indic-socks-port"),
+    pytest.param(_with_userinfo("http", f"us\\er:{PASSWORD}", "proxy.example.com:9"), id="backslash-in-user"),
+    pytest.param(_with_userinfo("http", f"user:{PASSWORD}\\x", "proxy.example.com:9"), id="backslash-in-password"),
+    pytest.param(
+        _with_userinfo("http", f"us]er:s3c[{PASSWORD}", "proxy.example.com:9"), id="bracket-user-and-password"
+    ),
+    pytest.param(_with_userinfo("socks5", f"us\\er:{PASSWORD}", "proxy.example.com:1080"), id="backslash-socks5"),
+    pytest.param(_with_userinfo("http", f"us/er:{PASSWORD}", "proxy.example.com:9"), id="slash-sends-to-another-host"),
+    pytest.param(
+        _with_userinfo("http", f"us?er:{PASSWORD}", "proxy.example.com:9"), id="question-mark-sends-to-another-host"
+    ),
+    pytest.param(_with_userinfo("http", f"us#er:{PASSWORD}", "proxy.example.com:9"), id="hash-sends-to-another-host"),
+    pytest.param(_with_userinfo("http", f"user:{PASSWORD}", "proxy.example.com:3128\n"), id="trailing-newline"),
+    pytest.param(_with_userinfo("http", f"user:{PASSWORD}", "proxy.example.com:٣١٢٨"), id="arabic-indic-port"),
+    pytest.param(_with_userinfo("socks5", f"user:{PASSWORD}", "proxy.example.com:١٠٨٠"), id="arabic-indic-socks-port"),
 ]
 USABLE = [
     "http://proxy.example.com:8080",
     "https://proxy.example.com:443",
     "socks4://proxy.example.com:1080",
     "socks5://proxy.example.com:1080",
-    "http://user:pass@proxy.example.com:3128",
-    "https://user:pass@proxy.example.com:8443",
-    "socks5://user:pass@proxy.example.com:1080",
-    "socks4://user:pass@proxy.example.com:1080",
-    "http://User:Pa55-word_x.y~z@Proxy.Example.COM:3128",
-    "http://us%5Cer:p%5Bass%5D@proxy.example.com:3128",
-    "http://user:p%40ss@proxy.example.com:3128",
-    "http://user:pa!$&'()*+,;=ss@proxy.example.com:3128",
-    f"http://user:pw@{PUNYCODE}:3128",
-    f"https://user:pw@{PUNYCODE}:443",
-    f"socks5://user:pw@{PUNYCODE}:1080",
-    "http://user:pw@XN--BCHER-KVA.example:3128",
+    _with_userinfo("http", "user:pass", "proxy.example.com:3128"),
+    _with_userinfo("https", "user:pass", "proxy.example.com:8443"),
+    _with_userinfo("socks5", "user:pass", "proxy.example.com:1080"),
+    _with_userinfo("socks4", "user:pass", "proxy.example.com:1080"),
+    _with_userinfo("http", "User:Pa55-word_x.y~z", "Proxy.Example.COM:3128"),
+    _with_userinfo("http", "us%5Cer:p%5Bass%5D", "proxy.example.com:3128"),
+    _with_userinfo("http", "user:p%40ss", "proxy.example.com:3128"),
+    _with_userinfo("http", "user:pa!$&'()*+,;=ss", "proxy.example.com:3128"),
+    _with_userinfo("http", "user:pw", f"{PUNYCODE}:3128"),
+    _with_userinfo("https", "user:pw", f"{PUNYCODE}:443"),
+    _with_userinfo("socks5", "user:pw", f"{PUNYCODE}:1080"),
+    _with_userinfo("http", "user:pw", f"{UPPERCASE_PUNYCODE}:3128"),
 ]
 
 
@@ -109,7 +120,11 @@ def test_every_usable_proxy_form_including_a_punycode_host_still_saves_unchanged
 
 
 @pytest.mark.parametrize(
-    "proxy_url", [f"http://user:pw@{PUNYCODE}:3128", "socks5://user:pw@XN--BCHER-KVA.example:1080"]
+    "proxy_url",
+    [
+        _with_userinfo("http", "user:pw", f"{PUNYCODE}:3128"),
+        _with_userinfo("socks5", "user:pw", f"{UPPERCASE_PUNYCODE}:1080"),
+    ],
 )
 def test_a_punycode_proxy_host_is_accepted_through_node_create(proxy_url):
     assert NodeCreate.model_validate(_node(proxy_url)).proxy_url == proxy_url
@@ -125,12 +140,20 @@ def test_a_stored_usable_proxy_loads_unchanged(proxy_url):
 def test_the_written_target_check_compares_the_raw_punycode_host():
     from app.fork import proxy_url
 
-    for value in (f"http://user:pw@{PUNYCODE}:3128", "http://user:pw@XN--BCHER-KVA.example:3128"):
+    for value in (
+        _with_userinfo("http", "user:pw", f"{PUNYCODE}:3128"),
+        _with_userinfo("http", "user:pw", f"{UPPERCASE_PUNYCODE}:3128"),
+    ):
         assert proxy_url.proxy_url_reaches_its_host(value) == value
 
 
 @pytest.mark.parametrize(
-    "value", ["http://u:p@h.example:٣١٢٨", "https://u:p@h.example:31٠28", "socks5://u:p@h.example:١٠٨٠"]
+    "value",
+    [
+        _with_userinfo("http", "u:p", "h.example:٣١٢٨"),
+        _with_userinfo("https", "u:p", "h.example:31٠28"),
+        _with_userinfo("socks5", "u:p", "h.example:١٠٨٠"),
+    ],
 )
 def test_the_written_target_check_refuses_a_port_in_other_digits(value):
     from app.fork import proxy_url
