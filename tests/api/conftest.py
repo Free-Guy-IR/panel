@@ -40,17 +40,25 @@ def node_manager_methods_come_from_its_class():
             delattr(node_manager, name)
 
 
-@pytest.fixture(autouse=True)
-def host_manager_locks_are_fresh_per_test():
-    from asyncio import Lock
+class _EchoRouter:
+    async def publish(self, topic, message):
+        from app.core.hosts import host_manager
 
-    from app.core.hosts import host_manager
+        await host_manager._handle_host_message(message)
 
-    host_manager._lock = Lock()
-    host_manager._publish_lock = Lock()
-    yield
-    host_manager._lock = Lock()
-    host_manager._publish_lock = Lock()
+
+@pytest.fixture(params=["configured", "nats"])
+def host_write_path(request):
+    if request.param == "configured":
+        yield request.param
+        return
+    import app.core.hosts as hosts_module
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(hosts_module, "router", _EchoRouter())
+        patch.setattr(hosts_module.host_manager, "_add_hosts_impl", hosts_module.host_manager._add_hosts_nats)
+        patch.setattr(hosts_module.host_manager, "_remove_host_impl", hosts_module.host_manager._remove_host_nats)
+        yield request.param
 
 
 @pytest.fixture(autouse=True)

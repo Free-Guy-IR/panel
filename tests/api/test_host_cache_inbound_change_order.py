@@ -16,7 +16,7 @@ from tests.api.helpers import auth_headers, create_core, delete_core, get_inboun
 OWNER = AdminDetails(id=None, username="owner", role=AdminRoleData(id=1, name="owner", is_owner=True))
 
 
-def test_bulk_enable_with_stale_inbounds_beats_a_later_applied_core_refresh(access_token, monkeypatch):
+def test_bulk_enable_with_stale_inbounds_beats_a_later_applied_core_refresh(access_token, monkeypatch, host_write_path):
     core = create_core(access_token, name=unique_name("r2_inb_core"))
     inbound = get_inbounds(access_token)[0]
     response = client.post(
@@ -69,16 +69,17 @@ def test_bulk_enable_with_stale_inbounds_beats_a_later_applied_core_refresh(acce
         removed[0] = True
         refresh_paused, refresh_resume = asyncio.Event(), asyncio.Event()
         refresh_armed = [True]
-        real_apply = host_manager._add_prepared_hosts_local
+        real_prepare = host_manager._prepare_hosts
 
-        async def gated_apply(*args, **kwargs):
+        async def gated_prepare(*args, **kwargs):
+            prepared = await real_prepare(*args, **kwargs)
             if refresh_armed[0]:
                 refresh_armed[0] = False
                 refresh_paused.set()
                 await refresh_resume.wait()
-            await real_apply(*args, **kwargs)
+            return prepared
 
-        monkeypatch.setattr(host_manager, "_add_prepared_hosts_local", gated_apply)
+        monkeypatch.setattr(host_manager, "_prepare_hosts", gated_prepare)
 
         async def core_refresh():
             async with GetTestDB() as db:

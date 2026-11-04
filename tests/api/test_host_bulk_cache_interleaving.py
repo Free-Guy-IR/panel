@@ -61,7 +61,7 @@ def _assert_cache_matches_db(access_token: str, host_ids: list[int]) -> None:
 @pytest.mark.parametrize("change", ["edit", "delete"])
 @pytest.mark.parametrize("pause_at", ["add_hosts", "apply"])
 def test_bulk_enable_paused_behind_a_single_host_change_leaves_the_cache_equal_to_the_db(
-    access_token, monkeypatch, pause_at, change
+    access_token, monkeypatch, host_write_path, pause_at, change
 ):
     core = create_core(access_token, name=unique_name("race_core"))
     inbound = get_inbounds(access_token)[0]
@@ -86,16 +86,17 @@ def test_bulk_enable_paused_behind_a_single_host_change_leaves_the_cache_equal_t
 
             monkeypatch.setattr(host_manager, "add_hosts", gated)
         else:
-            real = host_manager._add_prepared_hosts_local
+            real = host_manager._prepare_hosts
 
             async def gated(*args, **kwargs):
+                prepared = await real(*args, **kwargs)
                 if armed[0]:
                     armed[0] = False
                     paused.set()
                     await resume.wait()
-                await real(*args, **kwargs)
+                return prepared
 
-            monkeypatch.setattr(host_manager, "_add_prepared_hosts_local", gated)
+            monkeypatch.setattr(host_manager, "_prepare_hosts", gated)
 
         async def bulk_enable():
             async with GetTestDB() as db:

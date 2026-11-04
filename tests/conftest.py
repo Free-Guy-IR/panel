@@ -64,6 +64,20 @@ def loop_bound_node_state_per_test_loop(monkeypatch):
         monkeypatch.setattr(bridge_memory, "_init_lock", asyncio.Lock())
 
 
+def _fresh_host_manager_locks() -> None:
+    hosts = sys.modules.get("app.core.hosts")
+    if hosts is not None:
+        hosts.host_manager._lock = asyncio.Lock()
+        hosts.host_manager._publish_lock = asyncio.Lock()
+
+
+@pytest.fixture(autouse=True)
+def host_manager_locks_are_fresh_per_test():
+    _fresh_host_manager_locks()
+    yield
+    _fresh_host_manager_locks()
+
+
 @pytest.fixture
 def refuse_submitted_collisions(monkeypatch):
     from config import SubmittedSecretCollision, proxy_secret_settings

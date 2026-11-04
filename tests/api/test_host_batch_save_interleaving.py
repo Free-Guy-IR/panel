@@ -3,7 +3,6 @@ import asyncio
 import pytest
 from fastapi import HTTPException, status
 
-import app.core.hosts as hosts_module
 from app.core.hosts import host_manager
 from app.models.admin import AdminDetails, AdminRoleData
 from app.models.host import BulkHostSelection, CreateHost
@@ -16,20 +15,6 @@ OWNER = AdminDetails(id=None, username="owner", role=AdminRoleData(id=1, name="o
 MISSING_DOWNLOAD_HOST_ID = 987654321
 MANAGER_PAUSE_TARGETS = {"add_hosts": "add_hosts", "apply": "_prepare_hosts"}
 PAUSE_AFTER_THE_REAL_CALL = {"apply"}
-
-
-class _EchoRouter:
-    async def publish(self, topic, message):
-        await host_manager._handle_host_message(message)
-
-
-@pytest.fixture(params=["configured", "nats"])
-def host_write_path(request, monkeypatch):
-    if request.param == "nats":
-        monkeypatch.setattr(hosts_module, "router", _EchoRouter())
-        monkeypatch.setattr(host_manager, "_add_hosts_impl", host_manager._add_hosts_nats)
-        monkeypatch.setattr(host_manager, "_remove_host_impl", host_manager._remove_host_nats)
-    return request.param
 
 
 def _create_host(access_token: str, inbound: str, address: str, is_disabled: bool) -> int:
