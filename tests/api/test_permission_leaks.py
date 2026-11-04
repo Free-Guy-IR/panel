@@ -7,7 +7,6 @@ from fastapi import status
 from sqlalchemy import select
 
 from app.db.crud.admin import build_admin_details, get_admin_by_id
-from app.db.crud.hwid import register_user_hwid
 from app.db.models import Admin
 from app.models.admin import hash_password
 from app.models.user import UserListQuery
@@ -424,6 +423,8 @@ SEEDED_HWID = "seeded-device"
 
 
 async def _seed_hwid(user_id: int) -> None:
+    from app.db.crud.hwid import register_user_hwid
+
     async with TestSession() as session:
         await register_user_hwid(session, user_id, SEEDED_HWID)
         await session.commit()
