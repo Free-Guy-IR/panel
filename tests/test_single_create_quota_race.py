@@ -119,6 +119,8 @@ async def test_a_create_that_counted_before_a_concurrent_create_committed_never_
     assert outcomes["early"] == "committed", (outcomes, failures)
     assert isinstance(failures.get("late"), HTTPException), (outcomes, failures)
     assert failures["late"].status_code == 400, (outcomes, failures)
+    refusal = "Bulk create would exceed user limit" if kind == "bulk" else "User limit reached"
+    assert failures["late"].detail.startswith(refusal), (outcomes, failures)
     assert await _owned_by(recorder_db, reseller.id) == QUOTA, outcomes
     if deadlocks_before is not None:
         assert deadlocks_after - deadlocks_before == 0, outcomes
