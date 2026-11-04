@@ -249,6 +249,26 @@ MAKE_GOARCH_RE = re.compile(r"^(?:(?:export|override)\s+)*goarch\s*(?:::|[:?+!])
 MAKE_INCLUDE_RE = re.compile(r"include|\$[({]\s*eval\b", re.IGNORECASE)
 SHELL_CONTINUATION_RE = re.compile(r"\\\r?\n")
 QUOTED_HEREDOC_RE = re.compile(r"""<<-?\s*(['"])(\w+)\1""")
+HEREDOC_DOCKERFILE_TARGET = r"""(?P<{0}>["']?)(?:[^\s"'<>|;&]*/)?(?:docker|container)file[^\s"'<>|;&/]*(?P={0})"""
+HEREDOC_TO_DOCKERFILE_RE = re.compile(
+    r"\s*(?:cat\s*>>?\s*" + HEREDOC_DOCKERFILE_TARGET.format("cat") + r"|tee\s+(?:-a\s+)?"
+    + HEREDOC_DOCKERFILE_TARGET.format("tee") + r"(?:\s*>\s*/dev/null)?)\s*",
+    re.IGNORECASE,
+)
+HEREDOC_CAPTURED_RE = re.compile(r"""\s*[A-Za-z_]\w*=\$\(\s*cat\s+<<-?\s*(['"])\w+\1\s*""")
+SHELL_DYNAMIC_PART = r"""(?:\$\{\{.*?\}\}|\$\([^()]*\)|`[^`]*`|\$\{[^{}]*\}|\$[A-Za-z_]\w*)"""
+SHELL_DYNAMIC_NAME_RE = re.compile(
+    r"""(?:^|[\s;&|(!])(?:\w|["']|""" + SHELL_DYNAMIC_PART + r""")*""" + SHELL_DYNAMIC_PART
+    + r"""(?:\w|["']|""" + SHELL_DYNAMIC_PART + r""")*\+?=(?!=)"""
+)
+DOCKER_LEGACY_ENV_TARGETARCH_RE = re.compile(r"^env\s+targetarch(?:\s|$)", re.IGNORECASE)
+WORKFLOW_TARGETARCH_SET_RE = re.compile(
+    r"""(?<![\w$.{-])["']?targetarch["']?\s*(?:(?:::|[:?+!])?=(?!=)|:(?=\s|$))""", re.IGNORECASE
+)
+QUOTED_ARCH_KEY_RE = re.compile(
+    r"""(["'])(?:goarch|targetarch)\1\s*\]?\s*(?:[:,]|\+?=(?!=))\s*("[^"]*"|'[^']*'|[^\s,)\]}]*)""", re.IGNORECASE
+)
+TASK_SOURCE_RE = re.compile(r"taskfile(?:\.dist)?\.ya?ml|\.?justfile|magefile\.go", re.IGNORECASE)
 SHELL_SCRIPT_RE = re.compile(r".+\.(?:sh|bash|zsh|ksh)", re.IGNORECASE)
 OTHER_MAKEFILE_RE = re.compile(r"(?:gnu)?makefile(?:\..+)?|.+\.(?:mk|make|inc)", re.IGNORECASE)
 COMPOSE_FILE_RE = re.compile(r"(?:docker-)?compose(?:[._-].*)?\.ya?ml", re.IGNORECASE)
@@ -264,7 +284,7 @@ UNREAD_ARCH_VALUE_RE = re.compile(
     re.IGNORECASE,
 )
 UNREAD_PLATFORM_RE = re.compile(
-    r"""(?:--platforms?(?:=|\s+)|\b(?:docker_default_)?platforms?["']?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s;&|)]*)""",
+    r"""(?:--platforms?(?:=|\s+)|\b(?:docker_default_)?platforms?["']?\s*(?::|=(?!=))\s*)("[^"]*"|'[^']*'|[^\s;&|)]*)""",
     re.IGNORECASE,
 )
 BUILD_TOOL_CONFIG_RE = re.compile(
@@ -1068,6 +1088,8 @@ def commit_hunks(sha):
             current["first_added"] = current["first_added"] or new_at
             new_at += 1
     for hunk in hunks:
+        numbers = [number for _, _, number in hunk["post"]]
+        hunk["post_span"] = (min(numbers), max(numbers)) if numbers else None
         hunk["pre"] = blank_comments(f"{sha}^", hunk["old"], hunk["pre"])
         hunk["post"] = blank_comments(sha, hunk["new"], hunk["post"])
     return hunks
@@ -1477,31 +1499,47 @@ def named_commits(reason, head, upstream_sha):
 
 
 @functools.lru_cache(maxsize=1024)
-def later_line_changes(fork_sha, head, path):
-    removed, added = set(), set()
+def later_line_changes(fork_sha, head, path, span):
+    removed, added, added_anywhere = set(), set(), set()
+    overlapping = False
     in_hunk = False
-    diff = git(
-        "log", "--format=", "-p", "-U0", "--no-color", "--no-ext-diff", "--diff-merges=first-parent",
-        f"{fork_sha}..{head}", "--", path,
-    )
+    diff = git("diff", "-U0", "--no-color", "--no-ext-diff", fork_sha, head, "--", path)
     for line in diff.splitlines():
         if line.startswith("diff --git "):
             in_hunk = False
-        elif HUNK_RANGE_RE.match(line):
+            continue
+        numbers = HUNK_OLD_RANGE_RE.match(line) if line.startswith("@@") else None
+        if numbers:
             in_hunk = True
-        elif in_hunk and line[:1] in "-+":
-            text = normalise_line(path, line[1:])
-            if text:
-                (removed if line[0] == "-" else added).add(text)
-    return frozenset(removed), frozenset(added)
+            old_at = int(numbers.group(1))
+            old_count = 1 if numbers.group(2) is None else int(numbers.group(2))
+            if span is None:
+                overlapping = False
+            elif old_count:
+                overlapping = old_at <= span[1] and old_at + old_count - 1 >= span[0]
+            else:
+                overlapping = span[0] <= old_at < span[1]
+            continue
+        if not in_hunk or line[:1] not in "-+":
+            continue
+        text = normalise_line(path, line[1:])
+        if not text:
+            continue
+        if line[0] == "+":
+            added_anywhere.add(text)
+        if overlapping:
+            (removed if line[0] == "-" else added).add(text)
+    return frozenset(removed), frozenset(added), frozenset(removed - added_anywhere)
 
 
-def tolerant_follows(lines, start, step, context, dropped, inserted):
+def tolerant_follows(lines, start, step, context, dropped, inserted, gone=frozenset()):
     slack = CONTEXT_SLACK
     index = start
+    anchors = 0
     for expected in context:
         if expected in dropped:
             if 0 <= index < len(lines) and lines[index] == expected:
+                anchors += expected not in gone
                 index += step
             continue
         while 0 <= index < len(lines) and lines[index] != expected:
@@ -1512,8 +1550,9 @@ def tolerant_follows(lines, start, step, context, dropped, inserted):
             index += step
         if not 0 <= index < len(lines):
             return False
+        anchors += 1
         index += step
-    return True
+    return anchors > 0 or not context
 
 
 def own_core_end(lines, start, core, dropped, inserted):
@@ -1531,7 +1570,7 @@ def own_core_end(lines, start, core, dropped, inserted):
     return index
 
 
-def own_lines_in_place(lines, path, side, dropped, inserted):
+def own_lines_in_place(lines, path, side, dropped, inserted, gone=frozenset()):
     if lines is None:
         return False
     marked = [(text, changed) for text, changed in ((normalise_line(path, t), c) for t, c in side) if text]
@@ -1546,8 +1585,8 @@ def own_lines_in_place(lines, path, side, dropped, inserted):
         end = own_core_end(lines, start, core, dropped, inserted)
         if (
             end is not None
-            and tolerant_follows(lines, start - 1, -1, before, dropped, inserted)
-            and tolerant_follows(lines, end, 1, after, dropped, inserted)
+            and tolerant_follows(lines, start - 1, -1, before, dropped, inserted, gone)
+            and tolerant_follows(lines, end, 1, after, dropped, inserted, gone)
         ):
             return True
     return False
@@ -1570,8 +1609,8 @@ def own_lines_missing(fork_sha, head, paths):
         expected += 1
         here = normalised_file(head, path)
         if check_post:
-            dropped, inserted = later_line_changes(fork_sha, head, path)
-            if not own_lines_in_place(here, path, hunk["post"], dropped, inserted):
+            dropped, inserted, gone = later_line_changes(fork_sha, head, path, hunk["post_span"])
+            if not own_lines_in_place(here, path, hunk["post"], dropped, inserted, gone):
                 missing.append((path, post[1][0]))
         elif block_in_place(here, pre):
             missing.append((path, f"-{pre[1][0]}"))
@@ -1992,6 +2031,7 @@ def workflow_linux_arches(text):
                 value = workflow_block_text(lines, index)
             found |= workflow_platform_arches(value, line, values)
             continue
+        refuse_dynamic_or_targetarch(line)
         found |= workflow_goarch_arches(line)
         for flag in WORKFLOW_PLATFORM_FLAG_RE.finditer(line):
             found |= workflow_platform_arches(flag.group(1), line, values)
@@ -2001,13 +2041,30 @@ def workflow_linux_arches(text):
     return frozenset(found)
 
 
+def builds_dynamic_name(line):
+    for match in SHELL_DYNAMIC_NAME_RE.finditer(line):
+        prefix = line[: match.end()]
+        if prefix.count('"') % 2 == 0 and prefix.count("'") % 2 == 0:
+            return True
+    return False
+
+
+def refuse_dynamic_or_targetarch(line):
+    if builds_dynamic_name(line):
+        raise ShippedArchesUnreadable(f"the line {line!r} builds a variable name the gate cannot read")
+    if WORKFLOW_TARGETARCH_SET_RE.search(line):
+        raise ShippedArchesUnreadable(f"the line {line!r} sets TARGETARCH, which the gate does not read")
+
+
 def build_file_linux_arches(text, passthrough=GOARCH_SELF_REFERENCES | GOARCH_DOCKER_TARGET_REFERENCES):
     found = set()
     for indent, line in workflow_lines(text):
         if WORKFLOW_UNREAD_TOOL_RE.search(line):
             raise ShippedArchesUnreadable(f"the line {line!r} builds with a tool whose config the gate does not read")
-        if TARGETARCH_ASSIGNMENT_RE.search(line):
+        if TARGETARCH_ASSIGNMENT_RE.search(line) or DOCKER_LEGACY_ENV_TARGETARCH_RE.match(line):
             raise ShippedArchesUnreadable(f"the line {line!r} sets TARGETARCH, which the gate does not read")
+        if builds_dynamic_name(line):
+            raise ShippedArchesUnreadable(f"the line {line!r} builds a variable name the gate cannot read")
         legacy = DOCKER_LEGACY_ENV_GOARCH_RE.match(line)
         if legacy:
             value = legacy.group(1).strip()
@@ -2054,32 +2111,53 @@ def quoted_heredoc_lines(lines):
                 inside.add(index)
             continue
         opened = QUOTED_HEREDOC_RE.search(line)
-        if opened:
+        if opened and heredoc_is_dockerfile_text(line, opened):
             tag = opened.group(2)
     return inside
+
+
+def heredoc_is_dockerfile_text(line, opened):
+    if HEREDOC_CAPTURED_RE.fullmatch(line):
+        return True
+    rest = f"{line[: opened.start()]} {line[opened.end() :]}"
+    return HEREDOC_TO_DOCKERFILE_RE.fullmatch(rest) is not None
 
 
 def unread_dockerfile_linux_arches(text):
     return unread_source_linux_arches(text, GOARCH_SELF_REFERENCES | GOARCH_DOCKER_TARGET_REFERENCES)
 
 
-def unread_source_linux_arches(text, passthrough=GOARCH_SELF_REFERENCES):
+def unread_source_linux_arches(text, passthrough=GOARCH_SELF_REFERENCES, literal_arches=frozenset()):
     lines = SHELL_CONTINUATION_RE.sub("", text).splitlines()
     literal = quoted_heredoc_lines(lines)
+    found = set()
     for index, raw in enumerate(lines):
         line = raw.replace("\\", "")
         allowed = passthrough | GOARCH_DOCKER_TARGET_REFERENCES if index in literal else passthrough
-        if WORKFLOW_GOARCH_BARE_RE.search(line) or UNREAD_OS_ARCH_RE.search(line):
+        if WORKFLOW_GOARCH_BARE_RE.search(line) or (not literal_arches and UNREAD_OS_ARCH_RE.search(line)):
             raise ShippedArchesUnreadable(f"the line {raw!r} names an arch in a source the gate does not read")
-        for match in UNREAD_ARCH_VALUE_RE.finditer(line):
-            value = (match.group(1) or match.group(2) or "").strip("'\"").lower()
-            if value and value not in allowed:
+        if index not in literal and builds_dynamic_name(line):
+            raise ShippedArchesUnreadable(f"the line {raw!r} builds a variable name the gate cannot read")
+        values = [(match.group(1) or match.group(2) or "") for match in UNREAD_ARCH_VALUE_RE.finditer(line)]
+        if literal_arches:
+            values += [match.group(2) for match in QUOTED_ARCH_KEY_RE.finditer(line)]
+        for value in values:
+            value = value.strip("'\"").lower()
+            if not value:
+                continue
+            if value in literal_arches:
+                found.add(value)
+            elif value not in allowed:
                 raise ShippedArchesUnreadable(f"the line {raw!r} sets an arch in a source the gate does not read")
         for match in UNREAD_PLATFORM_RE.finditer(line):
             value = match.group(1).strip("'\"").lower()
             if value and value not in DOCKER_BUILDER_PLATFORMS:
                 raise ShippedArchesUnreadable(f"the line {raw!r} sets a platform in a source the gate does not read")
-    return set()
+    return found
+
+
+def task_source_linux_arches(text):
+    return unread_source_linux_arches(text, literal_arches=GO_FILENAME_ARCHES)
 
 
 def shipped_linux_arch_source(path):
@@ -2093,6 +2171,8 @@ def shipped_linux_arch_source(path):
         return workflow_linux_arches
     if not folder and name in MAKEFILE_NAMES:
         return makefile_linux_arches
+    if TASK_SOURCE_RE.fullmatch(name) or (path.startswith(SCRIPT_FOLDERS) and name.lower().endswith(".py")):
+        return task_source_linux_arches
     if CONTAINER_FILE_RE.fullmatch(name):
         return unread_dockerfile_linux_arches if folder else build_file_linux_arches
     if (

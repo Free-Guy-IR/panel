@@ -137,7 +137,7 @@ def test_10q_backslash_newline_joins_without_a_space_in_workflow_and_build_lines
         ("docker-compose.yml", "services:\n  node:\n    build: .\n"),
         ("scripts/build", "go vet ./...\n"),
     ],
-    ids=["quoted-heredoc-dockerfile", "subfolder-dockerfile", "printf-v-other", "makefile-no-arch", "compose-no-platform", "script-no-arch"],
+    ids=["quoted-heredoc-captured-by-cat-into-a-variable", "subfolder-dockerfile", "printf-v-other", "makefile-no-arch", "compose-no-platform", "script-no-arch"],
 )
 def test_10q_sources_that_set_no_arch_are_not_refused(path, text):
     reader = load_inventory().shipped_linux_arch_source(path)
