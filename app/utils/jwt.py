@@ -55,7 +55,10 @@ async def get_admin_payload(token: str, *, secret_key: str | None = None) -> dic
         if secret_key is None:
             secret_key = await get_secret_key()
         required = ["iat", "exp"] if jwt_settings.access_token_expire_minutes > 0 else ["iat"]
-        payload = jwt.decode(token, secret_key, algorithms=["HS256"], leeway=5, options={"require": required})
+        try:
+            payload = jwt.decode(token, secret_key, algorithms=["HS256"], leeway=5, options={"require": required})
+        except TypeError:
+            return
         username: str = payload.get("sub")
         access: str = payload.get("access")
         admin_id = payload.get("aid")
@@ -71,7 +74,7 @@ async def get_admin_payload(token: str, *, secret_key: str | None = None) -> dic
             return
         try:
             created_at = datetime.fromtimestamp(payload["iat"], tz=UTC)
-        except (OverflowError, OSError, ValueError):
+        except (OverflowError, OSError, TypeError, ValueError):
             return
 
         return {
