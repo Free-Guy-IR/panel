@@ -10,7 +10,7 @@ from sqlalchemy import func, insert, select
 from app.db.models import Admin, Group, User, UserTemplate, template_group_association
 from app.models.admin import AdminDetails, AdminRoleData
 from app.models.admin_role import RoleLimits
-from app.models.user import CreateUserFromTemplate, UserCreate
+from app.models.user import BulkUsersFromTemplate, CreateUserFromTemplate, UserCreate, UsernameGenerationStrategy
 from app.operation import OperatorType
 from app.operation.user import UserOperation
 from tests.test_admin_removal_during_owner_moves import _attempt
@@ -50,6 +50,18 @@ def _create(recorder_db, kind: str, label: str, admin: AdminDetails, group_id: i
             operation = UserOperation(OperatorType.API)
             if kind == "single":
                 await operation.create_user(db, UserCreate(username=username, group_ids=[group_id]), admin)
+            elif kind == "bulk":
+                await operation.bulk_create_users_from_template(
+                    db,
+                    BulkUsersFromTemplate(
+                        user_template_id=template_id,
+                        count=1,
+                        strategy=UsernameGenerationStrategy.sequence,
+                        username=username,
+                        start_number=1,
+                    ),
+                    admin,
+                )
             else:
                 await operation.create_user_from_template(
                     db, CreateUserFromTemplate(user_template_id=template_id, username=username), admin
@@ -64,22 +76,23 @@ async def _owned_by(recorder_db, admin_id: int) -> int:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind", ["single", "template"])
+@pytest.mark.parametrize("kind", ["single", "template", "bulk"])
 async def test_a_create_that_counted_before_a_concurrent_create_committed_never_exceeds_max_users(
     monkeypatch: pytest.MonkeyPatch, recorder_db, kind
 ):
     reseller, group_id, template_id, base = await _seed_reseller_one_below_quota(recorder_db)
     late_counted = asyncio.Event()
     early_finished = asyncio.Event()
-    real_prepare = UserOperation._prepare_user_proxy_settings
+    gated_name = "_persist_bulk_users" if kind == "bulk" else "_prepare_user_proxy_settings"
+    real_step = getattr(UserOperation, gated_name)
 
-    async def gated_prepare(self, db, *args, **kwargs):
+    async def gated_step(self, db, *args, **kwargs):
         if db.info.get("label") == "late":
             late_counted.set()
             await asyncio.wait_for(early_finished.wait(), BOUND)
-        return await real_prepare(self, db, *args, **kwargs)
+        return await real_step(self, db, *args, **kwargs)
 
-    monkeypatch.setattr(UserOperation, "_prepare_user_proxy_settings", gated_prepare)
+    monkeypatch.setattr(UserOperation, gated_name, gated_step)
 
     outcomes: dict[str, str] = {}
     failures: dict[str, BaseException] = {}
