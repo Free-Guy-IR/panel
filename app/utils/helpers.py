@@ -170,6 +170,16 @@ def escape_ds_markdown_list(list: tuple[str]) -> tuple[str]:
     return tuple(escape_ds_markdown(text) for text in list)
 
 
+# None of these belongs in a host address or URL prefix, and subscription pages print those values
+# inside HTML attributes and scripts, where any of them could break out of the markup.
+_MARKUP_UNSAFE_CHARS = frozenset("<>\"'`\\")
+
+
+def has_markup_unsafe_chars(value: str) -> bool:
+    """Returns True if value contains a quote, angle bracket, backtick, backslash, whitespace or control character."""
+    return any(char in _MARKUP_UNSAFE_CHARS or char.isspace() or not char.isprintable() for char in value)
+
+
 # Largest width or precision a host format field may use. str.format_map builds the padded result before anything
 # can check its size, so "{USERNAME:>1000000000}" would allocate a gigabyte on save and on every subscription render.
 MAX_FORMAT_SPEC_NUMBER = 256
@@ -190,13 +200,3 @@ def has_oversized_format_spec(value: str) -> bool:
             if len(digits) > len(str(MAX_FORMAT_SPEC_NUMBER)) or int(digits or "0") > MAX_FORMAT_SPEC_NUMBER:
                 return True
     return False
-
-
-# None of these belongs in a host address or URL prefix, and subscription pages print those values
-# inside HTML attributes and scripts, where any of them could break out of the markup.
-_MARKUP_UNSAFE_CHARS = frozenset("<>\"'`\\")
-
-
-def has_markup_unsafe_chars(value: str) -> bool:
-    """Returns True if value contains a quote, angle bracket, backtick, backslash, whitespace or control character."""
-    return any(char in _MARKUP_UNSAFE_CHARS or char.isspace() or not char.isprintable() for char in value)
