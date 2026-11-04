@@ -31,7 +31,13 @@ def _role(access_token: str, permissions: dict) -> dict:
     response = client.post(
         "/api/admin-role",
         headers=auth_headers(access_token),
-        json={"name": unique_name("hwid_count_role"), "permissions": permissions, "limits": {}, "features": {}, "access": {}},
+        json={
+            "name": unique_name("hwid_count_role"),
+            "permissions": permissions,
+            "limits": {},
+            "features": {},
+            "access": {},
+        },
     )
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
@@ -51,6 +57,9 @@ def _hand_user_to(user_id: int, admin_id: int) -> None:
     [
         pytest.param({"users": {"read": SCOPE_ALL}}, False, id="without-hwids-read"),
         pytest.param({"users": {"read": SCOPE_ALL}, "hwids": {"read": True}}, True, id="with-hwids-read"),
+        pytest.param(
+            {"users": {"read": SCOPE_ALL}, "hwids": {"read": SCOPE_OWN}}, False, id="all-users-own-hwids-read"
+        ),
     ],
 )
 def test_user_list_shows_device_counts_only_with_hwids_read(access_token, permissions, sees_counts):

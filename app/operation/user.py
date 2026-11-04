@@ -1642,7 +1642,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
 
         # Device counts are HWID data: without hwids.read they are not loaded and the sort is
         # ignored, the same way node filters are ignored without nodes.stats.
-        can_read_hwids = _has_permission(admin, "hwids", "read")
+        can_read_hwids = _has_permission(admin, "hwids", "read") and (
+            scope_admin_id is not None or is_scope_all(admin, "hwids", "read")
+        )
         if not can_read_hwids and any(option.field == UserSortField.hwid_count for option in query.sort):
             query = query.model_copy(
                 update={"sort": [option for option in query.sort if option.field != UserSortField.hwid_count]}
