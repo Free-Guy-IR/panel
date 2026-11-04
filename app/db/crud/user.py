@@ -380,7 +380,15 @@ async def get_users_with_proxy_settings(
     return list(result.scalars().all())
 
 
+def _user_hwid_count_subquery():
+    return select(func.count(UserHWID.id)).where(UserHWID.user_id == User.id).correlate(User).scalar_subquery()
+
+
 def _build_user_sort_clause(sort_option: UserSortOption):
+    if sort_option.field == UserSortField.hwid_count:
+        count = _user_hwid_count_subquery()
+        return count.desc() if sort_option.value.startswith("-") else count.asc()
+
     field_map = {
         UserSortField.username: User.username,
         UserSortField.used_traffic: User.used_traffic,
@@ -421,6 +429,7 @@ async def get_users(
     load_admin_role: bool = False,
     load_usage_logs: bool = True,
     load_lifetime_used_traffic: bool = False,
+    load_hwid_count: bool = False,
 ) -> list[User] | tuple[list[User], int]:
     """
     Retrieves users based on various filters.
@@ -452,6 +461,8 @@ async def get_users(
     stmt = select(User).options(*options)
     if load_lifetime_used_traffic:
         stmt = stmt.execution_options(populate_existing=True)
+    if load_hwid_count:
+        stmt = stmt.options(with_expression(User.hwid_count, _user_hwid_count_subquery()))
 
     filters = []
     if query.ids:
@@ -525,10 +536,12 @@ async def get_users(
             else:
                 sort_clauses.append(clause)
         stmt = stmt.order_by(*sort_clauses)
+        if any(option.field == UserSortField.hwid_count for option in query.sort):
+            stmt = stmt.order_by(User.id.asc())
 
     total = None
     if return_with_count:
-        count_stmt = select(func.count()).select_from(stmt.subquery())
+        count_stmt = select(func.count()).select_from(stmt.order_by(None).subquery())
         result = await db.execute(count_stmt)
         total = result.scalar()
 

@@ -165,8 +165,13 @@ class UsersResponseWithInbounds(SubscriptionUserResponse):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserListItem(UserResponse):
+    # None when the device count was not loaded, for example without hwids.read
+    hwid_count: int | None = Field(default=None, ge=0)
+
+
 class UsersResponse(BaseModel):
-    users: list[UserResponse]
+    users: list[UserListItem]
     total: int
 
 
@@ -186,6 +191,7 @@ class UsersSimpleResponse(BaseModel):
 
 
 class UserSortField(str, Enum):
+    hwid_count = "hwid_count"
     username = "username"
     used_traffic = "used_traffic"
     data_limit = "data_limit"
@@ -206,6 +212,8 @@ class SortDirection(str, Enum):
 
 
 class UserSortOption(str, Enum):
+    hwid_count = "hwid_count"
+    desc_hwid_count = "-hwid_count"
     username = "username"
     used_traffic = "used_traffic"
     data_limit = "data_limit"
