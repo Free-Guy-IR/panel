@@ -278,7 +278,7 @@ class _PausingConnection:
 
 
 @pytest.mark.asyncio
-async def test_a_node_deleted_inside_the_write_transaction_after_the_existence_check_leaves_no_orphan_rows(
+async def test_a_node_delete_issued_inside_the_usage_write_succeeds_without_a_deadlock_and_loses_no_bytes_of_the_kept_node(
     monkeypatch: pytest.MonkeyPatch, session_factory
 ):
     async with session_factory() as session:
