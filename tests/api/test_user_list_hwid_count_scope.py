@@ -213,9 +213,9 @@ def test_lists_racing_a_hwids_read_change_never_leak_or_mix_device_counts(access
         for _ in range(3):
             calls = [_users_list(token, tag) for _ in range(4) for token in (reader_token, plain_token)]
             calls.insert(3, _hwids_read_change(access_token, reader_role["id"], granted_after))
-            barrier = _ChangeBetweenGateAndQuery(monkeypatch, lists=8)
-            responses = send_concurrently(calls)
-            monkeypatch.undo()
+            with monkeypatch.context() as patch:
+                barrier = _ChangeBetweenGateAndQuery(patch, lists=8)
+                responses = send_concurrently(calls)
 
             assert (barrier.held_when_changed, barrier.queried_after_change) == (8, 8)
             role_change = responses.pop(3)
