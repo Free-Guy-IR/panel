@@ -43,9 +43,12 @@ def _decoded_handlers(page: str) -> list[str]:
 
 @pytest.fixture
 def poisoned_host_user(access_token, monkeypatch):
-    monkeypatch.setattr(host_models, "check_host_addresses", lambda addresses: addresses)
     core = create_core(access_token, name=unique_name("xss_core"))
-    hosts = create_hosts_for_inbounds(access_token, address=[PAYLOAD])
+    with monkeypatch.context() as legacy_row:
+        legacy_row.setattr(host_models, "check_host_addresses", lambda addresses: addresses)
+        legacy_row.setattr(host_models, "has_markup_unsafe_chars", lambda value: False)
+        hosts = create_hosts_for_inbounds(access_token, address=[PAYLOAD])
+    hosts += create_hosts_for_inbounds(access_token)
     group = create_group(access_token, name=unique_name("xss_group"))
     user = create_user(access_token, group_ids=[group["id"]], payload={"username": unique_name("xss_user")})
     yield user
@@ -63,6 +66,7 @@ def test_host_address_cannot_break_out_of_the_copy_handler(poisoned_host_user):
     assert copy_handlers
     for handler in copy_handlers:
         assert "new Image()" not in handler, f"attacker JS reaches the onclick handler as code: {handler[:200]}"
+    assert "evil.example" not in page.text
 
 
 def test_admin_sub_domain_cannot_break_out_of_the_import_handler(access_token):
@@ -79,8 +83,7 @@ def test_admin_sub_domain_cannot_break_out_of_the_import_handler(access_token):
         json={"sub_domain": sub_domain},
     )
     client.delete(f"/api/admin/{admin.json()['username']}", headers=auth_headers(access_token))
-    assert stored.status_code == 200
-    assert stored.json().get("sub_domain", sub_domain) == sub_domain
+    assert stored.status_code == 422
 
     template_app = Application(
         name="v2rayNG",
