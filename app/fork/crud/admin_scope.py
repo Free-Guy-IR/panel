@@ -39,8 +39,8 @@ async def _detach_committed_owners(db: AsyncSession, admin_ids: list[int], *, no
     owned = select(User.id).where(User.admin_id.in_(admin_ids))
     candidates = [user_id for (user_id,) in await read_committed_rows(db, owned)]
     await lock_user_rows(db, candidates, nowait=nowait)
-    for statement in locked_targets(update(User).where(User.admin_id.in_(admin_ids)), candidates):
-        await db.execute(statement.values(admin_id=None))
+    for user_id in sorted(set(candidates)):
+        await db.execute(update(User).where(User.id == user_id, User.admin_id.in_(admin_ids)).values(admin_id=None))
 
 
 async def detach_admin_users(db: AsyncSession, admin_ids: list[int]) -> None:
