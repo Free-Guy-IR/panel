@@ -3,6 +3,7 @@ import asyncio
 import pytest
 from fastapi import HTTPException, status
 
+import app.core.hosts as hosts_module
 from app.core.hosts import host_manager
 from app.models.admin import AdminDetails, AdminRoleData
 from app.models.host import BulkHostSelection, CreateHost
@@ -13,7 +14,22 @@ from tests.api.helpers import auth_headers, create_core, delete_core, get_inboun
 
 OWNER = AdminDetails(id=None, username="owner", role=AdminRoleData(id=1, name="owner", is_owner=True))
 MISSING_DOWNLOAD_HOST_ID = 987654321
-MANAGER_PAUSE_TARGETS = {"add_hosts": "add_hosts", "apply": "_add_prepared_hosts_local"}
+MANAGER_PAUSE_TARGETS = {"add_hosts": "add_hosts", "apply": "_prepare_hosts"}
+PAUSE_AFTER_THE_REAL_CALL = {"apply"}
+
+
+class _SilentRouter:
+    async def publish(self, topic, message):
+        return None
+
+
+@pytest.fixture(params=["configured", "nats"])
+def host_write_path(request, monkeypatch):
+    if request.param == "nats":
+        monkeypatch.setattr(hosts_module, "router", _SilentRouter())
+        monkeypatch.setattr(host_manager, "_add_hosts_impl", host_manager._add_hosts_nats)
+        monkeypatch.setattr(host_manager, "_remove_host_impl", host_manager._remove_host_nats)
+    return request.param
 
 
 def _create_host(access_token: str, inbound: str, address: str, is_disabled: bool) -> int:
@@ -73,11 +89,18 @@ def _gate_host_manager(monkeypatch, pause_at: str) -> tuple[asyncio.Event, async
     real = getattr(host_manager, target)
 
     async def gated(*args, **kwargs):
+        if pause_at in PAUSE_AFTER_THE_REAL_CALL:
+            result = await real(*args, **kwargs)
+            if armed[0]:
+                armed[0] = False
+                paused.set()
+                await resume.wait()
+            return result
         if armed[0]:
             armed[0] = False
             paused.set()
             await resume.wait()
-        await real(*args, **kwargs)
+        return await real(*args, **kwargs)
 
     monkeypatch.setattr(host_manager, target, gated)
     return paused, resume
@@ -132,7 +155,7 @@ def _cleanup(access_token: str, host_ids: list[int], core_id: int) -> None:
 @pytest.mark.parametrize("toggle_to_disabled", [True, False])
 @pytest.mark.parametrize("pause_at", ["add_hosts", "apply"])
 def test_batch_save_paused_in_the_host_manager_while_a_bulk_toggle_finishes_leaves_the_cache_equal_to_the_db(
-    access_token, monkeypatch, pause_at, toggle_to_disabled
+    access_token, monkeypatch, host_write_path, pause_at, toggle_to_disabled
 ):
     core = create_core(access_token, name=unique_name("it2_core"))
     inbound = get_inbounds(access_token)[0]
@@ -168,7 +191,7 @@ def test_batch_save_paused_in_the_host_manager_while_a_bulk_toggle_finishes_leav
 
 @pytest.mark.parametrize("pause_at", ["add_hosts", "apply"])
 def test_bulk_toggle_paused_in_the_host_manager_while_a_batch_save_commits_leaves_the_cache_equal_to_the_db(
-    access_token, monkeypatch, pause_at
+    access_token, monkeypatch, host_write_path, pause_at
 ):
     core = create_core(access_token, name=unique_name("it2_core"))
     inbound = get_inbounds(access_token)[0]
@@ -204,7 +227,7 @@ def test_bulk_toggle_paused_in_the_host_manager_while_a_batch_save_commits_leave
 
 @pytest.mark.parametrize("paused_side", ["batch_save_in_validation", "toggle_in_add_hosts", "toggle_in_apply"])
 def test_a_batch_save_failing_half_way_beside_a_bulk_toggle_keeps_nothing_of_the_batch_and_all_of_the_toggle(
-    access_token, monkeypatch, paused_side
+    access_token, monkeypatch, host_write_path, paused_side
 ):
     core = create_core(access_token, name=unique_name("it2_core"))
     inbound = get_inbounds(access_token)[0]

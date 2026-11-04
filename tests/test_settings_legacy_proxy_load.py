@@ -100,12 +100,15 @@ async def test_cached_getters_load_a_legacy_stored_proxy(stored_row, proxy):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("nats_enabled", [False, True])
 @pytest.mark.parametrize("proxy", LEGACY_PROXIES)
-async def test_loaded_legacy_proxy_is_refused_by_every_sender(stored_row, proxy, caplog, monkeypatch):
+async def test_loaded_legacy_proxy_is_refused_by_every_sender(stored_row, proxy, nats_enabled, caplog, monkeypatch):
     import app.jobs.send_notifications as job
     import app.notification.client as notification_client
+    import app.telegram as telegram_module
     from app.telegram import TelegramBotManager
 
+    monkeypatch.setattr(telegram_module, "is_nats_enabled", lambda: nats_enabled)
     stored_row["row"] = _row(proxy)
     caplog.set_level(logging.DEBUG)
 
@@ -128,7 +131,11 @@ async def test_loaded_legacy_proxy_is_refused_by_every_sender(stored_row, proxy,
     assert manager._bot is None
 
     messages = [record.getMessage() for record in caplog.records]
-    assert messages.count(INVALID_PROXY_MESSAGE) >= 3
+    if nats_enabled:
+        assert any(message.startswith("Long polling is not supported in multi-worker mode") for message in messages)
+        assert messages.count(INVALID_PROXY_MESSAGE) >= 2
+    else:
+        assert messages.count(INVALID_PROXY_MESSAGE) >= 3
     assert all(SECRET not in message for message in messages)
 
 

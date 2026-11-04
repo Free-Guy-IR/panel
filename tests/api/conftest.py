@@ -41,6 +41,19 @@ def node_manager_methods_come_from_its_class():
 
 
 @pytest.fixture(autouse=True)
+def host_manager_locks_are_fresh_per_test():
+    from asyncio import Lock
+
+    from app.core.hosts import host_manager
+
+    host_manager._lock = Lock()
+    host_manager._publish_lock = Lock()
+    yield
+    host_manager._lock = Lock()
+    host_manager._publish_lock = Lock()
+
+
+@pytest.fixture(autouse=True)
 def mock_lock(monkeypatch: pytest.MonkeyPatch):
     _lock = MagicMock(spec=RWLock(fast=True))
     monkeypatch.setattr("app.node.node_manager._lock", _lock)
