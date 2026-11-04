@@ -12,7 +12,7 @@ TOKEN_CONTRACT_FUNCTIONS = (
     "_decode_b64_token",
     "get_subscription_payload",
 )
-ROLLBACK_IMAGE_TOKEN_CONTRACT_SHA256 = "706b4b2d1857d784c2ffaad3f200cc0302c9ce58dafef152ee131e0d3d092812"
+ROLLBACK_IMAGE_TOKEN_CONTRACT_SHA256 = "94f00ebe6fd4a3553aa126d95c099fa5c7543ac05c70e80655a6063f848aad87"
 
 
 def test_the_rollback_image_was_proven_against_the_token_code_this_release_ships():
