@@ -9,6 +9,7 @@ from app.fork.finalmask import (
     restore_doh_tls_configs,
     restore_nested_doh_tls_configs,
 )
+from app.fork.wireguard_endpoint_dns import resolve_wireguard_endpoints_directly
 from app.models.host import FinalMask, prune_blank_values
 from app.models.subscription import (
     GRPCTransportConfig,
@@ -75,6 +76,7 @@ class XrayConfiguration(BaseSubscription):
         json_template = json.loads(template_content) if template_content is not None else self.template.copy()
         json_template["remarks"] = remarks
         json_template["outbounds"] = outbounds + json_template["outbounds"]
+        json_template = resolve_wireguard_endpoints_directly(json_template, outbounds)
         self.config.append(json_template)
 
     def render(self):
