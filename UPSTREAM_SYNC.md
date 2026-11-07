@@ -388,7 +388,9 @@ days after the id's date. Only the entries it lists that name the id with `owner
   `e0bb1127b6c8c1486ce946aa78cd3fbea817f1a3`
   `80d855f03557578e91455be33b7aa6ba4420c724`
   `0155c0e50c5f92552429e32c67b06dcb5c6e5a98`
-  and the bridge waiver pasarguard-node-bridge@0.9.4
+  and the bridge waiver pasarguard-node-bridge@0.9.4, and from 2026-11-07, when upstream had released node_bridge_py
+  v0.9.5 (2026-11-04) and v0.10.0 (2026-11-05) on top of v0.9.4, the same waiver as pasarguard-node-bridge@0.10.0, owed
+  by the same B-INFRA bump with no new date
   until: 2026-11-20
 - `2026-10-28-main-hint-waivers` main approved on 2026-10-28 the Waived entries whose upstream commits the keyword hint flags. Seven change only upstream's Telegram notifier workflow, .github/workflows/github-notifications-bot.yml, which the fork deleted on purpose in 535c1aa01; each is covered only while it touches nothing else. Two are unmerged upstream feature branches (pre-admin-UserTemplates and feat/apikey-request-limit) whose UNMERGED-WIP waivers still fail at once if upstream merges them. It covers
   `517f2bac48cdeb4f570a29b6ea94a3f5cd8158cf` touching only `.github/workflows/github-notifications-bot.yml`
