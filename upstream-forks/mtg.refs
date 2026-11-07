@@ -8,8 +8,11 @@ b1074193a8109752ee34ea96e66415dd2363d469 0.16
 2933062393bdbe85528827108ab5017b98eacf43 0.9
 68e1d660171031de30efcc89b6c3a445a756d5c1 1.0
 b86a9cf85d2dfd26a523a2e93c9eaeb89c5b5fea upstream/contrib/sni-router-host-mode
+3e0e1f96f36554f4bfcbfdf75f31b38191eb7513 upstream/docs/sni-router-v2-release
 b6ec95b9a7755aae00c8903195508004f6de9e68 upstream/docs/sni-router-version-note
+12a6907bffb3897e42bc94af816abe4c450c6146 upstream/fix/doppel-reply-channel-shutdown
 00a27e407da4db5c73c4dc0dfde967d1c8d650ee upstream/fix/shutdown-connection-race
+d1b29dbdd555602e5b80e1ed48161984aa29762a upstream/fix/shutdown-connection-race
 1e2af250988804fec01dde9284b5e06c0382f716 upstream/log-time-format
 f372866982a063c8abd12ae0af46385cc97bdf11 upstream/log-time-format
 753d051259a9d33e409dd3cc6930865acbae8380 upstream/master
