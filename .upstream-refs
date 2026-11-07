@@ -6,6 +6,7 @@ e2707d99064e75acd1ea4d8e1d9bb4542906c5e8 upstream/dependabot/uv/dev/cryptography
 b021d6f7be94bb5c7dc57cf6a648d4b89584e776 upstream/dependabot/uv/dev/fastapi-0.142.2
 3d1a1a3605f527dd765064a0aa4992a00db0bc71 upstream/dependabot/uv/dev/fastapi-0.162.0
 6759a6e3db38103b4b8588b37931df4bc0018f48 upstream/dependabot/uv/dev/pydantic-settings-2.16.1
+654e6280de32defd60b3924d8f677ba184fac3c1 upstream/dependabot/uv/dev/pytest-asyncio-1.4.1.post1
 19611f74522391cc2e8239591aaadc7ea8ebcb2a upstream/dependabot/uv/dev/python-dateutil-3.0.0
 1872a7317f84e1a8e1eb6759fcd486486177fa5b upstream/dependabot/uv/dev/python-multipart-0.0.33
 59a347e6517ec9888ffb21102b954430d492b6b4 upstream/dependabot/uv/dev/ruff-0.16.10
@@ -15,6 +16,7 @@ b021d6f7be94bb5c7dc57cf6a648d4b89584e776 upstream/dependabot/uv/dev/fastapi-0.14
 30b9f2d176cdaf3713493c8520ffaa386d96ba93 upstream/dependabot/uv/dev/uvloop-0.23.0
 d3fdded8243273e754f18b993dc3efdcec36d24a upstream/dependabot/uv/idna-3.15
 cfdce3765ee7ad7cb46782ba00fa360d0c7134ed upstream/dependabot/uv/pyasn1-0.6.5
+5a7a7b53b29559a42566ee71d75a3b8543f5b5d2 upstream/deprecated-apis
 f936134cb19783a0871243d4904c088722b9ec26 upstream/deprecated-apis
 0c869b089278062a861de16e20de5102d190e40b upstream/dev
 0d57c2c44a5762fdbe950f39efb05bf6b32fa6ed upstream/dev
@@ -39,6 +41,7 @@ d4d2fd4238469f34d6d730544f15d7ab96907d4a upstream/dev
 d94e157791ac1d098a48172e50a3689caaf2f46f upstream/dev
 da871f475782da54ec547da1945d2478a35171b0 upstream/dev
 de75b25f55817990a16508566de741c215d0375f upstream/dev
+f92acaf51cec0b8f57236d75e39fe25cdbb98a40 upstream/dev
 ff6e596e090dd8901f073d32fefb4b96e2338ebd upstream/dev
 7ad4c7d3cee9bb479237eeb34198d61c554b4eb4 upstream/feat/apikey-request-limit
 5423caeaa857f54edf06d630daa3ad22af4a8b10 upstream/feat/env-to-settings
@@ -49,6 +52,7 @@ ff6e596e090dd8901f073d32fefb4b96e2338ebd upstream/dev
 b15cdf53c9560dd93806bec5dcb11259035700c3 upstream/feat/mtproto
 1fadd9f55177479211d07645661a28f9299dd178 upstream/feat/on_hold_timeout_action
 e5f3b555150de7c35c128bdfa911fe3494aedfc7 upstream/feat/outbound-usage
+449f4f940090e7cd3df11f69a5a9adeaed8dfd96 upstream/feat/role-conflict-guard
 6ad9a84135869c4a26525b23e691ba71a658cb72 upstream/fix/api-key-copy-insecure-context
 e1376a5d10b5bcb7e1ced980b5fc4725429dbce6 upstream/fix/area-chart-theme
 cea5f7ac1172b33a8bed1cc25ff149ba40b28e9c upstream/fix/chart-period-limits
