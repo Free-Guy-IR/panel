@@ -55,7 +55,6 @@ def test_raw_endpoint_honours_the_device_lock_the_page_and_manual_routes_enforce
 
 
 FORK_SECRETS = {
-    "mtproto": {"secret": "ef" * 16},
     "l2tp": {"password": "L2tpSecret-7788"},
     "openvpn": {"password": "OvpnSecret-99887766"},
 }
@@ -79,7 +78,7 @@ async def test_no_subscription_route_hands_a_device_locked_secret_out_without_x_
         await db.commit()
     stored = client.get(f"/api/user/{hwid_locked_user['username']}", headers=auth_headers(access_token)).json()
     secrets = _secret_strings(stored["proxy_settings"])
-    assert {"ef" * 16, "L2tpSecret-7788", "OvpnSecret-99887766", stored["proxy_settings"]["vless"]["id"]} <= secrets
+    assert {"L2tpSecret-7788", "OvpnSecret-99887766", stored["proxy_settings"]["vless"]["id"]} <= secrets
 
     base = hwid_locked_user["subscription_url"]
     responses = {

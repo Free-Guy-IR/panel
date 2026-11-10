@@ -14,11 +14,6 @@ export function createNoExtraSection(messageKey: string, defaultValue: string) {
   }
 }
 
-export const MTProtoExtraSection = createNoExtraSection(
-  'hostsDialog.mtproto.noExtraSettings',
-  'MTProto hosts need no additional settings here — the fake-TLS domain and secrets are configured on the core instance and per user.',
-)
-
 export const L2TPExtraSection = createNoExtraSection(
   'hostsDialog.l2tp.noExtraSettings',
   'L2TP/IPsec hosts need no additional settings here — the pre-shared key and IPsec parameters are configured on the core instance, and credentials are per user.',

@@ -26,7 +26,7 @@ tracker_branch = "main"
 tracker_path = ".github/workflows/upstream-drift.yml"
 pending_until = "2026-10-20"
 pending_reason = "the drift check (scripts/upstream_drift.sh with .github/upstream-waivers.txt, first added in node commit ed5fd64) is only on unpublished node branches (release/v0.6.21 and release/v0.6.21-acct-drift6) and reaches main with the 0.6.21 release; until then Xray-core, sing-box and sing-quic releases and advisories are watched only by that unpublished check"
-reason = "the node drift check watches Xray-core, sing-box, sing-quic and mtg releases, security commits and advisories against the pins in the node go.mod and Dockerfile"
+reason = "the node drift check watches Xray-core, sing-box and sing-quic releases, security commits and advisories against the pins in the node Dockerfile; its mtg section was retired on 2026-11-10 with the MTProto backend"
 
 [[repo]]
 name = "scripts"
@@ -93,7 +93,7 @@ grandfathered_base = "d095108334deb1512f4b7aece588f6e00f5ec428"
 ledger = "upstream-forks/mtg.md"
 snapshot = "upstream-forks/mtg.refs"
 release_refs = ["refs/remotes/upstream/master", "refs/upstream-tags/*"]
-reason = "every 9seconds/mtg branch and tag is tracked here commit by commit against fork main, the fork default branch, which carries fork master (the commit the node go.mod pins) and the merge of upstream v2.3.0; upstream releases from master"
+reason = "every 9seconds/mtg branch and tag is tracked here commit by commit against fork main, the fork default branch, which carries fork master and the merge of upstream v2.3.0; upstream releases from master. The node dropped its mtg require and replace on 2026-11-10 with the MTProto backend, so no node pin points here any more; the fork repository stays tracked so the backend can be rebuilt from work/r11/MED/mtproto.med without starting the mtg fork over"
 
 [[repo]]
 name = "sing-box"
@@ -119,7 +119,7 @@ reason = "written for the fork; it has no upstream"
 name = "mtproto-config-kit"
 mode = "original"
 fork = "Free-Guy-IR/mtproto-config-kit"
-reason = "written for the fork; it has no upstream"
+reason = "written for the fork; it has no upstream. The dashboard stopped importing it on 2026-11-10 with the MTProto core editor; it stays a dependency because @pasarguard/core-kit still requires it"
 
 [[repo]]
 name = "openvpn-config-kit"

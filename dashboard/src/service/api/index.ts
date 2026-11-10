@@ -1980,18 +1980,6 @@ export interface L2TPSettings {
   password?: string | null;
 }
 
-export interface MTProtoRegistrationSecret {
-  tag: string;
-  port?: number | null;
-  mode: string;
-  domain?: string | null;
-  secret: string;
-}
-
-export interface MTProtoSettings {
-  secret?: string | null;
-}
-
 export interface ModifyUserByTemplate {
   user_template_id: number;
   note?: string | null;
@@ -2373,7 +2361,6 @@ export interface ProxyTable {
   masque?: MasqueSettings;
   hysteria2?: Hysteria2Settings;
   openvpn?: OpenVPNSettings;
-  mtproto?: MTProtoSettings;
   tuic?: TuicSettings;
   l2tp?: L2TPSettings;
 }
@@ -2391,7 +2378,6 @@ export interface ProxyTableInput {
   hysteria?: HysteriaSettings;
   hysteria2?: Hysteria2Settings;
   openvpn?: OpenVPNSettings;
-  mtproto?: MTProtoSettings;
   tuic?: TuicSettings;
   masque?: MasqueSettings;
   l2tp?: StrictL2TPSettings;
@@ -4509,145 +4495,6 @@ export const useReleaseUser = <TError = ErrorType<HTTPValidationError>,
       return useMutation(getReleaseUserMutationOptions(options), queryClient);
     }
 
-export type getMtprotoRegistrationSecretResponse200 = {
-  data: MTProtoRegistrationSecret
-  status: 200
-}
-
-export type getMtprotoRegistrationSecretResponse401 = {
-  data: Unauthorized
-  status: 401
-}
-
-export type getMtprotoRegistrationSecretResponse403 = {
-  data: Forbidden
-  status: 403
-}
-
-export type getMtprotoRegistrationSecretResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type getMtprotoRegistrationSecretResponseSuccess = (getMtprotoRegistrationSecretResponse200) & {
-  headers: Headers;
-};
-export type getMtprotoRegistrationSecretResponseError = (getMtprotoRegistrationSecretResponse401 | getMtprotoRegistrationSecretResponse403 | getMtprotoRegistrationSecretResponse422) & {
-  headers: Headers;
-};
-
-export type getMtprotoRegistrationSecretResponse = (getMtprotoRegistrationSecretResponseSuccess | getMtprotoRegistrationSecretResponseError)
-
-export const getGetMtprotoRegistrationSecretUrl = (coreId: number,
-    tag: string,) => {
-
-
-
-
-  return `/api/core/${coreId}/mtproto/${tag}/registration-secret`
-}
-
-/**
- * Return a client secret that @MTProxybot accepts when registering this instance.
- * @summary Get Mtproto Registration Secret
- */
-export const getMtprotoRegistrationSecret = async (coreId: number,
-    tag: string, options?: RequestInit): Promise<getMtprotoRegistrationSecretResponse> => {
-
-  return orvalFetcher<getMtprotoRegistrationSecretResponse>(getGetMtprotoRegistrationSecretUrl(coreId,tag),
-  {
-    ...options,
-    method: 'GET'
-
-
-  }
-);}
-
-
-
-
-
-export const getGetMtprotoRegistrationSecretQueryKey = (coreId: number,
-    tag: string,) => {
-    return [
-    `/api/core/${coreId}/mtproto/${tag}/registration-secret`
-    ] as const;
-    }
-
-
-export const getGetMtprotoRegistrationSecretQueryOptions = <TData = Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(coreId: number,
-    tag: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
-) => {
-
-const {query: queryOptions, request: requestOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetMtprotoRegistrationSecretQueryKey(coreId,tag);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>> = ({ signal }) => getMtprotoRegistrationSecret(coreId,tag, { signal, ...requestOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, enabled: coreId !== null && coreId !== undefined && tag !== null && tag !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetMtprotoRegistrationSecretQueryResult = NonNullable<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>>
-export type GetMtprotoRegistrationSecretQueryError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>
-
-
-export function useGetMtprotoRegistrationSecret<TData = Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
- coreId: number,
-    tag: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>,
-          TError,
-          Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetMtprotoRegistrationSecret<TData = Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
- coreId: number,
-    tag: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>,
-          TError,
-          Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>
-        > , 'initialData'
-      >, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetMtprotoRegistrationSecret<TData = Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
- coreId: number,
-    tag: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
- * @summary Get Mtproto Registration Secret
- */
-
-export function useGetMtprotoRegistrationSecret<TData = Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError = ErrorType<Unauthorized | Forbidden | HTTPValidationError>>(
- coreId: number,
-    tag: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMtprotoRegistrationSecret>>, TError, TData>>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getGetMtprotoRegistrationSecretQueryOptions(coreId,tag,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
 export type generateOpenvpnPkiBundleResponse200 = {
   data: OpenVPNPKIResponse
   status: 200
@@ -5009,114 +4856,6 @@ export function useUserSubscriptionPing<TData = Awaited<ReturnType<typeof userSu
 
 
 
-
-export type bulkActivateMtprotoSecretsResponse200 = {
-  data: unknown
-  status: 200
-}
-
-export type bulkActivateMtprotoSecretsResponse401 = {
-  data: Unauthorized
-  status: 401
-}
-
-export type bulkActivateMtprotoSecretsResponse422 = {
-  data: HTTPValidationError
-  status: 422
-}
-
-export type bulkActivateMtprotoSecretsResponseSuccess = (bulkActivateMtprotoSecretsResponse200) & {
-  headers: Headers;
-};
-export type bulkActivateMtprotoSecretsResponseError = (bulkActivateMtprotoSecretsResponse401 | bulkActivateMtprotoSecretsResponse422) & {
-  headers: Headers;
-};
-
-export type bulkActivateMtprotoSecretsResponse = (bulkActivateMtprotoSecretsResponseSuccess | bulkActivateMtprotoSecretsResponseError)
-
-export const getBulkActivateMtprotoSecretsUrl = () => {
-
-
-
-
-  return `/api/users/bulk/mtproto_activate`
-}
-
-/**
- * Generate an MTProto secret for existing users who have MTProto access via
- * their current groups but don't have one yet - e.g. users created before
- * MTProto was enabled on their group.
- *
- * - **user_ids**: Optional list of user IDs to modify
- * - **admins**: Optional list of admin IDs — their users will be targeted
- * - **group_ids**: Optional list of group IDs to filter users by their group membership
- * - **status**: Optional status to filter users (e.g., "expired", "active"), empty means no filtering
- * - Sending no filters at all targets every user.
- *
- * Users who already have an MTProto secret are never touched, even if they
- * match the filter - this only ever fills in a *missing* secret, never
- * regenerates an existing one.
- * @summary Retroactively generate MTProto secrets for existing users
- */
-export const bulkActivateMtprotoSecrets = async (bulkUserFilter: BulkUserFilter, options?: RequestInit): Promise<bulkActivateMtprotoSecretsResponse> => {
-
-  return orvalFetcher<bulkActivateMtprotoSecretsResponse>(getBulkActivateMtprotoSecretsUrl(),
-  {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(bulkUserFilter)
-  }
-);}
-
-
-
-
-
-export const getBulkActivateMtprotoSecretsMutationOptions = <TError = ErrorType<Unauthorized | HTTPValidationError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkActivateMtprotoSecrets>>, TError,{data: BodyType<BulkUserFilter>}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
-): UseMutationOptions<Awaited<ReturnType<typeof bulkActivateMtprotoSecrets>>, TError,{data: BodyType<BulkUserFilter>}, TContext> => {
-
-const mutationKey = ['bulkActivateMtprotoSecrets'];
-const {mutation: mutationOptions, request: requestOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, request: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkActivateMtprotoSecrets>>, {data: BodyType<BulkUserFilter>}> = (props) => {
-          const {data} = props ?? {};
-
-          return  bulkActivateMtprotoSecrets(data,requestOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type BulkActivateMtprotoSecretsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkActivateMtprotoSecrets>>>
-    export type BulkActivateMtprotoSecretsMutationBody = BodyType<BulkUserFilter>
-    export type BulkActivateMtprotoSecretsMutationError = ErrorType<Unauthorized | HTTPValidationError>
-
-    /**
- * @summary Retroactively generate MTProto secrets for existing users
- */
-export const useBulkActivateMtprotoSecrets = <TError = ErrorType<Unauthorized | HTTPValidationError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkActivateMtprotoSecrets>>, TError,{data: BodyType<BulkUserFilter>}, TContext>, request?: SecondParameter<typeof orvalFetcher>}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof bulkActivateMtprotoSecrets>>,
-        TError,
-        {data: BodyType<BulkUserFilter>},
-        TContext
-      > => {
-      return useMutation(getBulkActivateMtprotoSecretsMutationOptions(options), queryClient);
-    }
 
 export type bulkActivateL2tpPasswordsResponse200 = {
   data: unknown

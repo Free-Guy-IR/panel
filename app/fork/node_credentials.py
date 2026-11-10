@@ -7,7 +7,6 @@ REQUIRED_CREDENTIALS = {
     "hysteria": ("auth",),
     "hysteria2": ("password",),
     "open_vpn": ("password",),
-    "mtproto": ("secret",),
     "tuic": ("uuid", "password"),
     "l2tp": ("password",),
 }

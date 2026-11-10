@@ -15,12 +15,10 @@ from app.operation.user import UserOperation
 
 OVPN = "ovpn-udp"
 L2TP = "l2tp-de"
-MTP = "mtp-443"
 OWNER = SimpleNamespace(username="owner", is_owner=True, role=None)
 STORED = {
     "openvpn": ("password", "stored-openvpn-password-123"),
     "l2tp": ("password", "StoredL2tpPassword12"),
-    "mtproto": ("secret", "0123456789abcdef0123456789abcdef"),
 }
 NEW_VLESS_ID = "c8c1a7ff-4f2c-4b0d-8e9f-5b1f2a3d4e5f"
 
@@ -46,7 +44,7 @@ async def _seed(sessions):
         db.add(role)
         await db.flush()
         admin = Admin(username="owner", hashed_password="x", role_id=role.id)
-        inbounds = [ProxyInbound(tag=tag) for tag in (OVPN, L2TP, MTP)]
+        inbounds = [ProxyInbound(tag=tag) for tag in (OVPN, L2TP)]
         db.add_all([admin, *inbounds])
         await db.flush()
         db.add_all(
@@ -57,7 +55,6 @@ async def _seed(sessions):
                     type=CoreType.l2tp,
                     config={"inbound_tag": L2TP, "server_addr": "vpn.example.com", "psk": "correct-horse"},
                 ),
-                CoreConfig(name="mtproto", type=CoreType.mtproto, config={"instances": [{"tag": MTP}]}),
             ]
         )
         group = Group(name="vpn", inbounds=inbounds)
@@ -124,7 +121,6 @@ async def test_a_user_edit_that_leaves_an_entitled_secret_empty_keeps_the_stored
     [
         ("openvpn", "explicit-openvpn-password-456"),
         ("l2tp", "ExplicitL2tpPass9876"),
-        ("mtproto", "fedcba9876543210fedcba9876543210"),
     ],
 )
 @pytest.mark.asyncio

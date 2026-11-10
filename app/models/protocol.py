@@ -10,7 +10,6 @@ class ProxyProtocol(IntEnum):
     hysteria = 6
     hysteria2 = 7
     openvpn = 8
-    mtproto = 9
     tuic = 10
     l2tp = 11
 

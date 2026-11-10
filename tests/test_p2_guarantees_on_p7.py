@@ -213,7 +213,6 @@ async def test_a_second_failure_before_the_first_pass_reads_is_covered_and_leave
     state = await _phase_two_state(sessions, member)
     assert len(state.peer_ips) == 1
     assert state.openvpn
-    assert state.mtproto
     assert await _markers(sessions, member) == []
     assert group_repair.pending_repair_user_ids() == set()
 
@@ -254,7 +253,6 @@ async def test_failures_arriving_during_the_first_two_passes_get_a_third_pass(se
     state = await _phase_two_state(sessions, member)
     assert len(state.peer_ips) == 1
     assert state.openvpn
-    assert state.mtproto
     assert group_repair.pending_repair_user_ids() == set()
 
 
@@ -400,7 +398,6 @@ async def test_concurrent_group_changes_and_user_edits_finish_without_deadlock_o
         edited = await _stored_user(sessions, user_id)
         assert len(state.peer_ips) == 1, (user_id, state)
         assert state.openvpn, (user_id, state)
-        assert state.mtproto, (user_id, state)
         assert edited.note == EDITED_NOTE
         assert edited.vless_id == _vless_id_for(user_id)
 

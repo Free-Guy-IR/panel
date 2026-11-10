@@ -5,7 +5,6 @@ from random import choice
 from urllib.parse import quote
 
 from app.fork.finalmask import restore_nested_doh_tls_configs
-from app.fork.subscription.links import register_fork_link_handlers
 from app.models.subscription import (
     GRPCTransportConfig,
     KCPTransportConfig,
@@ -59,7 +58,6 @@ class StandardLinks(BaseSubscription):
             "hysteria2": self._build_hysteria2,
             "wireguard": self._build_wireguard,
         }
-        register_fork_link_handlers(self)
 
     def add_link(self, link):
         self.links.append(link)

@@ -20,7 +20,6 @@ from app.operation.core import CoreOperation
 WAITING_TAG = "ovpn-new"
 EXISTING_TAG = "ovpn-a"
 L2TP_TAG = "l2tp-de"
-MTP_TAG = "mtp-443"
 VLESS = "vless-in"
 KEPT = "kept-openvpn-password"
 
@@ -93,12 +92,12 @@ async def _seed(db):
     await db.flush()
     admin = Admin(username="owner", hashed_password="x", role_id=role.id)
     db.add(admin)
-    inbounds = {tag: ProxyInbound(tag=tag) for tag in (WAITING_TAG, EXISTING_TAG, L2TP_TAG, MTP_TAG, VLESS)}
+    inbounds = {tag: ProxyInbound(tag=tag) for tag in (WAITING_TAG, EXISTING_TAG, L2TP_TAG, VLESS)}
     db.add_all(inbounds.values())
     await db.flush()
     existing = CoreConfig(name="ovpn", type=CoreType.openvpn, config={"instances": [{"tag": EXISTING_TAG}]})
     db.add(existing)
-    waiting = Group(name="waiting", inbounds=[inbounds[WAITING_TAG], inbounds[L2TP_TAG], inbounds[MTP_TAG]])
+    waiting = Group(name="waiting", inbounds=[inbounds[WAITING_TAG], inbounds[L2TP_TAG]])
     plain = Group(name="plain", inbounds=[inbounds[VLESS]])
     db.add_all([waiting, plain])
     await db.flush()
@@ -141,7 +140,6 @@ async def test_creating_an_openvpn_core_for_a_tag_groups_already_carry_issues_th
     assert stored["holder"].openvpn.password == KEPT
     assert stored["outsider"].openvpn.password is None
     assert stored["newcomer"].l2tp.password is None
-    assert stored["newcomer"].mtproto.secret is None
     assert quiet_core == [["newcomer", "second"]]
 
 
@@ -181,27 +179,21 @@ async def test_saving_the_same_core_again_changes_nothing(engine, db, quiet_core
 
 
 @pytest.mark.asyncio
-async def test_l2tp_and_mtproto_cores_issue_only_their_own_secret(engine, db, quiet_core):
+async def test_an_l2tp_core_issues_only_its_own_secret(engine, db, quiet_core):
     await _seed(db)
 
+    before = await _stored(engine)
     await _operation().create_core(
         db,
         CoreCreate(name="l2tp", type=CoreType.l2tp, config={"inbound_tag": L2TP_TAG, "server_addr": "vpn.example.com"}),
         ADMIN,
     )
     after_l2tp = await _stored(engine)
-    await _operation().create_core(
-        db, CoreCreate(name="mtproto", type=CoreType.mtproto, config={"instances": [{"tag": MTP_TAG}]}), ADMIN
-    )
-    after_mtproto = await _stored(engine)
 
+    assert before["newcomer"].l2tp.password is None
     assert after_l2tp["newcomer"].l2tp.password
-    assert after_l2tp["newcomer"].mtproto.secret is None
     assert after_l2tp["newcomer"].openvpn.password is None
-    assert after_mtproto["newcomer"].mtproto.secret
-    assert after_mtproto["newcomer"].l2tp.password == after_l2tp["newcomer"].l2tp.password
-    assert after_mtproto["outsider"].l2tp.password is None
-    assert after_mtproto["outsider"].mtproto.secret is None
+    assert after_l2tp["outsider"].l2tp.password is None
 
 
 @pytest.mark.asyncio

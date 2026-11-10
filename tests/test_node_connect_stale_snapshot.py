@@ -43,7 +43,7 @@ CORE_VERSION = "26.3.27"
 SETTINGS = ProxyTable().dict(no_obj=True)
 BACKEND_TYPES = {
     CoreType.xray: service.BackendType.XRAY,
-    CoreType.mtproto: service.BackendType.MTPROTO,
+    CoreType.singbox: service.BackendType.SING_BOX,
 }
 _NODE_IDS = itertools.count(60000 + random.randrange(0, 30000) * 10)
 
@@ -216,7 +216,7 @@ class Harness:
         self.db_nodes: dict[int, SimpleNamespace] = {}
         self.tag_a = unique_name("snap_a")
         self.tag_b = unique_name("snap_b")
-        self.cores = {1: _core(CoreType.xray, [self.tag_a]), 2: _core(CoreType.mtproto, [self.tag_b])}
+        self.cores = {1: _core(CoreType.xray, [self.tag_a]), 2: _core(CoreType.singbox, [self.tag_b])}
         self.user_id = 0
         self.email = ""
         monkeypatch.setattr(node_manager, "_nodes", {})
@@ -510,7 +510,7 @@ async def test_attach_keeps_the_users_of_every_backend(monkeypatch):
 
         remote = h.remote(db_node)
         assert remote.carries(h.email, service.BackendType.XRAY)
-        assert remote.carries(h.email, service.BackendType.MTPROTO), (
+        assert remote.carries(h.email, service.BackendType.SING_BOX), (
             "attaching pushed only the primary core's users, which emptied the extra backend"
         )
 
@@ -640,8 +640,8 @@ async def test_reconcile_extra_cores_does_not_bury_a_delta(monkeypatch):
             problems = await NodeOperation._reconcile_extra_cores(db, pg_node, db_node)
 
         assert problems == ""
-        assert remote.carries("0", service.BackendType.MTPROTO) is False
-        assert service.BackendType.MTPROTO in remote.backends
+        assert remote.carries("0", service.BackendType.SING_BOX) is False
+        assert service.BackendType.SING_BOX in remote.backends
         assert await h.cleared(db_node), "reconciling added the extra backend with a snapshot older than a delta"
 
 

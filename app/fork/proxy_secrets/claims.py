@@ -23,7 +23,7 @@ CLAIM_CHUNK = 400
 HEX_DIGITS = frozenset(string.hexdigits)
 ROUTE_NORMALIZED_UUID_FIELDS = frozenset({ProxySecretField.vless_id, ProxySecretField.hysteria_auth})
 UUID_FIELDS = frozenset({ProxySecretField.vmess_id, ProxySecretField.tuic_uuid})
-HEX_FIELDS = frozenset({ProxySecretField.mtproto_secret})
+HEX_FIELDS: frozenset[ProxySecretField] = frozenset()
 
 Claims = dict[ProxySecretField, str]
 ALL_KINDS = frozenset(spec.field for spec in SECRET_FIELD_SPECS)

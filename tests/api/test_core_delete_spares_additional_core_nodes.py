@@ -57,16 +57,32 @@ def bridge_calls(monkeypatch):
     return calls
 
 
-def create_mtproto_core(access_token: str) -> dict:
+def create_singbox_core(access_token: str) -> dict:
     response = client.post(
         "/api/core",
         headers=auth_headers(access_token),
         json={
-            "name": unique_name("spare_mtproto"),
+            "name": unique_name("spare_singbox"),
             "config": {
-                "instances": [{"tag": unique_name("spare_mt"), "port": random.randint(20000, 60000), "mode": "plain"}]
+                "log": {"level": "error"},
+                "inbounds": [
+                    {
+                        "type": "hysteria2",
+                        "tag": unique_name("spare_sb"),
+                        "listen": "127.0.0.1",
+                        "listen_port": random.randint(20000, 60000),
+                        "users": [],
+                        "tls": {
+                            "enabled": True,
+                            "alpn": ["h3"],
+                            "certificate_path": "/etc/ssl/certs/hy2.crt",
+                            "key_path": "/etc/ssl/private/hy2.key",
+                        },
+                    }
+                ],
+                "outbounds": [{"type": "direct", "tag": "direct"}],
             },
-            "type": "mtproto",
+            "type": "singbox",
             "exclude_inbound_tags": [],
             "fallbacks_inbound_tags": [],
         },
@@ -124,7 +140,7 @@ def delete_extra(access_token: str, core_id: int, how: str):
 def test_deleting_a_core_a_node_runs_only_as_an_extra_never_touches_its_primary_backend(
     access_token, bridge_calls, how
 ):
-    extra = create_mtproto_core(access_token)
+    extra = create_singbox_core(access_token)
     node_id = make_connected_node_with_extra(extra["id"])
     try:
         response = delete_extra(access_token, extra["id"], how)

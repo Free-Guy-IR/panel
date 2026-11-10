@@ -17,10 +17,8 @@ from app.operation.user import UserOperation
 
 OVPN = "ovpn-udp"
 L2TP = "l2tp-de"
-MTP = "mtp-443"
 VLESS = "vless-in"
 KEPT_OVPN = "kept-openvpn-password"
-KEPT_MTP = "0123456789abcdef0123456789abcdef"
 VMESS_ID = "b7b0f6ee-3e1b-4a9c-9d8e-4a0e1f2c3d4e"
 
 
@@ -59,10 +57,9 @@ def synced(monkeypatch):
     return calls
 
 
-def _settings(openvpn=None, mtproto=None, extra=None):
+def _settings(openvpn=None, extra=None):
     settings = ProxyTable().dict()
     settings["openvpn"] = {"password": openvpn}
-    settings["mtproto"] = {"secret": mtproto}
     settings.update(extra or {})
     return settings
 
@@ -73,25 +70,24 @@ async def _seed(db):
     await db.flush()
     admin = Admin(username="owner", hashed_password="x", role_id=role.id)
     db.add(admin)
-    inbounds = {tag: ProxyInbound(tag=tag) for tag in (OVPN, L2TP, MTP, VLESS)}
+    inbounds = {tag: ProxyInbound(tag=tag) for tag in (OVPN, L2TP, VLESS)}
     db.add_all(inbounds.values())
     await db.flush()
     db.add_all(
         [
             CoreConfig(name="ovpn", type=CoreType.openvpn, config={"instances": [{"tag": OVPN}]}),
-            CoreConfig(name="mtproto", type=CoreType.mtproto, config={"instances": [{"tag": MTP}]}),
         ]
     )
-    vpn = Group(name="vpn", inbounds=[inbounds[OVPN], inbounds[MTP]])
+    vpn = Group(name="vpn", inbounds=[inbounds[OVPN]])
     plain = Group(name="plain", inbounds=[inbounds[VLESS]])
-    off = Group(name="off", inbounds=[inbounds[OVPN], inbounds[MTP]], is_disabled=True)
+    off = Group(name="off", inbounds=[inbounds[OVPN]], is_disabled=True)
     db.add_all([vpn, plain, off])
     await db.flush()
 
     rows = {
         "entitled": (_settings(extra={"vmess": {"id": VMESS_ID}, "future_key": {"kept": True}}), [vpn], None),
         "expired": (_settings(), [vpn], UserStatus.expired),
-        "holder": (_settings(openvpn=KEPT_OVPN, mtproto=KEPT_MTP), [vpn], None),
+        "holder": (_settings(openvpn=KEPT_OVPN), [vpn], None),
         "outsider": (_settings(), [plain], None),
         "switched_off": (_settings(), [off], None),
         "no_groups": (_settings(), [], None),
@@ -172,7 +168,6 @@ async def test_the_openvpn_activation_writes_only_the_openvpn_password(engine, d
     for key in set(before["entitled"]) | set(after["entitled"]):
         if key != "openvpn":
             assert after["entitled"].get(key) == before["entitled"].get(key)
-    assert after["entitled"]["mtproto"]["secret"] is None
     assert after["entitled"]["future_key"] == {"kept": True}
 
 
@@ -229,57 +224,16 @@ async def test_the_cli_operator_gets_the_count(engine, db, synced):
 
 
 @pytest.mark.asyncio
-async def test_the_mtproto_activation_keeps_its_contract(engine, db, synced):
-    await _seed(db)
-
-    dry = await _operation().bulk_activate_mtproto_secrets(db, BulkUserFilter(dry_run=True))
-    result = await _operation().bulk_activate_mtproto_secrets(db, BulkUserFilter())
-
-    assert dry.affected_users == 2
-    assert result == {"detail": "operation has been successfuly done on 2 users"}
-    stored = await _stored(engine)
-    for username in ("entitled", "expired"):
-        secret = stored[username]["mtproto"]["secret"]
-        assert len(secret) == 32
-        int(secret, 16)
-    assert stored["holder"]["mtproto"]["secret"] == KEPT_MTP
-    for username in ("outsider", "switched_off", "no_groups"):
-        assert stored[username]["mtproto"]["secret"] is None
-        assert stored[username]["openvpn"]["password"] is None
-
-
-@pytest.mark.asyncio
-async def test_the_mtproto_activation_never_hands_out_a_secret_another_user_already_holds(
-    engine, db, synced, monkeypatch
-):
-    await _seed(db)
-    values = iter([KEPT_MTP, KEPT_MTP, "f" * 32, "e" * 32])
-    spec = entitled_module.ENTITLED_SPEC_BY_FIELD[EntitledSecretField.mtproto_secret]
-    monkeypatch.setitem(
-        entitled_module.ENTITLED_SPEC_BY_FIELD,
-        EntitledSecretField.mtproto_secret,
-        replace(spec, generate=lambda: next(values)),
-    )
-
-    await _operation().bulk_activate_mtproto_secrets(db, BulkUserFilter())
-
-    stored = await _stored(engine)
-    issued = {stored[name]["mtproto"]["secret"] for name in ("entitled", "expired")}
-    assert issued == {"f" * 32, "e" * 32}
-    assert stored["holder"]["mtproto"]["secret"] == KEPT_MTP
-
-
-@pytest.mark.asyncio
-async def test_the_mtproto_activation_is_not_blocked_by_an_unrelated_broken_wireguard_key(engine, db, synced):
+async def test_the_openvpn_activation_is_not_blocked_by_an_unrelated_broken_wireguard_key(engine, db, synced):
     await _seed(db)
     user = (await db.execute(select(User).where(User.username == "entitled"))).scalar_one()
     user.proxy_settings = {**user.proxy_settings, "wireguard": {"private_key": "not-a-real-key"}}
     await db.commit()
 
-    await _operation().bulk_activate_mtproto_secrets(db, BulkUserFilter())
+    await _operation().bulk_activate_openvpn_passwords(db, BulkUserFilter())
 
     stored = await _stored(engine)
-    assert stored["entitled"]["mtproto"]["secret"]
+    assert stored["entitled"]["openvpn"]["password"]
     assert stored["entitled"]["wireguard"] == {"private_key": "not-a-real-key"}
 
 

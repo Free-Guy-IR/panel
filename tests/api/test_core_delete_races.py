@@ -28,7 +28,7 @@ from tests.api.test_core_delete_keeps_nodes import (
 )
 from tests.api.test_core_delete_restarts_its_nodes import (
     assert_no_node_left_on_a_deleted_core,
-    create_mtproto_core,
+    create_singbox_core,
     delete_bulk,
     delete_single,
     make_node,
@@ -41,7 +41,7 @@ __all__ = ["starts"]
 
 @pytest.mark.parametrize("bulk", [False, True], ids=["single", "bulk"])
 def test_a_delete_never_leaves_an_active_node_on_a_deleted_additional_core(access_token, starts, bulk):
-    extra = create_mtproto_core(access_token)
+    extra = create_singbox_core(access_token)
     node = make_node(1, additional=[extra["id"]])
     try:
         response = delete_bulk(access_token, [extra["id"]]) if bulk else delete_single(access_token, extra["id"])
@@ -162,7 +162,7 @@ async def test_a_delete_racing_a_node_adding_the_core_as_an_extra_never_leaves_i
     tmp_path, race_restarts, policy, bulk
 ):
     engine = await _race_engine(tmp_path)
-    rows = await _seed(engine, CoreType.mtproto)
+    rows = await _seed(engine, CoreType.singbox)
     try:
         outcomes, trace = await _race(
             engine,
@@ -273,7 +273,7 @@ async def test_a_delete_racing_a_node_adding_the_core_as_an_extra_never_restarts
     tmp_path, race_restarts, policy, bulk
 ):
     engine = await _race_engine(tmp_path)
-    rows = await _seed(engine, CoreType.mtproto)
+    rows = await _seed(engine, CoreType.singbox)
     try:
         outcomes, trace = await _race(
             engine,

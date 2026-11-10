@@ -555,8 +555,6 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             type = service.BackendType.SING_BOX
         elif core.type == CoreType.openvpn:
             type = service.BackendType.OPEN_VPN
-        elif core.type == CoreType.mtproto:
-            type = service.BackendType.MTPROTO
         elif core.type == CoreType.l2tp:
             type = service.BackendType.L2TP
         else:

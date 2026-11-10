@@ -2,13 +2,11 @@ import type { StateCreator } from 'zustand'
 import type { CoreKind } from '@pasarguard/core-kit'
 import type { SingBoxCoreDraft } from '@pasarguard/singbox-config-kit'
 import type { OpenVPNCoreDraft } from '@pasarguard/openvpn-config-kit'
-import type { MTProtoCoreDraft } from '@pasarguard/mtproto-config-kit'
 import type { L2TPCoreDraft } from '@pasarguard/l2tp-config-kit'
 import type { CoreResponse } from '@/service/api'
 import { apiCoreTypeToKind } from '@/features/core-editor/kit/core-kind'
 import { createNewSingBoxDraft, draftToPersistedConfig as sbDraftToPersistedConfig, singBoxConfigToDraft } from '@/features/core-editor/kit/singbox-adapter'
 import { createNewOpenVPNDraft, draftToPersistedConfig as ovDraftToPersistedConfig, openVPNConfigToDraft } from '@/features/core-editor/kit/openvpn-adapter'
-import { createNewMTProtoDraft, draftToPersistedConfig as mtDraftToPersistedConfig, mtprotoConfigToDraft } from '@/features/core-editor/kit/mtproto-adapter'
 import { createNewL2TPDraft, draftToPersistedConfig as l2tpDraftToPersistedConfig, l2tpConfigToDraft } from '@/features/core-editor/kit/l2tp-adapter'
 import {
   isForkCoreKind,
@@ -18,7 +16,7 @@ import {
   type ForkPersistedFields,
 } from './core-editor-types'
 
-export type { ForkCoreEditorSlice, ForkCoreKind, ForkCoreSection, ForkPersistedFields, L2tpCoreSection, MtCoreSection, OvCoreSection, SbCoreSection } from './core-editor-types'
+export type { ForkCoreEditorSlice, ForkCoreKind, ForkCoreSection, ForkPersistedFields, L2tpCoreSection, OvCoreSection, SbCoreSection } from './core-editor-types'
 export { isForkCoreKind } from './core-editor-types'
 
 type SetFn = (partial: Record<string, unknown>) => void
@@ -64,10 +62,6 @@ function cloneOv(d: OpenVPNCoreDraft): OpenVPNCoreDraft {
   return JSON.parse(JSON.stringify(d)) as OpenVPNCoreDraft
 }
 
-function cloneMt(d: MTProtoCoreDraft): MTProtoCoreDraft {
-  return JSON.parse(JSON.stringify(d)) as MTProtoCoreDraft
-}
-
 function cloneL2tp(d: L2TPCoreDraft): L2TPCoreDraft {
   return JSON.parse(JSON.stringify(d)) as L2TPCoreDraft
 }
@@ -75,7 +69,6 @@ function cloneL2tp(d: L2TPCoreDraft): L2TPCoreDraft {
 function emptyForkDraftFields(): ForkPersistedFields & {
   sbBaseline: null
   ovBaseline: null
-  mtBaseline: null
   l2tpBaseline: null
 } {
   return {
@@ -83,8 +76,6 @@ function emptyForkDraftFields(): ForkPersistedFields & {
     sbBaseline: null,
     ovDraft: null,
     ovBaseline: null,
-    mtDraft: null,
-    mtBaseline: null,
     l2tpDraft: null,
     l2tpBaseline: null,
   }
@@ -139,16 +130,6 @@ const handlers: Record<ForkCoreKind, ForkKindHandler> = {
     assign: (draft, baseline) => ({ ovDraft: draft, ovBaseline: baseline }),
     read: s => s.ovDraft,
   },
-  mtproto: {
-    defaultSection: 'instances',
-    overviewSection: 'instances',
-    create: createNewMTProtoDraft,
-    parse: mtprotoConfigToDraft,
-    persist: d => mtDraftToPersistedConfig(d as MTProtoCoreDraft),
-    clone: d => cloneMt(d as MTProtoCoreDraft),
-    assign: (draft, baseline) => ({ mtDraft: draft, mtBaseline: baseline }),
-    read: s => s.mtDraft,
-  },
   l2tp: {
     defaultSection: 'settings',
     overviewSection: 'settings',
@@ -182,7 +163,6 @@ function captureForkFields(s: ForkStoreView): ForkPersistedFields {
   return {
     sbDraft: s.sbDraft ? cloneSb(s.sbDraft) : null,
     ovDraft: s.ovDraft ? cloneOv(s.ovDraft) : null,
-    mtDraft: s.mtDraft ? cloneMt(s.mtDraft) : null,
     l2tpDraft: s.l2tpDraft ? cloneL2tp(s.l2tpDraft) : null,
   }
 }
@@ -206,7 +186,6 @@ export function composeForkPersistedSnapshot(s: ForkStoreView): ForkStoreView['p
 function snapshotDraft(snapshot: NonNullable<ForkStoreView['persistedSnapshot']>, kind: ForkCoreKind): unknown {
   if (kind === 'singbox') return snapshot.sbDraft
   if (kind === 'openvpn') return snapshot.ovDraft
-  if (kind === 'mtproto') return snapshot.mtDraft
   return snapshot.l2tpDraft
 }
 
@@ -327,8 +306,6 @@ export function createForkCoreEditorSlice(set: SetFn, get: GetFn): ForkCoreEdito
     sbBaseline: null,
     ovDraft: null,
     ovBaseline: null,
-    mtDraft: null,
-    mtBaseline: null,
     l2tpDraft: null,
     l2tpBaseline: null,
     setSbDraft: sbDraft => {
@@ -351,17 +328,6 @@ export function createForkCoreEditorSlice(set: SetFn, get: GetFn): ForkCoreEdito
       if (!cur) return
       const next = updater(cloneOv(cur))
       set({ ovDraft: next, dirty: true })
-      get().syncMonacoFromDraft()
-    },
-    setMtDraft: mtDraft => {
-      set({ mtDraft, dirty: true })
-      get().syncMonacoFromDraft()
-    },
-    updateMtDraft: updater => {
-      const cur = get().mtDraft
-      if (!cur) return
-      const next = updater(cloneMt(cur))
-      set({ mtDraft: next, dirty: true })
       get().syncMonacoFromDraft()
     },
     setL2tpDraft: l2tpDraft => {
@@ -446,7 +412,7 @@ function tryForkMarkClean(set: SetFn, get: GetFn): boolean {
   const h = handlers[s.kind]
   const draft = h.read(s)
   if (!draft) return false
-  const baselineKey = s.kind === 'singbox' ? 'sbBaseline' : s.kind === 'openvpn' ? 'ovBaseline' : s.kind === 'mtproto' ? 'mtBaseline' : 'l2tpBaseline'
+  const baselineKey = s.kind === 'singbox' ? 'sbBaseline' : s.kind === 'openvpn' ? 'ovBaseline' : 'l2tpBaseline'
   set({ [baselineKey]: h.clone(draft), dirty: false, monacoDirty: false })
   return true
 }
@@ -476,7 +442,7 @@ function tryForkApplyMonaco(set: SetFn, get: GetFn): { ok: true } | { ok: false;
   }
   const r = handlers[s.kind].parse(parsed)
   if (!r.ok) return { ok: false, error: r.message }
-  const draftKey = s.kind === 'singbox' ? 'sbDraft' : s.kind === 'openvpn' ? 'ovDraft' : s.kind === 'mtproto' ? 'mtDraft' : 'l2tpDraft'
+  const draftKey = s.kind === 'singbox' ? 'sbDraft' : s.kind === 'openvpn' ? 'ovDraft' : 'l2tpDraft'
   set({ [draftKey]: r.draft, dirty: true, monacoDirty: false })
   return { ok: true }
 }

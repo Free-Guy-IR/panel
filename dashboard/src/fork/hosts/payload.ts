@@ -102,7 +102,7 @@ export function applyHostProtocolPayload<T extends ProtocolHostPayload>(payload:
     clearWireguardPayload(payload)
     return payload
   }
-  if (protocol === 'mtproto' || protocol === 'l2tp') {
+  if (protocol === 'l2tp') {
     cleanNoExtraPayload(payload)
     clearWireguardPayload(payload)
     clearOpenvpnPayload(payload)

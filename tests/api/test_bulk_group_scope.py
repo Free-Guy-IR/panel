@@ -154,12 +154,11 @@ async def test_entitled_secret_activation_by_a_group_restricted_admin_only_consi
     with scoped_world(access_token) as world:
         for path in (
             "/api/users/bulk/l2tp_activate",
-            "/api/users/bulk/mtproto_activate",
             "/api/users/bulk/openvpn_activate",
         ):
             _post(world.token, path, {"users": world.ids, "dry_run": True})
         _post(access_token, "/api/users/bulk/l2tp_activate", {"users": world.ids, "dry_run": True})
-    assert seen == [[world.visible["id"]]] * 3 + [sorted(world.ids)], seen
+    assert seen == [[world.visible["id"]]] * 2 + [sorted(world.ids)], seen
 
 
 async def test_duplicate_secret_repair_by_a_group_restricted_admin_only_touches_its_users(access_token):

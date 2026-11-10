@@ -28,10 +28,9 @@ from app.fork.proxy_secrets.uniqueness import (
     ReservedSecrets,
     secret_column,
 )
-from app.models.proxy import L2TPSettings, MTProtoSettings, OpenVPNSettings
+from app.models.proxy import L2TPSettings, OpenVPNSettings
 from app.utils.l2tp import generate_l2tp_password, l2tp_core_tags
 from app.utils.logger import get_logger
-from app.utils.mtproto import generate_mtproto_secret, mtproto_core_tags
 from app.utils.openvpn import openvpn_core_tags
 from app.utils.system import random_password
 
@@ -43,7 +42,6 @@ LOOKUP_CHUNK = 500
 class EntitledSecretField(StrEnum):
     openvpn_password = "openvpn.password"
     l2tp_password = "l2tp.password"
-    mtproto_secret = "mtproto.secret"
 
 
 @dataclass(frozen=True)
@@ -78,16 +76,6 @@ ENTITLED_SECRET_SPECS: tuple[EntitledSecretSpec, ...] = (
         L2TPSettings,
         l2tp_core_tags,
         generate_l2tp_password,
-    ),
-    EntitledSecretSpec(
-        EntitledSecretField.mtproto_secret,
-        "mtproto",
-        "secret",
-        "MTProto",
-        CoreType.mtproto,
-        MTProtoSettings,
-        mtproto_core_tags,
-        generate_mtproto_secret,
     ),
 )
 

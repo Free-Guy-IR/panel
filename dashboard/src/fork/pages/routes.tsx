@@ -9,7 +9,6 @@ const ConnectionLimitSettings = lazyWithChunkRecovery(() => import('./connection
 const ConnectionLimitReview = lazyWithChunkRecovery(() => import('./connection-limit-review'))
 const ConnectionLimitViolations = lazyWithChunkRecovery(() => import('./connection-limit-violations'))
 const BulkL2tpPage = lazyWithChunkRecovery(() => import('./bulk-l2tp'))
-const BulkMtprotoPage = lazyWithChunkRecovery(() => import('./bulk-mtproto'))
 
 function withSpinner(element: ReactElement) {
   return <Suspense fallback={<LoadingSpinner />}>{element}</Suspense>
@@ -19,7 +18,6 @@ registerRoute({ path: '/settings/connection-limit', element: withSpinner(<Connec
 registerRoute({ path: '/settings/connection-limit/review', element: withSpinner(<ConnectionLimitReview />) }, 'settings')
 registerRoute({ path: '/settings/connection-limit/violations', element: withSpinner(<ConnectionLimitViolations />) }, 'settings')
 registerRoute({ path: '/bulk/l2tp', element: withSpinner(<BulkL2tpPage />) }, 'bulk')
-registerRoute({ path: '/bulk/mtproto', element: withSpinner(<BulkMtprotoPage />) }, 'bulk')
 
 export const forkSettingsRoutes: RouteObject[] = extraRoutes('settings')
 export const forkBulkRoutes: RouteObject[] = extraRoutes('bulk')

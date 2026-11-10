@@ -12,7 +12,6 @@ export type {
   ForkCoreSection,
   ForkPersistedFields,
   L2tpCoreSection,
-  MtCoreSection,
   OvCoreSection,
   SbCoreSection,
 } from './core-editor'

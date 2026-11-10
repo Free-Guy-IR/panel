@@ -30,9 +30,6 @@ export const wireguardSettingsSchema = z.object({
   private_key: z.string().nullable().optional(),
   public_key: z.string().nullable().optional(),
 })
-export const mtprotoSettingsSchema = z.object({
-  secret: z.string().nullable().optional(),
-})
 export const l2tpSettingsSchema = z.object({
   password: z
     .string()
@@ -50,7 +47,6 @@ export const proxyTableInputSchema = z.object({
   wireguard: wireguardSettingsSchema.optional(),
   hysteria: hysteriaSettingsSchema.optional(),
   masque: masqueSettingsSchema.optional(),
-  mtproto: mtprotoSettingsSchema.optional(),
   l2tp: l2tpSettingsSchema.optional(),
 })
 
@@ -143,9 +139,6 @@ export const getDefaultUserForm = async () => {
         auth: undefined,
       },
       masque: {},
-      mtproto: {
-        secret: undefined,
-      },
       l2tp: {
         password: undefined,
       },

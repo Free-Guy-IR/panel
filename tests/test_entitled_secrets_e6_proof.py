@@ -21,7 +21,6 @@ from app.subscription.config_cache import clear_sub_config_cache
 
 OVPN = "ovpn-udp"
 L2TP = "l2tp-de"
-MTP = "mtp-443"
 VLESS = "vless-in"
 CA = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----"
 TLS_CRYPT = "-----BEGIN OpenVPN Static key V1-----\nabcd\n-----END OpenVPN Static key V1-----"
@@ -50,7 +49,7 @@ async def _seed(db):
     await db.flush()
     admin = Admin(username="owner", hashed_password="x", role_id=role.id)
     db.add(admin)
-    inbounds = {tag: ProxyInbound(tag=tag) for tag in (OVPN, L2TP, MTP, VLESS)}
+    inbounds = {tag: ProxyInbound(tag=tag) for tag in (OVPN, L2TP, VLESS)}
     db.add_all(inbounds.values())
     await db.flush()
     db.add_all(
@@ -61,10 +60,9 @@ async def _seed(db):
                 type=CoreType.l2tp,
                 config={"inbound_tag": L2TP, "server_addr": "vpn.example.com", "psk": "correct-horse"},
             ),
-            CoreConfig(name="mtproto", type=CoreType.mtproto, config={"instances": [{"tag": MTP}]}),
         ]
     )
-    vpn = Group(name="vpn", inbounds=[inbounds[OVPN], inbounds[L2TP], inbounds[MTP]])
+    vpn = Group(name="vpn", inbounds=[inbounds[OVPN], inbounds[L2TP]])
     plain = Group(name="plain", inbounds=[inbounds[VLESS]])
     db.add_all([vpn, plain])
     await db.flush()
@@ -120,7 +118,6 @@ async def test_a_user_granted_the_protocols_by_a_bulk_group_add_gets_a_secret_fo
     stored = await _stored(db, "newcomer")
     assert stored.openvpn.password
     assert stored.l2tp.password
-    assert stored.mtproto.secret
 
 
 @pytest.mark.asyncio
@@ -131,7 +128,7 @@ async def test_a_user_granted_the_protocols_by_a_group_edit_gets_a_secret_for_ea
     await _group_operation().modify_group(
         db,
         seed.plain.id,
-        GroupModify(name="plain", inbound_tags=[VLESS, OVPN, L2TP, MTP]),
+        GroupModify(name="plain", inbound_tags=[VLESS, OVPN, L2TP]),
         SimpleNamespace(username="owner", is_owner=True),
     )
 
@@ -139,7 +136,6 @@ async def test_a_user_granted_the_protocols_by_a_group_edit_gets_a_secret_for_ea
         stored = await _stored(db, username)
         assert stored.openvpn.password
         assert stored.l2tp.password
-        assert stored.mtproto.secret
 
 
 @pytest.mark.asyncio
@@ -157,7 +153,6 @@ async def test_a_group_change_that_grants_nothing_creates_no_secret(db, monkeypa
     stored = await _stored(db, "outsider")
     assert stored.openvpn.password is None
     assert stored.l2tp.password is None
-    assert stored.mtproto.secret is None
 
 
 def _openvpn_host():

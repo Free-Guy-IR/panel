@@ -49,8 +49,8 @@ test('applyHostProtocolPayload openvpn keeps only openvpn overrides', () => {
   expect(payload.openvpn_overrides).toEqual({ dns_servers: ['9.9.9.9'] })
 })
 
-test('applyHostProtocolPayload mtproto and l2tp strip extras', () => {
-  for (const protocol of ['mtproto', 'l2tp'] as const) {
+test('applyHostProtocolPayload l2tp strips extras', () => {
+  for (const protocol of ['l2tp'] as const) {
     const payload = applyHostProtocolPayload(
       {
         sni: ['x'],

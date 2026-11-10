@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import { ArrowDownToLine, ArrowUpFromLine, Braces, Cable, Globe, Link2, Scale, Waypoints, Webhook } from 'lucide-react'
 import type { WgCoreSection, XrayCoreSection } from '@/features/core-editor/state/core-editor-store'
 import { FlaskConical, ListTree, ScrollText, ShieldCheck } from 'lucide-react'
-import type { L2tpCoreSection, MtCoreSection, OvCoreSection, SbCoreSection } from '@/features/core-editor/state/core-editor-store'
+import type { L2tpCoreSection, OvCoreSection, SbCoreSection } from '@/features/core-editor/state/core-editor-store'
 
 export type XraySectionNavItem = {
   id: XrayCoreSection
@@ -27,13 +27,6 @@ export type SbSectionNavItem = {
 
 export type OvSectionNavItem = {
   id: OvCoreSection
-  labelKey: string
-  defaultLabel: string
-  icon: LucideIcon
-}
-
-export type MtSectionNavItem = {
-  id: MtCoreSection
   labelKey: string
   defaultLabel: string
   icon: LucideIcon
@@ -77,11 +70,6 @@ export const SING_BOX_CORE_SECTION_NAV: SbSectionNavItem[] = [
 export const OPENVPN_CORE_SECTION_NAV: OvSectionNavItem[] = [
   { id: 'instances', labelKey: 'coreEditor.section.instances', defaultLabel: 'Instances', icon: ScrollText },
   { id: 'pki', labelKey: 'coreEditor.section.pki', defaultLabel: 'PKI', icon: ShieldCheck },
-  { id: 'advanced', labelKey: 'coreEditor.section.advanced', defaultLabel: 'Advanced', icon: Braces },
-]
-
-export const MTPROTO_CORE_SECTION_NAV: MtSectionNavItem[] = [
-  { id: 'instances', labelKey: 'coreEditor.section.instances', defaultLabel: 'Instances', icon: ScrollText },
   { id: 'advanced', labelKey: 'coreEditor.section.advanced', defaultLabel: 'Advanced', icon: Braces },
 ]
 

@@ -18,7 +18,6 @@ from app.models.proxy import ProxyTable
 
 OVPN = "ovpn-udp"
 L2TP = "l2tp-de"
-MTP = "mtp-443"
 VLESS = "vless-in"
 GIGABYTE = 1024**3
 
@@ -62,7 +61,7 @@ async def _seed(db):
     await db.flush()
     admin = Admin(username="owner", hashed_password="x", role_id=role.id)
     db.add(admin)
-    inbounds = {tag: ProxyInbound(tag=tag) for tag in (OVPN, L2TP, MTP, VLESS)}
+    inbounds = {tag: ProxyInbound(tag=tag) for tag in (OVPN, L2TP, VLESS)}
     db.add_all(inbounds.values())
     await db.flush()
     db.add_all(
@@ -73,11 +72,10 @@ async def _seed(db):
                 type=CoreType.l2tp,
                 config={"inbound_tag": L2TP, "server_addr": "vpn.example.com", "psk": "correct-horse"},
             ),
-            CoreConfig(name="mtproto", type=CoreType.mtproto, config={"instances": [{"tag": MTP}]}),
         ]
     )
     plain = Group(name="plain", inbounds=[inbounds[VLESS]])
-    vpn = Group(name="vpn", inbounds=[inbounds[OVPN], inbounds[L2TP], inbounds[MTP], inbounds[VLESS]])
+    vpn = Group(name="vpn", inbounds=[inbounds[OVPN], inbounds[L2TP], inbounds[VLESS]])
     db.add_all([plain, vpn])
     await db.flush()
     template = UserTemplate(
@@ -112,7 +110,7 @@ async def _stored(engine, user_id):
             groups=sorted(group.name for group in user.groups),
             data_limit=user.data_limit,
             used_traffic=user.used_traffic,
-            secrets=(table.openvpn.password, table.l2tp.password, table.mtproto.secret),
+            secrets=(table.openvpn.password, table.l2tp.password),
         )
 
 
@@ -127,7 +125,7 @@ async def test_applying_the_next_plan_grants_the_secrets_its_groups_entitle(engi
     assert stored.groups == ["vpn"]
     assert stored.data_limit == 5 * GIGABYTE
     assert all(stored.secrets)
-    assert len(set(stored.secrets)) == 3
+    assert len(set(stored.secrets)) == 2
 
 
 @pytest.mark.asyncio
@@ -146,7 +144,7 @@ async def test_a_failed_grant_still_applies_the_plan_and_logs_the_user_and_field
     assert stored.groups == ["vpn"]
     assert stored.data_limit == 5 * GIGABYTE
     assert stored.used_traffic == 0
-    assert stored.secrets == (None, None, None)
+    assert stored.secrets == (None, None)
     messages = [record.getMessage() for record in errors_seen]
     assert any(str(seed.user_id) in message and "openvpn.password" in message for message in messages), messages
 
@@ -171,7 +169,7 @@ async def test_a_grant_that_times_out_on_the_lock_still_applies_the_plan(engine,
     assert stored.groups == ["vpn"]
     assert stored.data_limit == 5 * GIGABYTE
     assert stored.used_traffic == 0
-    assert stored.secrets == (None, None, None)
+    assert stored.secrets == (None, None)
     messages = [record.getMessage() for record in errors_seen]
     assert any(str(seed.user_id) in message and "timed out" in message for message in messages), messages
 
@@ -197,4 +195,4 @@ async def test_a_grant_whose_transaction_is_already_gone_fails_the_plan_instead_
     assert stored.groups == ["plain"]
     assert stored.data_limit == GIGABYTE
     assert stored.used_traffic == GIGABYTE
-    assert stored.secrets == (None, None, None)
+    assert stored.secrets == (None, None)

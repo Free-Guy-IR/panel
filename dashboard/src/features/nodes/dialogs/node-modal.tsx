@@ -24,7 +24,7 @@ import { LoaderButton } from '@/components/ui/loader-button'
 import type { NodeFormValues } from '@/features/nodes/forms/node-form'
 import type { CoreSimple } from '@/service/api'
 
-const MULTI_INSTANCE_CORE_TYPES = ['wg', 'singbox', 'openvpn', 'mtproto', 'l2tp']
+const MULTI_INSTANCE_CORE_TYPES = ['wg', 'singbox', 'openvpn', 'l2tp']
 
 interface NodeModalProps {
   isDialogOpen: boolean

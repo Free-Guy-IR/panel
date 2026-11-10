@@ -95,7 +95,6 @@ export function parseWireguardKey(value: string): Uint8Array | null {
 /** Standard padded base64 public key for a secret key, or '' when the key does not parse. */
 export function deriveWireguardPublicKey(secretKey: string): string {
   // Overlaps utils/wireguard.ts getWireGuardPublicKey (base64 only); that file cannot be edited
-  // while the MTProto work is open, so the two are unified later.
   const bytes = parseWireguardKey(secretKey)
   if (!bytes) return ''
   return bytesToBase64(scalarMultBase(bytes))

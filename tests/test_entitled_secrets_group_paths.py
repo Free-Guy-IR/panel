@@ -16,7 +16,6 @@ from app.operation.user import UserOperation
 
 OVPN = "ovpn-udp"
 L2TP = "l2tp-de"
-MTP = "mtp-443"
 VLESS = "vless-in"
 OWNER = SimpleNamespace(username="owner", is_owner=True)
 
@@ -79,7 +78,7 @@ async def _seed(db):
     await db.flush()
     admin = Admin(username="owner", hashed_password="x", role_id=role.id)
     db.add(admin)
-    inbounds = {tag: ProxyInbound(tag=tag) for tag in (OVPN, L2TP, MTP, VLESS)}
+    inbounds = {tag: ProxyInbound(tag=tag) for tag in (OVPN, L2TP, VLESS)}
     db.add_all(inbounds.values())
     await db.flush()
     db.add_all(
@@ -90,10 +89,9 @@ async def _seed(db):
                 type=CoreType.l2tp,
                 config={"inbound_tag": L2TP, "server_addr": "vpn.example.com", "psk": "correct-horse"},
             ),
-            CoreConfig(name="mtproto", type=CoreType.mtproto, config={"instances": [{"tag": MTP}]}),
         ]
     )
-    vpn_tags = [inbounds[OVPN], inbounds[L2TP], inbounds[MTP]]
+    vpn_tags = [inbounds[OVPN], inbounds[L2TP]]
     groups = {
         "vpn": Group(name="vpn", inbounds=list(vpn_tags)),
         "paused": Group(name="paused", inbounds=list(vpn_tags), is_disabled=True),
@@ -119,7 +117,7 @@ async def _secrets(engine):
         result = {}
         for user in rows:
             table = ProxyTable.model_validate(user.proxy_settings)
-            result[user.username] = (table.openvpn.password, table.l2tp.password, table.mtproto.secret)
+            result[user.username] = (table.openvpn.password, table.l2tp.password)
         return result
 
 
@@ -128,7 +126,7 @@ def _all_set(values):
 
 
 def _none_set(values):
-    return values == (None, None, None)
+    return values == (None, None)
 
 
 @pytest.mark.asyncio
@@ -152,7 +150,7 @@ async def test_editing_a_group_that_stays_disabled_issues_nothing(engine, db, pu
     await _groups().modify_group(
         db,
         seed.groups["paused"].id,
-        GroupModify(name="paused", inbound_tags=[OVPN, L2TP, MTP, VLESS], is_disabled=True),
+        GroupModify(name="paused", inbound_tags=[OVPN, L2TP, VLESS], is_disabled=True),
         OWNER,
     )
 
@@ -209,7 +207,7 @@ async def test_a_group_change_keeps_secrets_that_already_exist(engine, db, pushe
     first = (await _secrets(engine))["plain_member"]
 
     await _groups().modify_group(
-        db, seed.groups["vpn"].id, GroupModify(name="vpn-renamed", inbound_tags=[OVPN, L2TP, MTP]), OWNER
+        db, seed.groups["vpn"].id, GroupModify(name="vpn-renamed", inbound_tags=[OVPN, L2TP]), OWNER
     )
 
     assert (await _secrets(engine))["plain_member"] == first
@@ -222,14 +220,13 @@ async def test_non_entitled_users_stay_null_after_group_changes_and_after_every_
     await _groups().modify_group(
         db,
         seed.groups["paused"].id,
-        GroupModify(name="paused", inbound_tags=[OVPN, L2TP, MTP], is_disabled=True),
+        GroupModify(name="paused", inbound_tags=[OVPN, L2TP], is_disabled=True),
         OWNER,
     )
     operation = UserOperation.__new__(UserOperation)
     operation.operator_type = OperatorType.API
 
     await operation.bulk_activate_openvpn_passwords(db, BulkUserFilter())
-    await operation.bulk_activate_mtproto_secrets(db, BulkUserFilter())
     await operation.bulk_activate_l2tp_passwords(db, BulkUserFilter())
 
     stored = await _secrets(engine)

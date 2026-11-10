@@ -21,7 +21,7 @@ def requested_core_ids(monkeypatch):
 
     async def _map(db, core_ids, lazy=False):
         seen.append(set(core_ids))
-        return {core_id: SimpleNamespace(type=CoreType.mtproto) for core_id in core_ids}, {
+        return {core_id: SimpleNamespace(type=CoreType.singbox) for core_id in core_ids}, {
             core_id: [f"user-of-{core_id}"] for core_id in core_ids
         }
 

@@ -154,10 +154,3 @@ class OpenVPNPKIResponse(BaseModel):
     server_key: str
     tls_crypt_key: str
 
-
-class MTProtoRegistrationSecret(BaseModel):
-    tag: str
-    port: int | None = None
-    mode: str
-    domain: str | None = None
-    secret: str

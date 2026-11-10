@@ -15,7 +15,7 @@
 
 ---
 
-> **Note:** This is [Free-Guy-IR](https://github.com/Free-Guy-IR)'s fork of the original [PasarGuard panel](https://github.com/Free-Guy-IR/panel), extended with **sing-box (Hysteria2)**, **OpenVPN**, **MTProto (Telegram proxy)** and **L2TP/IPsec** as additional core types alongside Xray and WireGuard.
+> **Note:** This is [Free-Guy-IR](https://github.com/Free-Guy-IR)'s fork of the original [PasarGuard panel](https://github.com/Free-Guy-IR/panel), extended with **sing-box (Hysteria2)**, **OpenVPN** and **L2TP/IPsec** as additional core types alongside Xray and WireGuard.
 
 ---
 
@@ -74,7 +74,7 @@
 
 > **What is PasarGuard?**
 
-PasarGuard is a powerful proxy management tool that offers an intuitive and efficient interface for handling hundreds of proxy accounts. Built with Python and React.js it combines performance, scalability, and ease of use to simplify large-scale proxy management. It supports [Xray-core](https://github.com/XTLS/Xray-core), [WireGuard](https://www.wireguard.com/), [sing-box (Hysteria2)](https://github.com/SagerNet/sing-box), OpenVPN, and MTProto (Telegram proxy) for maximum performance and flexibility.
+PasarGuard is a powerful proxy management tool that offers an intuitive and efficient interface for handling hundreds of proxy accounts. Built with Python and React.js it combines performance, scalability, and ease of use to simplify large-scale proxy management. It supports [Xray-core](https://github.com/XTLS/Xray-core), [WireGuard](https://www.wireguard.com/), [sing-box (Hysteria2)](https://github.com/SagerNet/sing-box) and OpenVPN for maximum performance and flexibility.
 
 ---
 
@@ -96,7 +96,7 @@ PasarGuard is a user-friendly, feature-rich, and reliable proxy management tool.
 - **Multi-Node** support for infrastructure distribution
 
 **🔐 Protocols & Security**
-- Supports **Vmess**, **VLESS**, **Trojan**, **Shadowsocks**, **WireGuard**, **Hysteria2**, **OpenVPN**, **MTProto** (Telegram proxy) and **L2TP/IPsec**
+- Supports **Vmess**, **VLESS**, **Trojan**, **Shadowsocks**, **WireGuard**, **Hysteria2**, **OpenVPN** and **L2TP/IPsec**
 - **TLS** and **REALITY** support
 - **Multi-protocol** for a single user
 
@@ -224,7 +224,7 @@ node-eu-1 edit-env
 
 You can run any other subcommand for that same node with the same prefix (`node-eu-1 ...`).
 
-> ⚠️ **Important:** Never reuse ports between nodes. The connection port and every core's inbound/instance ports (Xray, sing-box, OpenVPN, MTProto, ...) attached to each node must be completely unique per node.
+> ⚠️ **Important:** Never reuse ports between nodes. The connection port and every core's inbound/instance ports (Xray, sing-box, OpenVPN, ...) attached to each node must be completely unique per node.
 
 
 <p align="center">

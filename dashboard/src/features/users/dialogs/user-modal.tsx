@@ -1236,24 +1236,11 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
     return out
   }
 
-  // MTProto secrets are a 16-byte (32 hex char) key, matching
-  // app.utils.mtproto.generate_mtproto_secret's secrets.token_hex(16) on
-  // the panel backend - not the letters/numbers/underscore shape
-  // generatePassword() above produces.
-  function generateMtprotoSecret(): string {
-    const bytes = new Uint8Array(16)
-    crypto.getRandomValues(bytes)
-    return Array.from(bytes)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
-  }
-
   const generateAllProxySettings = React.useCallback(() => {
     const newSettings = regenerateAllProxyCredentials(form.getValues('proxy_settings') as ProxySettingsValues | undefined, {
       uuid: () => uuidv4(),
       password: () => generatePassword(),
       openvpnPassword: () => generatePassword(),
-      mtprotoSecret: generateMtprotoSecret,
       l2tpPassword: generateL2tpPassword,
     })
     form.setValue('proxy_settings', newSettings as any, { shouldDirty: true, shouldValidate: true })
@@ -2104,49 +2091,6 @@ function UserModal({ isDialogOpen, onOpenChange, form, editingUser, editingUserI
                                         handleFieldChange('proxy_settings.masque.password', newVal)
                                       }}
                                       title="Generate password"
-                                    >
-                                      <RefreshCcw className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          {/* MTProto - secret stays masked by default (PasswordInput), unlike every
-                              other protocol's plain Input, since it's a bearer credential the same
-                              way an account password is. */}
-                          <FormField
-                            control={form.control}
-                            name="proxy_settings.mtproto.secret"
-                            render={({ field }) => (
-                              <FormItem className="mb-2">
-                                <FormLabel>{t('userDialog.proxySettings.mtprotoSecret', { defaultValue: 'MTProto Secret' })}</FormLabel>
-                                <FormControl>
-                                  <div dir="ltr" className={`flex items-center gap-2 ${dir === 'rtl' ? 'flex-row-reverse' : 'flex-row'}`}>
-                                    <PasswordInput
-                                      {...field}
-                                      value={field.value ?? ''}
-                                      placeholder={t('userDialog.proxySettings.mtprotoSecret', { defaultValue: 'MTProto Secret' })}
-                                      onChange={e => {
-                                        field.onChange(e)
-                                        form.trigger('proxy_settings.mtproto.secret')
-                                        handleFieldChange('proxy_settings.mtproto.secret', e.target.value)
-                                      }}
-                                    />
-                                    <Button
-                                      size="icon"
-                                      type="button"
-                                      variant="ghost"
-                                      onClick={e => {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                        const newVal = generateMtprotoSecret()
-                                        field.onChange(newVal)
-                                        form.trigger('proxy_settings.mtproto.secret')
-                                        handleFieldChange('proxy_settings.mtproto.secret', newVal)
-                                      }}
-                                      title={t('userDialog.proxySettings.regenerate', { defaultValue: 'Regenerate' })}
                                     >
                                       <RefreshCcw className="h-3 w-3" />
                                     </Button>

@@ -2230,7 +2230,7 @@ def test_prepare_outbound_params_folds_directions():
                 {"tag": "block", "up": 0, "down": 0},
             ],
             2: [{"tag": "direct", "up": 1, "down": 0}],
-            3: [{"tag": "MTProto", "up": 4, "down": 6}],
+            3: [{"tag": "hy2-in", "up": 4, "down": 6}],
         },
         bucket,
     )
@@ -2239,7 +2239,7 @@ def test_prepare_outbound_params_folds_directions():
         {"node_id": 1, "tag": "direct", "up": 5, "down": 7, "created_at": bucket},
         {"node_id": 1, "tag": "wg0", "up": 2, "down": 3, "created_at": bucket},
         {"node_id": 2, "tag": "direct", "up": 1, "down": 0, "created_at": bucket},
-        {"node_id": 3, "tag": "MTProto", "up": 4, "down": 6, "created_at": bucket},
+        {"node_id": 3, "tag": "hy2-in", "up": 4, "down": 6, "created_at": bucket},
     ]
 
 

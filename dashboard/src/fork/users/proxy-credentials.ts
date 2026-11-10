@@ -8,7 +8,6 @@ export type CredentialGenerators = {
   uuid: () => string
   password: () => string
   openvpnPassword: () => string
-  mtprotoSecret: () => string
   l2tpPassword: () => string
 }
 
@@ -28,7 +27,6 @@ export const regenerateAllProxyCredentials = (current: ProxySettingsValues | und
     hysteria2: { ...sectionOf(current, 'hysteria2'), password: generate.password() },
     tuic: { ...sectionOf(current, 'tuic'), uuid: generate.uuid(), password: generate.password() },
     openvpn: { ...sectionOf(current, 'openvpn'), password: generate.openvpnPassword() },
-    mtproto: { ...sectionOf(current, 'mtproto'), secret: generate.mtprotoSecret() },
     l2tp: { ...sectionOf(current, 'l2tp'), password: generate.l2tpPassword() },
   }
 }

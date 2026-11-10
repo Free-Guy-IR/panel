@@ -11,7 +11,6 @@ import {
   useBulkAddGroupsToUsers,
   useBulkRemoveUsersFromGroups,
   useBulkActivateL2tpPasswords,
-  useBulkActivateMtprotoSecrets,
   ShadowsocksMethods,
   UserStatus,
 } from '@/service/api'
@@ -43,7 +42,7 @@ import { endOfDay, startOfDay } from 'date-fns'
 
 const PAGE_SIZE = 50
 
-type BulkOperationType = 'proxy' | 'data' | 'expire' | 'groups' | 'mtproto' | 'l2tp'
+type BulkOperationType = 'proxy' | 'data' | 'expire' | 'groups' | 'l2tp'
 type ExpiryUnit = TimeUnit
 
 interface BulkFlowProps {
@@ -136,7 +135,6 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
   const expireMutation = useBulkModifyUsersExpire()
   const addGroupsMutation = useBulkAddGroupsToUsers()
   const removeGroupsMutation = useBulkRemoveUsersFromGroups()
-  const mtprotoMutation = useBulkActivateMtprotoSecrets()
   const l2tpMutation = useBulkActivateL2tpPasswords()
 
   const nextStep = () => {
@@ -162,7 +160,7 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
         if (operationType === 'expire') {
           return expireSeconds !== undefined
         }
-        if (operationType === 'mtproto' || operationType === 'l2tp') {
+        if (operationType === 'l2tp') {
           return true
         }
         return true
@@ -177,7 +175,6 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
           case 'groups':
             // Allow proceeding even if no targets selected - will apply to all users
             return true
-          case 'mtproto':
           case 'l2tp':
             // Allow proceeding even if no targets selected - will apply to all eligible users
             return true
@@ -211,7 +208,6 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
     (operationType === 'data' && dataMutation.isPending) ||
     (operationType === 'expire' && expireMutation.isPending) ||
     (operationType === 'groups' && (groupsOperation === 'add' ? addGroupsMutation.isPending : removeGroupsMutation.isPending)) ||
-    (operationType === 'mtproto' && mtprotoMutation.isPending) ||
     (operationType === 'l2tp' && l2tpMutation.isPending)
 
   const bulkPreviewDescription = (response: unknown) => {
@@ -267,7 +263,6 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
             admins: selectedAdmins.length ? selectedAdmins : [],
             dry_run: false,
           }
-        case 'mtproto':
         case 'l2tp':
           return {
             ...basePayload,
@@ -288,8 +283,6 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
           return expireMutation
         case 'groups':
           return groupsOperation === 'add' ? addGroupsMutation : removeGroupsMutation
-        case 'mtproto':
-          return mtprotoMutation
         case 'l2tp':
           return l2tpMutation
         default:
@@ -385,7 +378,6 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
             admins: selectedAdmins.length ? selectedAdmins : [],
             dry_run: true,
           }
-        case 'mtproto':
         case 'l2tp':
           return {
             ...basePayload,
@@ -404,8 +396,6 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
           return expireMutation
         case 'groups':
           return groupsOperation === 'add' ? addGroupsMutation : removeGroupsMutation
-        case 'mtproto':
-          return mtprotoMutation
         case 'l2tp':
           return l2tpMutation
         default:
@@ -643,27 +633,6 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
                       <p className="text-muted-foreground text-xs leading-relaxed">
                         {t('bulk.l2tpActivateSafety', {
                           defaultValue: 'Users who already have a password are never touched or regenerated, even if selected below.',
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {operationType === 'mtproto' && (
-                <div className="rounded-lg border p-3 sm:p-4">
-                  <div className="flex items-start gap-2">
-                    <Info className="text-muted-foreground mt-0.5 h-3.5 w-3.5 flex-shrink-0 sm:h-4 sm:w-4" />
-                    <div className="min-w-0 flex-1 space-y-1.5">
-                      <p className="text-xs leading-relaxed font-medium sm:text-sm">
-                        {t('bulk.mtprotoActivateDescription', {
-                          defaultValue:
-                            'Generates an MTProto proxy secret for existing users who have MTProto access through their group but never received one - e.g. users created before MTProto was enabled on their group.',
-                        })}
-                      </p>
-                      <p className="text-muted-foreground text-xs leading-relaxed">
-                        {t('bulk.mtprotoActivateSafety', {
-                          defaultValue: 'Users who already have a secret are never touched or regenerated, even if selected below.',
                         })}
                       </p>
                     </div>
@@ -993,7 +962,6 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
                       {operationType === 'data' && t('bulk.dataLimit')}
                       {operationType === 'expire' && t('bulk.expireDate')}
                       {operationType === 'groups' && t('bulk.groups')}
-                      {operationType === 'mtproto' && t('bulk.mtprotoActivate', { defaultValue: 'MTProto Activation' })}
                       {operationType === 'l2tp' && t('bulk.l2tpActivate', { defaultValue: 'L2TP Activation' })}
                     </Badge>
                   </div>
@@ -1177,7 +1145,6 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
                 expireMutation.isPending ||
                 addGroupsMutation.isPending ||
                 removeGroupsMutation.isPending ||
-                mtprotoMutation.isPending ||
                 l2tpMutation.isPending
               }
             >
@@ -1186,7 +1153,6 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
               expireMutation.isPending ||
               addGroupsMutation.isPending ||
               removeGroupsMutation.isPending ||
-              mtprotoMutation.isPending ||
               l2tpMutation.isPending
                 ? t('applying', { defaultValue: 'Applying...' })
                 : t('confirm', { defaultValue: 'Confirm' })}

@@ -38,16 +38,32 @@ def restarts(monkeypatch):
     return spy
 
 
-def create_mtproto_core(access_token: str) -> dict:
+def create_singbox_core(access_token: str) -> dict:
     response = client.post(
         "/api/core",
         headers=auth_headers(access_token),
         json={
-            "name": unique_name("cd_mtproto"),
+            "name": unique_name("cd_singbox"),
             "config": {
-                "instances": [{"tag": unique_name("cd_mt"), "port": random.randint(20000, 60000), "mode": "plain"}]
+                "log": {"level": "error"},
+                "inbounds": [
+                    {
+                        "type": "hysteria2",
+                        "tag": unique_name("cd_sb"),
+                        "listen": "127.0.0.1",
+                        "listen_port": random.randint(20000, 60000),
+                        "users": [],
+                        "tls": {
+                            "enabled": True,
+                            "alpn": ["h3"],
+                            "certificate_path": "/etc/ssl/certs/hy2.crt",
+                            "key_path": "/etc/ssl/private/hy2.key",
+                        },
+                    }
+                ],
+                "outbounds": [{"type": "direct", "tag": "direct"}],
             },
-            "type": "mtproto",
+            "type": "singbox",
             "exclude_inbound_tags": [],
             "fallbacks_inbound_tags": [],
         },
@@ -148,7 +164,7 @@ def test_deleting_the_core_a_node_runs_on_is_refused_and_changes_nothing(access_
 
 
 def test_deleting_a_core_a_node_runs_as_an_additional_core_is_refused(access_token, restarts):
-    extra = create_mtproto_core(access_token)
+    extra = create_singbox_core(access_token)
     node = make_node(1, additional=[extra["id"]], node_status=NodeStatus.disabled)
     loaded_before = core_is_loaded(extra["id"])
     try:
@@ -200,7 +216,7 @@ def test_bulk_delete_with_one_referenced_core_deletes_none_of_them(access_token,
 
 def test_bulk_delete_names_every_blocking_core_and_node(access_token, restarts):
     primary_core = create_core(access_token, name=unique_name("cd_bulk_primary"))
-    extra = create_mtproto_core(access_token)
+    extra = create_singbox_core(access_token)
     spare = create_core(access_token, name=unique_name("cd_bulk_spare"))
     first = make_node(primary_core["id"], node_status=NodeStatus.disabled)
     second = make_node(1, additional=[extra["id"]], node_status=NodeStatus.limited)
@@ -623,7 +639,7 @@ async def test_a_core_delete_racing_a_node_adding_it_as_an_extra_never_drops_it_
     tmp_path, quiet_side_effects, policy, bulk
 ):
     engine = await _race_engine(tmp_path)
-    rows = await _seed(engine, CoreType.mtproto)
+    rows = await _seed(engine, CoreType.singbox)
     try:
         outcomes, trace = await _race(
             engine,

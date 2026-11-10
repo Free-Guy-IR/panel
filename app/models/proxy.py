@@ -86,8 +86,7 @@ class Hysteria2Settings(BaseModel):
 
 
 class OpenVPNSettings(BaseModel):
-    # Deliberately no default_factory here (see MTProtoSettings.secret's
-    # docstring below for the exact bug class this used to have: a bare
+    # Deliberately no default_factory here (a bare
     # default_factory=random_password silently regenerated a fresh,
     # never-persisted password on every read for any user whose stored
     # proxy_settings predates this field or otherwise lacks it - found live
@@ -95,7 +94,7 @@ class OpenVPNSettings(BaseModel):
     # calls on the same stored dict produced two different passwords).
     # Generation/persistence is instead handled explicitly by
     # app.utils.openvpn.prepare_openvpn_password, called at the same point
-    # prepare_wireguard_keys/prepare_mtproto_secret are.
+    # prepare_wireguard_keys is.
     password: str | None = None
 
 
@@ -114,20 +113,6 @@ class StrictOpenVPNSettings(OpenVPNSettings):
     @classmethod
     def validate_password(cls, value):
         return check_openvpn_password(value)
-
-
-class MTProtoSettings(BaseModel):
-    # Deliberately no default_factory here (unlike every other *Settings class
-    # above) - a bare default_factory would silently regenerate a fresh,
-    # never-persisted secret on every read for any user whose stored
-    # proxy_settings predates this field (the exact bug class that broke
-    # Hysteria2 for ~4000 users and was found still-unfixed for OpenVPN during
-    # this feature's research). Secret generation/persistence is instead
-    # handled explicitly by app.utils.mtproto.prepare_mtproto_secret, called
-    # at the same point app.utils.wireguard.prepare_wireguard_keys is -
-    # mirroring WireGuard's private_key/public_key: str | None = None
-    # pattern, the only other protocol in this file that gets this right.
-    secret: str | None = None
 
 
 L2TP_PASSWORD_MIN_LENGTH = 6
@@ -244,7 +229,6 @@ class ProxyTable(BaseModel):
     masque: MasqueSettings = Field(default_factory=MasqueSettings)
     hysteria2: Hysteria2Settings = Field(default_factory=Hysteria2Settings)
     openvpn: OpenVPNSettings = Field(default_factory=OpenVPNSettings)
-    mtproto: MTProtoSettings = Field(default_factory=MTProtoSettings)
     tuic: TuicSettings = Field(default_factory=TuicSettings)
     l2tp: L2TPSettings = Field(default_factory=L2TPSettings)
 

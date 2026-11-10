@@ -16,7 +16,6 @@ const storedProxySettings = (): ProxySettingsValues => ({
   tuic: { uuid: 'old-tuic-uuid', password: 'old-tuic-password' },
   wireguard: { private_key: 'old-wg-private', public_key: 'old-wg-public', peer_ips: ['peer-a', 'peer-b'] },
   openvpn: { password: 'old-openvpn-password' },
-  mtproto: { secret: 'old-mtproto-secret' },
   l2tp: { password: 'old-l2tp-password' },
 })
 
@@ -31,7 +30,6 @@ const CREDENTIAL_PATHS = [
   ['tuic', 'uuid'],
   ['tuic', 'password'],
   ['openvpn', 'password'],
-  ['mtproto', 'secret'],
   ['l2tp', 'password'],
 ] as const
 
@@ -47,7 +45,6 @@ const countingGenerators = (): CredentialGenerators => {
     uuid: () => next('uuid'),
     password: () => next('password'),
     openvpnPassword: () => next('openvpn'),
-    mtprotoSecret: () => next('mtproto'),
     l2tpPassword: () => next('l2tp'),
   }
 }
@@ -82,7 +79,6 @@ describe('regenerate all proxy credentials', () => {
       expect(value).not.toBe(valueAt(stored, path))
     }
     expect(regenerated.openvpn?.password).toStartWith('new-openvpn-')
-    expect(regenerated.mtproto?.secret).toStartWith('new-mtproto-')
     expect(regenerated.l2tp?.password).toStartWith('new-l2tp-')
   })
 
@@ -111,14 +107,13 @@ describe('regenerate all proxy credentials', () => {
     expect(regenerated.wireguard?.peer_ips).toEqual(['peer-a', 'peer-b'])
   })
 
-  it('issues a fresh OpenVPN, L2TP and MTProto secret even when the form holds none', () => {
-    const stored = { ...storedProxySettings(), openvpn: { password: null }, mtproto: {}, l2tp: { password: '' } }
+  it('issues a fresh OpenVPN and L2TP secret even when the form holds none', () => {
+    const stored = { ...storedProxySettings(), openvpn: { password: null }, l2tp: { password: '' } }
     const regenerated = regenerateAllProxyCredentials(stored, countingGenerators())
     const entitled = [
       ['openvpn', 'password'],
       ['l2tp', 'password'],
-      ['mtproto', 'secret'],
-    ] as const
+        ] as const
     for (const path of entitled) {
       const value = valueAt(regenerated, path)
       expect({ path: path.join('.'), fresh: typeof value === 'string' && value.startsWith('new-') }).toEqual({ path: path.join('.'), fresh: true })
@@ -160,7 +155,6 @@ describe('revoke subscription inside the user modal', () => {
     vmess: { id: 'revoked-vmess-id' },
     trojan: { password: 'revoked-trojan-password' },
     openvpn: { password: 'revoked-openvpn-password' },
-    mtproto: { secret: 'revoked-mtproto-secret' },
   }
 
   it('makes a later save send the revoked credentials, not the pre-revoke ones', async () => {

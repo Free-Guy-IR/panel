@@ -42,7 +42,6 @@ from app.operation import OperatorType
 from app.operation.permissions import get_allowed_group_ids
 from app.utils.l2tp import prepare_l2tp_password
 from app.utils.logger import get_logger
-from app.utils.mtproto import prepare_mtproto_secret
 from app.utils.openvpn import prepare_openvpn_password
 
 logger = get_logger("user-operation")
@@ -152,14 +151,12 @@ async def prepare_fork_proxy_settings(
 ) -> ProxyTable:
     user_mod = _user_mod()
     prepare_openvpn = getattr(user_mod, "prepare_openvpn_password", prepare_openvpn_password)
-    prepare_mtproto = getattr(user_mod, "prepare_mtproto_secret", prepare_mtproto_secret)
     prepare_l2tp = getattr(user_mod, "prepare_l2tp_password", prepare_l2tp_password)
     if keep_unentitled_wireguard:
         proxy_settings = await drop_unentitled_wireguard_keys(
             db, proxy_settings, groups, exclude_user_id=exclude_user_id
         )
     proxy_settings = await prepare_openvpn(db, proxy_settings, groups)
-    proxy_settings = await prepare_mtproto(db, proxy_settings, groups)
     proxy_settings = await prepare_l2tp(db, proxy_settings, groups)
     return await enforce_unique_proxy_secrets(
         db, proxy_settings, exclude_user_id=exclude_user_id, reserved=reserved, explicit_fields=explicit_fields
@@ -309,9 +306,6 @@ class UserExtrasMixin:
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {run.granted} users"}
         return run.granted
-
-    async def bulk_activate_mtproto_secrets(self, db: AsyncSession, bulk_model: BulkUserFilter, admin=None):
-        return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.mtproto_secret, admin)
 
     async def bulk_activate_openvpn_passwords(self, db: AsyncSession, bulk_model: BulkUserFilter, admin=None):
         return await self._bulk_activate_entitled_secret(db, bulk_model, EntitledSecretField.openvpn_password, admin)

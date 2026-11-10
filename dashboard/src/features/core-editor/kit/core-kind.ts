@@ -5,7 +5,6 @@ export function apiCoreTypeToKind(type: CoreResponseType | undefined): CoreKind 
   if (type === 'wg') return 'wg'
   if (type === 'singbox') return 'singbox'
   if (type === 'openvpn') return 'openvpn'
-  if (type === 'mtproto') return 'mtproto'
   if (type === 'l2tp') return 'l2tp'
   return 'xray'
 }
@@ -16,7 +15,6 @@ export function isSupportedCoreEditorKind(type: CoreResponseType | undefined): b
     type === 'xray' ||
     type === 'singbox' ||
     type === 'openvpn' ||
-    type === 'mtproto' ||
     type === 'l2tp' ||
     type == null ||
     type === undefined

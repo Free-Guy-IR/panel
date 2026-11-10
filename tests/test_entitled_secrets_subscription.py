@@ -19,7 +19,6 @@ from app.subscription.config_cache import clear_sub_config_cache
 
 OVPN = "ovpn-udp"
 L2TP = "l2tp-de"
-MTP = "mtp-443"
 VLESS = "vless-in"
 VLESS_ID = "b7b0f6ee-3e1b-4a9c-9d8e-4a0e1f2c3d4e"
 CA = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----"
@@ -43,17 +42,15 @@ def _host(tag, protocol, port, finalmask=None, network="udp"):
 HOSTS = {
     1: _host(OVPN, "openvpn", 1194, {"openvpn": {"ca_cert": CA, "tls_crypt_key": TLS_CRYPT}}),
     2: _host(L2TP, "l2tp", 1701, {"l2tp": {"server_addr": "vpn.example.com", "psk": "correct-horse"}}),
-    3: _host(MTP, "mtproto", 443, {"mtproto": {"mode": "plain"}}),
     4: _host(VLESS, "vless", 443, network="tcp"),
 }
 
 
-def _user(openvpn=None, l2tp=None, mtproto=None, inbounds=(OVPN, L2TP, MTP, VLESS)):
+def _user(openvpn=None, l2tp=None, inbounds=(OVPN, L2TP, VLESS)):
     settings = ProxyTable().dict()
     settings["vless"] = {"id": VLESS_ID, "flow": ""}
     settings["openvpn"] = {"password": openvpn}
     settings["l2tp"] = {"password": l2tp}
-    settings["mtproto"] = {"secret": mtproto}
     return UsersResponseWithInbounds.model_validate(
         {
             "id": 41,
@@ -69,7 +66,7 @@ def _user(openvpn=None, l2tp=None, mtproto=None, inbounds=(OVPN, L2TP, MTP, VLES
 
 
 def _issued():
-    return _user(openvpn="ovpn-pass-123", l2tp="L2tpPass12345678", mtproto="0123456789abcdef0123456789abcdef")
+    return _user(openvpn="ovpn-pass-123", l2tp="L2tpPass12345678")
 
 
 def _settings():
@@ -134,30 +131,13 @@ def _operation():
 async def test_the_links_format_is_untouched_by_a_missing_openvpn_or_l2tp_secret():
     operation = _operation()
 
-    missing, missing_type = await operation.fetch_config(
-        _user(mtproto="0123456789abcdef0123456789abcdef"), ConfigFormat.links
-    )
+    missing, missing_type = await operation.fetch_config(_user(), ConfigFormat.links)
     clear_sub_config_cache()
     issued, issued_type = await operation.fetch_config(_issued(), ConfigFormat.links)
 
     assert missing_type == issued_type == "text/plain"
     assert missing == issued
     assert VLESS_ID in missing
-    assert "tg://proxy" in missing
-
-
-@pytest.mark.asyncio
-async def test_a_missing_mtproto_secret_drops_only_that_link_and_is_logged():
-    records, handler = _capture_subscription_warnings()
-    try:
-        body, _ = await _operation().fetch_config(_user(), ConfigFormat.links)
-    finally:
-        logging.getLogger("subscription").removeHandler(handler)
-
-    assert VLESS_ID in body
-    assert "tg://proxy" not in body
-    messages = [record.getMessage() for record in records]
-    assert any("user 41 can reach mtproto inbound 'mtp-443'" in message for message in messages)
 
 
 @pytest.mark.asyncio
@@ -298,7 +278,7 @@ async def test_the_html_page_still_renders_when_openvpn_and_l2tp_are_not_activat
         return db_user
 
     async def validated_user(user):
-        return _user(mtproto="0123456789abcdef0123456789abcdef")
+        return _user()
 
     async def hwid_enabled(user, db=None):
         return False

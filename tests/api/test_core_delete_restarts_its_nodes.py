@@ -85,16 +85,32 @@ def starts(monkeypatch):
     return issued
 
 
-def create_mtproto_core(access_token: str) -> dict:
+def create_singbox_core(access_token: str) -> dict:
     response = client.post(
         "/api/core",
         headers=auth_headers(access_token),
         json={
-            "name": unique_name("coredel_mtproto"),
+            "name": unique_name("coredel_singbox"),
             "config": {
-                "instances": [{"tag": unique_name("coredel_mt"), "port": random.randint(20000, 60000), "mode": "plain"}]
+                "log": {"level": "error"},
+                "inbounds": [
+                    {
+                        "type": "hysteria2",
+                        "tag": unique_name("coredel_sb"),
+                        "listen": "127.0.0.1",
+                        "listen_port": random.randint(20000, 60000),
+                        "users": [],
+                        "tls": {
+                            "enabled": True,
+                            "alpn": ["h3"],
+                            "certificate_path": "/etc/ssl/certs/hy2.crt",
+                            "key_path": "/etc/ssl/private/hy2.key",
+                        },
+                    }
+                ],
+                "outbounds": [{"type": "direct", "tag": "direct"}],
             },
-            "type": "mtproto",
+            "type": "singbox",
             "exclude_inbound_tags": [],
             "fallbacks_inbound_tags": [],
         },

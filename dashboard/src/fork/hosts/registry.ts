@@ -2,7 +2,7 @@ import type { UseFormReturn } from 'react-hook-form'
 import type { HostFormValues } from '@/features/hosts/forms/host-form'
 import { cleanNoExtraPayload, cleanOpenvpnPayload, cleanWireguardPayload, clearOpenvpnPayload, clearWireguardPayload } from './payload'
 import { resolveHostMode, type HostProtocolMode } from './resolve-mode'
-import { L2TPExtraSection, MTProtoExtraSection } from './sections/no-extra-settings'
+import { L2TPExtraSection } from './sections/no-extra-settings'
 import { OpenVPNExtraSection } from './sections/openvpn-extra'
 import { WireGuardExtraSection } from './sections/wireguard-extra'
 import type { HostProtocolEntry } from './types'
@@ -59,13 +59,6 @@ export const HOST_PROTOCOL_REGISTRY: HostProtocolEntry[] = [
     clearForeignForm: clearOpenvpnForm,
     cleanPayload: cleanOpenvpnPayload,
     clearForeignPayload: clearOpenvpnPayload,
-  },
-  {
-    id: 'mtproto',
-    mode: 'mtproto',
-    ExtraSection: MTProtoExtraSection,
-    stripXrayFields: true,
-    cleanPayload: cleanNoExtraPayload,
   },
   {
     id: 'l2tp',

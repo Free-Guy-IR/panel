@@ -44,7 +44,7 @@ def test_xray_is_not_a_multi_instance_backend():
 
 
 def test_every_other_core_type_can_run_alongside():
-    for core_type in (CoreType.wg, CoreType.singbox, CoreType.openvpn, CoreType.mtproto, CoreType.l2tp):
+    for core_type in (CoreType.wg, CoreType.singbox, CoreType.openvpn, CoreType.singbox, CoreType.l2tp):
         assert core_type in _MULTI_INSTANCE_BACKENDS
 
 

@@ -3,7 +3,6 @@ import { cn } from '@/lib/utils'
 import { useCoreEditorStore } from '@/features/core-editor/state/core-editor-store'
 import {
   L2TP_CORE_SECTION_NAV,
-  MTPROTO_CORE_SECTION_NAV,
   OPENVPN_CORE_SECTION_NAV,
   SING_BOX_CORE_SECTION_NAV,
   WG_CORE_SECTION_NAV,
@@ -15,7 +14,6 @@ function sectionNavForKind(kind: CoreKind) {
   if (kind === 'wg') return WG_CORE_SECTION_NAV
   if (kind === 'singbox') return SING_BOX_CORE_SECTION_NAV
   if (kind === 'openvpn') return OPENVPN_CORE_SECTION_NAV
-  if (kind === 'mtproto') return MTPROTO_CORE_SECTION_NAV
   if (kind === 'l2tp') return L2TP_CORE_SECTION_NAV
   return XRAY_CORE_SECTION_NAV
 }
@@ -65,13 +63,13 @@ export function CoreSectionTabsPlaceholder({
   className,
 }: {
   kind: CoreKind
-  /** Defaults: inbounds (xray/singbox) / interface (wg) / instances (openvpn/mtproto) / settings (l2tp). */
+  /** Defaults: inbounds (xray/singbox) / interface (wg) / instances (openvpn) / settings (l2tp). */
   activeSectionId?: string
   className?: string
 }) {
   const { t } = useTranslation()
   const items = sectionNavForKind(kind)
-  const active = activeSectionId ?? (kind === 'wg' ? 'interface' : kind === 'l2tp' ? 'settings' : kind === 'openvpn' || kind === 'mtproto' ? 'instances' : 'inbounds')
+  const active = activeSectionId ?? (kind === 'wg' ? 'interface' : kind === 'l2tp' ? 'settings' : kind === 'openvpn' ? 'instances' : 'inbounds')
 
   return (
     <div className={cn('flex w-full border-b px-4', className)} role="presentation" aria-busy="true" aria-label={t('coreEditor.section.label', { defaultValue: 'Section' })}>

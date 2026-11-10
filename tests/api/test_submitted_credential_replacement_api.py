@@ -42,7 +42,6 @@ def _sales_bot_template():
         "hysteria2": {"password": f"bot-hy2-{uuid4().hex}"},
         "tuic": {"uuid": str(uuid4()), "password": f"bot-tuic-{uuid4().hex}"},
         "openvpn": {"password": None},
-        "mtproto": {"secret": None},
         "l2tp": {"password": None},
     }
 

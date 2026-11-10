@@ -20,7 +20,6 @@ from app.db.crud.bulk import (
     count_bulk_proxy_targets,
     get_bulk_user_limit_targets,
     get_users_for_l2tp_activation,  # noqa: F401
-    get_users_for_mtproto_activation,  # noqa: F401
     reset_all_users_data_usage,
     update_users_datalimit,
     update_users_expire,
@@ -160,7 +159,6 @@ from app.utils.hwid import resolve_effective_hwid_settings
 from app.utils.jwt import create_subscription_token
 from app.utils.l2tp import generate_l2tp_password, get_l2tp_cores, l2tp_core_tags, prepare_l2tp_password  # noqa: F401
 from app.utils.logger import get_logger
-from app.utils.mtproto import prepare_mtproto_secret  # noqa: F401
 from app.utils.openvpn import prepare_openvpn_password  # noqa: F401
 from app.utils.system import readable_duration, readable_size
 from app.utils.wireguard import ensure_unique_wireguard_public_key, prepare_wireguard_keys

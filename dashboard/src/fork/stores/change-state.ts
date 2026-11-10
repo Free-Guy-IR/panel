@@ -1,6 +1,5 @@
 import { draftToPersistedConfig as sbDraftToPersistedConfig } from '@/features/core-editor/kit/singbox-adapter'
 import { draftToPersistedConfig as ovDraftToPersistedConfig } from '@/features/core-editor/kit/openvpn-adapter'
-import { draftToPersistedConfig as mtDraftToPersistedConfig } from '@/features/core-editor/kit/mtproto-adapter'
 import { draftToPersistedConfig as l2tpDraftToPersistedConfig } from '@/features/core-editor/kit/l2tp-adapter'
 import { isForkCoreKind } from './core-editor-types'
 
@@ -8,11 +7,9 @@ type ChangeStateView = {
   kind: string
   sbDraft: unknown
   ovDraft: unknown
-  mtDraft: unknown
   l2tpDraft: unknown
   sbBaseline: unknown
   ovBaseline: unknown
-  mtBaseline: unknown
   l2tpBaseline: unknown
 }
 
@@ -43,10 +40,6 @@ export function forkCurrentConfigString(s: ChangeStateView): string | null {
     const draft = s.ovDraft
     return safeConfigString('ov_current_config', () => ovDraftToPersistedConfig(draft as never))
   }
-  if (s.kind === 'mtproto' && s.mtDraft) {
-    const draft = s.mtDraft
-    return safeConfigString('mt_current_config', () => mtDraftToPersistedConfig(draft as never))
-  }
   if (s.kind === 'l2tp' && s.l2tpDraft) {
     const draft = s.l2tpDraft
     return safeConfigString('l2tp_current_config', () => l2tpDraftToPersistedConfig(draft as never))
@@ -63,10 +56,6 @@ export function forkBaselineConfigString(s: ChangeStateView): string | null {
   if (s.kind === 'openvpn' && s.ovBaseline) {
     const draft = s.ovBaseline
     return safeConfigString('ov_baseline_config', () => ovDraftToPersistedConfig(draft as never))
-  }
-  if (s.kind === 'mtproto' && s.mtBaseline) {
-    const draft = s.mtBaseline
-    return safeConfigString('mt_baseline_config', () => mtDraftToPersistedConfig(draft as never))
   }
   if (s.kind === 'l2tp' && s.l2tpBaseline) {
     const draft = s.l2tpBaseline

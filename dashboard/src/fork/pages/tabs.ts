@@ -1,4 +1,4 @@
-import { ListChecks, Send, ShieldAlert, ShieldCheck, Users, type LucideIcon } from 'lucide-react'
+import { ListChecks, ShieldAlert, ShieldCheck, Users, type LucideIcon } from 'lucide-react'
 import { extraNavItems, registerNavItem, type ForkNavItem } from '../registry'
 
 export type ForkPageTab = {
@@ -11,14 +11,6 @@ export type ForkPageTab = {
 registerNavItem('settings', { id: 'connection-limit', label: 'settings.connectionLimit.title', icon: Users, url: '/settings/connection-limit' })
 registerNavItem('settings', { id: 'connection-limit-review', label: 'settings.connectionLimit.review.navTitle', icon: ListChecks, url: '/settings/connection-limit/review' })
 registerNavItem('settings', { id: 'connection-limit-violations', label: 'settings.connectionLimit.violations.navTitle', icon: ShieldAlert, url: '/settings/connection-limit/violations' })
-registerNavItem('bulk', {
-  id: 'mtproto',
-  label: 'bulk.mtprotoActivate',
-  icon: Send,
-  url: '/bulk/mtproto',
-  title: 'bulk.mtprotoActivate',
-  description: 'bulk.mtprotoActivateDesc',
-})
 registerNavItem('bulk', {
   id: 'l2tp',
   label: 'bulk.l2tpActivate',

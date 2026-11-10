@@ -9,7 +9,7 @@ import { apiCoreTypeToKind } from '../kit/core-kind'
 import { createNewXrayProfile, importRawToProfile, profileToPersistedConfig } from '../kit/xray-adapter'
 import { createNewWireGuardDraft, draftToPersistedConfig, wireGuardConfigToDraft } from '../kit/wireguard-adapter'
 
-export type { L2tpCoreSection, MtCoreSection, OvCoreSection, SbCoreSection } from '@/fork/stores/core-editor'
+export type { L2tpCoreSection, OvCoreSection, SbCoreSection } from '@/fork/stores/core-editor'
 
 export type XrayCoreSection = 'bindings' | 'inbounds' | 'outbounds' | 'routing' | 'balancers' | 'dns' | 'api' | 'advanced'
 

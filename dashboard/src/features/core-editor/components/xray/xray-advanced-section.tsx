@@ -9,7 +9,6 @@ import { profileToPersistedConfig } from '@/features/core-editor/kit/xray-adapte
 import { draftToPersistedConfig } from '@/features/core-editor/kit/wireguard-adapter'
 import { draftToPersistedConfig as sbDraftToPersistedConfig } from '@/features/core-editor/kit/singbox-adapter'
 import { draftToPersistedConfig as ovDraftToPersistedConfig } from '@/features/core-editor/kit/openvpn-adapter'
-import { draftToPersistedConfig as mtDraftToPersistedConfig } from '@/features/core-editor/kit/mtproto-adapter'
 import { draftToPersistedConfig as l2tpDraftToPersistedConfig } from '@/features/core-editor/kit/l2tp-adapter'
 import useDirDetection from '@/hooks/use-dir-detection'
 import type { JsonValue } from '@pasarguard/xray-config-kit'
@@ -181,7 +180,6 @@ export function XrayAdvancedSection() {
       if (kind === 'wg' && wgBaseline) full = draftToPersistedConfig(wgBaseline)
       else if (kind === 'singbox' && sbBaseline) full = sbDraftToPersistedConfig(sbBaseline)
       else if (kind === 'openvpn' && ovBaseline) full = ovDraftToPersistedConfig(ovBaseline)
-      else if (kind === 'mtproto' && mtBaseline) full = mtDraftToPersistedConfig(mtBaseline)
       else if (kind === 'l2tp' && l2tpBaseline) full = l2tpDraftToPersistedConfig(l2tpBaseline)
       else if (kind === 'xray' && xrayBaseline) full = profileToPersistedConfig(xrayBaseline)
       else return {} as JsonValue
@@ -198,7 +196,6 @@ export function XrayAdvancedSection() {
       if (kind === 'wg' && wgDraft) full = draftToPersistedConfig(wgDraft)
       else if (kind === 'singbox' && sbDraft) full = sbDraftToPersistedConfig(sbDraft)
       else if (kind === 'openvpn' && ovDraft) full = ovDraftToPersistedConfig(ovDraft)
-      else if (kind === 'mtproto' && mtDraft) full = mtDraftToPersistedConfig(mtDraft)
       else if (kind === 'l2tp' && l2tpDraft) full = l2tpDraftToPersistedConfig(l2tpDraft)
       else if (kind === 'xray' && xrayProfile) full = profileToPersistedConfig(xrayProfile)
       else return {} as JsonValue

@@ -1,6 +1,4 @@
-import hashlib
 import time
-from urllib.parse import quote
 
 from fastapi import HTTPException
 
@@ -9,7 +7,7 @@ from app.utils.logger import get_logger
 
 logger = get_logger("subscription")
 
-UNISSUED_SECRET_LABELS = {"openvpn": "OpenVPN", "l2tp": "L2TP", "mtproto": "MTProto"}
+UNISSUED_SECRET_LABELS = {"openvpn": "OpenVPN", "l2tp": "L2TP"}
 UNISSUED_WARNING_INTERVAL_SECONDS = 3600.0
 UNISSUED_WARNING_MEMORY = 10_000
 _unissued_warned_at: dict[tuple[object, str], float] = {}
@@ -39,14 +37,6 @@ class UnissuedSecretError(HTTPException):
             status_code=409,
             detail=f"{label} has not been activated for this user yet; ask the administrator to activate it",
         )
-
-
-def _pick_fake_tls_domain(domains: list[str], key: str) -> str:
-    if len(domains) == 1:
-        return domains[0]
-
-    digest = hashlib.sha256(key.encode("utf-8")).digest()
-    return domains[int.from_bytes(digest[:8], "big") % len(domains)]
 
 
 class ForkSubscriptionHelpers:
@@ -160,67 +150,3 @@ class ForkSubscriptionHelpers:
             "dns": [str(d) for d in (l2tp_data.get("dns") or [])],
         }
 
-    def _build_mtproto_components(
-        self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict
-    ) -> dict | None:
-        """Build a tg://proxy?... link for one MTProto instance.
-
-        Unlike OpenVPN, MTProto links ARE meant to appear in the standard
-        link aggregator (see app/subscription/links.py's protocol_handlers) -
-        tg:// is itself already a shareable single-URI scheme, no file
-        download needed.
-
-        The stored secret (settings["secret"], from ProxyTable.mtproto.secret)
-        is just the raw 16-byte key, hex-encoded - the client-facing secret
-        Telegram apps expect also embeds the fake-TLS domain (see the mtg
-        fork's mtglib/secret.go Secret.Hex(): 0xee prefix + key bytes + ASCII
-        hostname, all hex-encoded). Built here rather than stored, since the
-        domain is an instance/host-level property, not a per-user one.
-        """
-        user_id = settings.get("_user_id")
-        raw_secret = settings.get("secret")
-        if user_id is None:
-            return None
-        if not raw_secret:
-            self._note_unissued_secret("mtproto", user_id, inbound)
-            return None
-
-        finalmask = inbound.finalmask
-        if finalmask is None:
-            finalmask_dict = {}
-        elif isinstance(finalmask, dict):
-            finalmask_dict = finalmask
-        else:
-            finalmask_dict = finalmask.model_dump(by_alias=True, exclude_none=True)
-        mtproto_data = finalmask_dict.get("mtproto", {})
-        mode = mtproto_data.get("mode") or "faketls"
-
-        if mode == "plain":
-            full_secret = "dd" + raw_secret
-        else:
-            domains = mtproto_data.get("fake_tls_domains") or []
-            if not domains:
-                single = mtproto_data.get("fake_tls_domain")
-                domains = [single] if single else []
-            if not domains:
-                return None
-
-            domain = _pick_fake_tls_domain(domains, str(user_id))
-            full_secret = "ee" + raw_secret + domain.encode("ascii").hex()
-
-        validated_remark = self._remark_validation(remark)
-        self.proxy_remarks.append(validated_remark)
-
-        return {
-            "remark": validated_remark,
-            "address": address,
-            "port": inbound.port,
-            "secret": full_secret,
-            "uri": f"tg://proxy?server={address}&port={inbound.port}&secret={full_secret}#{quote(validated_remark)}",
-        }
-
-    def _build_mtproto(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
-        components = self._build_mtproto_components(remark, address, inbound, settings)
-        if not components:
-            return ""
-        return components["uri"]

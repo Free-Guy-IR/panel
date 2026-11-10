@@ -26,7 +26,7 @@ from app.operation import OperatorType
 from app.operation.user import UserOperation
 
 OVPN = "ovpn-udp"
-MTP = "mtp-443"
+L2TP = "l2tp-de"
 
 
 def _foreign_keys_on(dbapi_connection, _record):
@@ -50,7 +50,7 @@ async def _purge(engine):
             delete(inbounds_groups_association).where(inbounds_groups_association.c.group_id.in_(group_ids))
         )
         await conn.execute(delete(Group.__table__).where(Group.name.like(f"{PREFIX}%")))
-        await conn.execute(delete(ProxyInbound.__table__).where(ProxyInbound.tag.in_([OVPN, MTP])))
+        await conn.execute(delete(ProxyInbound.__table__).where(ProxyInbound.tag.in_([OVPN, L2TP])))
         await conn.execute(delete(CoreConfig.__table__).where(CoreConfig.name.like(f"{PREFIX}%")))
         await conn.execute(delete(Admin.__table__).where(Admin.username.like(f"{PREFIX}%")))
         await conn.execute(delete(AdminRole.__table__).where(AdminRole.name.like(f"{PREFIX}%")))
@@ -99,13 +99,13 @@ async def _seed(sessions, extra=None):
         await db.flush()
         admin = Admin(username=f"{PREFIX}owner", hashed_password="x", role_id=role.id)
         db.add(admin)
-        inbounds = [ProxyInbound(tag=OVPN), ProxyInbound(tag=MTP)]
+        inbounds = [ProxyInbound(tag=OVPN), ProxyInbound(tag=L2TP)]
         db.add_all(inbounds)
         await db.flush()
         db.add_all(
             [
                 CoreConfig(name=f"{PREFIX}ovpn", type=CoreType.openvpn, config={"instances": [{"tag": OVPN}]}),
-                CoreConfig(name=f"{PREFIX}mtproto", type=CoreType.mtproto, config={"instances": [{"tag": MTP}]}),
+                CoreConfig(name=f"{PREFIX}l2tp", type=CoreType.l2tp, config={"inbound_tag": L2TP, "server_addr": "vpn.example.com"}),
             ]
         )
         group = Group(name=f"{PREFIX}vpn", inbounds=inbounds)
@@ -113,7 +113,7 @@ async def _seed(sessions, extra=None):
         await db.flush()
         settings = ProxyTable().dict()
         settings["openvpn"] = {"password": None}
-        settings["mtproto"] = {"secret": None}
+        settings["l2tp"] = {"password": None}
         settings.update(extra or {})
         user = User(username=USERNAME, proxy_settings=settings, admin_id=admin.id)
         user.groups = [group]
@@ -158,19 +158,19 @@ def _last_synced(synced, key, attribute):
 async def test_a_concurrent_activation_of_another_protocol_is_not_overwritten(sessions, synced, monkeypatch):
     await _seed(sessions)
 
-    async def mtproto_activation(other):
-        await _operation().bulk_activate_mtproto_secrets(other, BulkUserFilter())
+    async def l2tp_activation(other):
+        await _operation().bulk_activate_l2tp_passwords(other, BulkUserFilter())
 
-    state = _interleave(monkeypatch, driver, sessions, mtproto_activation)
+    state = _interleave(monkeypatch, driver, sessions, l2tp_activation)
 
     async with sessions() as first:
         await _operation().bulk_activate_openvpn_passwords(first, BulkUserFilter())
 
     assert state["ran"] is True
     stored = await _stored(sessions)
-    assert stored["mtproto"]["secret"]
+    assert stored["l2tp"]["password"]
     assert stored["openvpn"]["password"]
-    assert stored["mtproto"]["secret"] == _last_synced(synced, "mtproto", "secret")
+    assert stored["l2tp"]["password"] == _last_synced(synced, "l2tp", "password")
     assert stored["openvpn"]["password"] == _last_synced(synced, "openvpn", "password")
 
 
@@ -199,10 +199,10 @@ async def test_a_secret_issued_meanwhile_for_the_same_protocol_is_never_rotated(
 async def test_a_group_change_grant_does_not_overwrite_a_secret_committed_meanwhile(sessions, synced, monkeypatch):
     user_id = await _seed(sessions, extra={"future_key": {"kept": True}})
 
-    async def mtproto_activation(other):
-        await _operation().bulk_activate_mtproto_secrets(other, BulkUserFilter())
+    async def l2tp_activation(other):
+        await _operation().bulk_activate_l2tp_passwords(other, BulkUserFilter())
 
-    _interleave(monkeypatch, entitled_module, sessions, mtproto_activation)
+    _interleave(monkeypatch, entitled_module, sessions, l2tp_activation)
 
     async with sessions() as first:
         users = list((await first.execute(select(User).where(User.id == user_id))).scalars().all())
@@ -211,7 +211,7 @@ async def test_a_group_change_grant_does_not_overwrite_a_secret_committed_meanwh
         in_memory = dict(users[0].proxy_settings)
 
     stored = await _stored(sessions)
-    assert stored["mtproto"]["secret"] == _last_synced(synced, "mtproto", "secret")
+    assert stored["l2tp"]["password"] == _last_synced(synced, "l2tp", "password")
     assert stored["openvpn"]["password"]
     assert stored["future_key"] == {"kept": True}
     assert [user.id for user in changed] == [user_id]
@@ -243,22 +243,22 @@ async def test_a_missing_or_null_section_is_created_and_a_present_value_is_left_
     async with sessions() as db:
         user = await db.get(User, user_id)
         user.proxy_settings = {key: value for key, value in user.proxy_settings.items() if key != "openvpn"} | {
-            "mtproto": None
+            "l2tp": None
         }
         await db.commit()
 
     openvpn = entitled_module.ENTITLED_SPEC_BY_FIELD[EntitledSecretField.openvpn_password]
-    mtproto = entitled_module.ENTITLED_SPEC_BY_FIELD[EntitledSecretField.mtproto_secret]
+    l2tp_spec = entitled_module.ENTITLED_SPEC_BY_FIELD[EntitledSecretField.l2tp_password]
     async with sessions() as db:
         created = await put_entitled_secret(db, openvpn, user_id, None, "first-password")
-        from_null = await put_entitled_secret(db, mtproto, user_id, None, "a" * 32)
+        from_null = await put_entitled_secret(db, l2tp_spec, user_id, None, "a" * 32)
         again = await put_entitled_secret(db, openvpn, user_id, None, "second-password")
         await db.commit()
 
     assert (created, from_null, again) == (True, True, False)
     stored = await _stored(sessions)
     assert stored["openvpn"] == {"password": "first-password"}
-    assert stored["mtproto"] == {"secret": "a" * 32}
+    assert stored["l2tp"] == {"password": "a" * 32}
     assert stored["vmess"]
 
 
@@ -274,7 +274,7 @@ async def test_a_group_change_whose_grants_are_all_skipped_syncs_what_the_other_
 
     async def both_activations(other):
         await _operation().bulk_activate_openvpn_passwords(other, BulkUserFilter())
-        await _operation().bulk_activate_mtproto_secrets(other, BulkUserFilter())
+        await _operation().bulk_activate_l2tp_passwords(other, BulkUserFilter())
         user = (await other.execute(select(User).where(User.id == user_id))).scalar_one()
         committed.update(user.proxy_settings)
 
@@ -299,12 +299,12 @@ async def test_a_group_change_whose_grants_are_all_skipped_syncs_what_the_other_
 
     stored = await _stored(sessions)
     assert committed["openvpn"]["password"]
-    assert committed["mtproto"]["secret"]
+    assert committed["l2tp"]["password"]
     assert stored["openvpn"] == committed["openvpn"]
-    assert stored["mtproto"] == committed["mtproto"]
+    assert stored["l2tp"] == committed["l2tp"]
     assert len(pushed) == 1
     assert pushed[0]["openvpn"] == committed["openvpn"]
-    assert pushed[0]["mtproto"] == committed["mtproto"]
+    assert pushed[0]["l2tp"] == committed["l2tp"]
 
 
 @pytest.mark.asyncio
@@ -341,7 +341,7 @@ async def test_a_group_change_takes_its_row_locks_in_ascending_user_id_order(ses
         group = (await db.execute(select(Group).where(Group.name == f"{PREFIX}vpn"))).scalar_one()
         for index, openvpn in enumerate(["already-issued", None, None]):
             settings = ProxyTable().dict()
-            settings["mtproto"] = dict(template.proxy_settings["mtproto"])
+            settings["l2tp"] = dict(template.proxy_settings["l2tp"])
             settings["openvpn"] = {"password": openvpn}
             extra = User(username=f"{USERNAME}{index}", proxy_settings=settings, admin_id=template.admin_id)
             extra.groups = [group]

@@ -61,7 +61,6 @@ NODE_CREDENTIALS = {
     "hysteria": ("auth",),
     "hysteria2": ("password",),
     "open_vpn": ("password",),
-    "mtproto": ("secret",),
     "tuic": ("uuid", "password"),
     "l2tp": ("password",),
 }
@@ -81,7 +80,6 @@ EVERY_STORED_CREDENTIAL = (
     ("wireguard", "private_key"),
     ("wireguard", "public_key"),
     ("openvpn", "password"),
-    ("mtproto", "secret"),
     ("l2tp", "password"),
 )
 DISPATCH_DELAYS = (0, 0, 0.01, 0.05, 0.3)

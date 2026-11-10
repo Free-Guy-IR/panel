@@ -40,7 +40,6 @@ def test_stored_proxy_settings_without_l2tp_do_not_regenerate_on_read():
         "hysteria": {"auth": "legacy-hysteria-auth"},
         "hysteria2": {"password": "legacy-hysteria2-password"},
         "openvpn": {"password": "legacy-openvpn-password"},
-        "mtproto": {"secret": "ab" * 16},
         "tuic": {"uuid": "1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f", "password": "legacy-tuic-password"},
     }
     assert "l2tp" not in stored
@@ -51,14 +50,12 @@ def test_stored_proxy_settings_without_l2tp_do_not_regenerate_on_read():
     assert second.l2tp.password is None
     assert first.trojan.password == "legacy-trojan-password"
     assert first.openvpn.password == "legacy-openvpn-password"
-    assert first.mtproto.secret == "ab" * 16
     assert first.tuic.password == "legacy-tuic-password"
     assert stored == {**stored}
 
     proto = _serialize_user_for_node(9, stored, ["tag"], None, None)
     assert not proto.proxies.HasField("l2tp")
     assert proto.proxies.trojan.password == "legacy-trojan-password"
-    assert proto.proxies.mtproto.username == "9"
 
 
 def test_node_serializer_emits_l2tp_credentials_only_when_allowed():
@@ -85,7 +82,6 @@ def test_adding_l2tp_did_not_change_any_other_protocol_credential():
         "hysteria": {"auth": "hy-auth"},
         "hysteria2": {"password": "hy2-pass"},
         "openvpn": {"password": "ov-pass"},
-        "mtproto": {"secret": "ab" * 16},
         "tuic": {"uuid": "1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f", "password": "tuic-pass"},
         "l2tp": {"password": "l2tp-pass"},
     }
@@ -100,15 +96,13 @@ def test_adding_l2tp_did_not_change_any_other_protocol_credential():
     assert p.hysteria.auth == "hy-auth"
     assert p.hysteria2.password == "hy2-pass"
     assert (p.open_vpn.username, p.open_vpn.password, p.open_vpn.max_concurrent_connections) == ("42", "ov-pass", 3)
-    assert (p.mtproto.username, p.mtproto.secret) == ("42", "ab" * 16)
     assert (p.tuic.uuid, p.tuic.password) == (every_protocol["tuic"]["uuid"], "tuic-pass")
     assert (p.l2tp.username, p.l2tp.password) == ("42", "l2tp-pass")
 
     without_l2tp = create_proxy(
-        mtproto_username="42", mtproto_secret="cd" * 16, openvpn_username="42", openvpn_password="x"
+        openvpn_username="42", openvpn_password="x"
     )
     assert (without_l2tp.l2tp.username, without_l2tp.l2tp.password) == ("", "")
-    assert without_l2tp.mtproto.username == "42"
     assert without_l2tp.open_vpn.password == "x"
 
 

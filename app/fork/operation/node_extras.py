@@ -132,7 +132,6 @@ _MULTI_INSTANCE_BACKENDS = {
     CoreType.wg: service.BackendType.WIREGUARD,
     CoreType.singbox: service.BackendType.SING_BOX,
     CoreType.openvpn: service.BackendType.OPEN_VPN,
-    CoreType.mtproto: service.BackendType.MTPROTO,
     CoreType.l2tp: service.BackendType.L2TP,
 }
 

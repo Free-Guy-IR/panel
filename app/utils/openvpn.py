@@ -27,7 +27,7 @@ async def get_openvpn_cores(db: AsyncSession) -> list[CoreConfig]:
 
 def openvpn_core_tags(cores: Iterable[CoreConfig]) -> set[str]:
     """All instance tags across every OpenVPN core - mirrors
-    app.utils.mtproto.mtproto_core_tags (an OpenVPN core can have several
+    app.utils.l2tp.l2tp_core_tags (an OpenVPN core can have several
     instances, e.g. one udp/1194 and one tcp/443, each its own tag).
     """
     tags: set[str] = set()
@@ -51,7 +51,7 @@ async def prepare_openvpn_password(
 ) -> ProxyTable:
     """Ensure an OpenVPN password exists for a user assigned to an OpenVPN core.
 
-    Mirrors app.utils.mtproto.prepare_mtproto_secret /
+    Mirrors app.utils.l2tp.prepare_l2tp_password /
     app.utils.wireguard.prepare_wireguard_keys: only generates (and, by
     being assigned back onto proxy_settings before it's persisted by the
     caller, saves) a password for users who actually have access, and never

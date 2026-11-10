@@ -302,7 +302,7 @@ async def test_attach_that_cannot_refresh_users_falls_back_to_a_clean_start(monk
     pg_node.start.side_effect = lambda **k: (order.append("start"), started)[1]
     monkeypatch.setattr(NodeOperation, "_attach_if_running", AsyncMock(return_value=object()))
     monkeypatch.setattr("app.operation.node.ATTACH_SYNC_BACKOFF", 0)
-    db_node = SimpleNamespace(name="mtproto-tg", id=69, keep_alive=0)
+    db_node = SimpleNamespace(name="singbox-hy2", id=69, keep_alive=0)
     core = SimpleNamespace(type=None, to_str=lambda: "{}", exclude_inbound_tags=[])
     users = [{"email": "1"}]
 

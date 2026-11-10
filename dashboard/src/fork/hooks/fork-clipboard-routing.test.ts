@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 const srcRoot = join(import.meta.dir, '..', '..')
 
-const forkCopyActions = ['features/core-editor/components/mtproto/mtproto-instance-form.tsx', 'features/core-editor/components/l2tp/l2tp-form.tsx']
+const forkCopyActions = ['features/core-editor/components/l2tp/l2tp-form.tsx']
 
 describe('fork copy actions', () => {
   for (const file of forkCopyActions) {

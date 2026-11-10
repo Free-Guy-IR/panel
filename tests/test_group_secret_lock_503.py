@@ -36,7 +36,7 @@ GITHUB_MODE = os.getenv("TEST_FROM", "local").lower() != "local"
 PREFIX = "grplock-"
 WG_TAG = f"{PREFIX}wg"
 OVPN = f"{PREFIX}ovpn"
-MTP = f"{PREFIX}mtp"
+L2TP = f"{PREFIX}l2tp"
 SUBNET = "10.77.0.0/24"
 OWNER = SimpleNamespace(username=f"{PREFIX}owner", is_owner=True)
 BALLAST_ROWS = 10
@@ -147,8 +147,8 @@ async def _seed(sessions):
         admin = Admin(username=f"{PREFIX}owner", hashed_password="x", role_id=role.id)
         db.add(admin)
         inbounds = {tag: ProxyInbound(tag=tag) for tag in (WG_TAG, OVPN)}
-        mtproto_inbound = ProxyInbound(tag=MTP)
-        db.add_all([*inbounds.values(), mtproto_inbound])
+        l2tp_inbound = ProxyInbound(tag=L2TP)
+        db.add_all([*inbounds.values(), l2tp_inbound])
         await db.flush()
         db.add_all(
             [
@@ -158,12 +158,12 @@ async def _seed(sessions):
                     config={"interface_name": WG_TAG, "address": ["10.77.0.1/24"], "listen_port": 51820},
                 ),
                 CoreConfig(name=f"{PREFIX}ovpn", type=CoreType.openvpn, config={"instances": [{"tag": OVPN}]}),
-                CoreConfig(name=f"{PREFIX}mtp", type=CoreType.mtproto, config={"instances": [{"tag": MTP}]}),
+                CoreConfig(name=f"{PREFIX}l2tp", type=CoreType.l2tp, config={"inbound_tag": L2TP, "server_addr": "vpn.example.com"}),
             ]
         )
         groups = {
             "bare": Group(name=f"{PREFIX}bare", inbounds=[]),
-            "mtp": Group(name=f"{PREFIX}mtp", inbounds=[mtproto_inbound]),
+            "mtp": Group(name=f"{PREFIX}l2tp", inbounds=[l2tp_inbound]),
             "vpn": Group(name=f"{PREFIX}vpn", inbounds=list(inbounds.values())),
             "paused": Group(name=f"{PREFIX}paused", inbounds=list(inbounds.values()), is_disabled=True),
         }
@@ -197,7 +197,7 @@ async def _phase_two_state(sessions, user_id):
     return SimpleNamespace(
         peer_ips=list(table.wireguard.peer_ips or []),
         openvpn=table.openvpn.password,
-        mtproto=table.mtproto.secret,
+        l2tp=table.l2tp.password,
         pool_rows=len(pool_rows),
     )
 
@@ -551,7 +551,7 @@ async def test_a_failure_arriving_while_its_users_repair_runs_gets_a_pass_that_r
     state = await _phase_two_state(sessions, member)
     assert len(state.peer_ips) == 1
     assert state.openvpn
-    assert state.mtproto
+    assert state.l2tp
     assert group_repair.pending_repair_user_ids() == set()
 
 

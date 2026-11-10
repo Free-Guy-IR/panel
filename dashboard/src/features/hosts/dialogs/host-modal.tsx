@@ -772,7 +772,7 @@ const HostModal: React.FC<HostModalProps> = ({ isDialogOpen, onOpenChange, onSub
     } else if (resolvedHostMode === 'openvpn') {
       setOpenSection(undefined)
       setWireguardOpenSection(undefined)
-    } else if (resolvedHostMode === 'mtproto' || resolvedHostMode === 'l2tp') {
+    } else if (resolvedHostMode === 'l2tp') {
       setOpenSection(undefined)
       setWireguardOpenSection(undefined)
       setOpenvpnOpenSection(undefined)
