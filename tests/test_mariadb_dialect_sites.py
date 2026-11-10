@@ -122,7 +122,7 @@ def test_period_truncation_works_on_mariadb():
 
 
 @pytest.mark.asyncio
-async def test_subscription_update_cleanup_avoids_limit_subquery_on_mariadb(monkeypatch):
+async def test_subscription_update_cleanup_ranks_in_one_delete_on_mariadb(monkeypatch):
     db = _MariaDBSession(first_rows=[SimpleNamespace(user_id=7)])
 
     async def _no_flush():
@@ -137,8 +137,12 @@ async def test_subscription_update_cleanup_avoids_limit_subquery_on_mariadb(monk
 
     await cleanup_subscription_updates.cleanup_user_subscription_updates()
 
-    assert isinstance(db.statements[1], Select)
-    assert not any(isinstance(stmt, Delete) for stmt in db.statements[1:])
+    assert len(db.statements) == 1
+    assert isinstance(db.statements[0], Delete)
+    assert not any(isinstance(stmt, Select) for stmt in db.statements)
+    compiled = str(db.statements[0].compile(dialect=MariaDBDialect()))
+    assert "row_number() OVER (PARTITION BY" in compiled
+    assert "LIMIT" not in compiled
 
 
 APP = Path(__file__).resolve().parents[1] / "app"
