@@ -9,6 +9,8 @@ FIXED_FLOORS = {
     "aiohttp": Version("3.14.4"),
     "multidict": Version("6.9.1"),
     "yarl": Version("1.25.1"),
+    "cryptography": Version("50.0.2"),
+    "mako": Version("1.4.2"),
 }
 
 LOCK_PATH = Path(__file__).resolve().parents[1] / "uv.lock"
