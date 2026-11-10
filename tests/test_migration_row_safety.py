@@ -109,35 +109,6 @@ def test_node_delete_rollback_without_orphaned_history_needs_no_consent(tmp_path
     assert _revision(url) == "e8c1f04b72a9"
 
 
-def test_fleet_wide_content_filter_rollback_is_refused_without_consent(tmp_path):
-    url = f"sqlite:///{tmp_path / 'filters.sqlite3'}"
-    _run(url, upgrade, "d4a92bc8e531")
-    with create_engine(url).begin() as connection:
-        connection.execute(
-            text(
-                "INSERT INTO content_filter_profiles (id, name, created_at, updated_at, strict_mode) "
-                "VALUES (1, 'p', '2026-09-15 00:00:00', '2026-09-15 00:00:00', 1)"
-            )
-        )
-        connection.execute(
-            text(
-                "INSERT INTO content_filter_assignments (profile_id, node_id, inbound_tag) "
-                "VALUES (1, NULL, '')"
-            )
-        )
-
-    with pytest.raises(RuntimeError, match="allow_data_loss=true"):
-        _run(url, downgrade, "c3f81ab7d420")
-    with create_engine(url).connect() as connection:
-        assert connection.execute(text("SELECT COUNT(*) FROM content_filter_assignments")).scalar() == 1
-    assert _revision(url) == "d4a92bc8e531"
-
-    _run(url, downgrade, "c3f81ab7d420", "allow_data_loss=true")
-    with create_engine(url).connect() as connection:
-        assert connection.execute(text("SELECT COUNT(*) FROM content_filter_assignments")).scalar() == 0
-    assert _revision(url) == "c3f81ab7d420"
-
-
 def test_openvpn_core_type_rollback_is_refused_while_openvpn_cores_exist(tmp_path):
     url = f"sqlite:///{tmp_path / 'openvpn.sqlite3'}"
     _run(url, upgrade, "8a1f3c6e9d02")

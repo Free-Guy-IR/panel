@@ -8,10 +8,6 @@ branch_labels = None
 depends_on = None
 
 COLUMNS = (
-    ("content_filter_profiles", "categories", True),
-    ("content_filter_profiles", "allow_list", True),
-    ("content_filter_profiles", "block_list", True),
-    ("content_filter_sniffing_overrides", "original", True),
     ("admin_roles", "hwid", False),
     ("admins", "custom_variables", True),
     ("api_keys", "permissions", False),

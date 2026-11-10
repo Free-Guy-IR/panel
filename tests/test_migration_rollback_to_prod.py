@@ -14,7 +14,7 @@ from sqlalchemy import create_engine, inspect, text
 
 from app.fork import db_rollback
 from app.fork.db_rollback import ROLLBACK_FLAG, RollbackError, current_heads, default_config, main, rollback
-from app.fork.migration_guards import StrayMigrationObjectError
+from app.fork.migration_guards import MIGRATION_OWNED_TABLES, StrayMigrationObjectError
 
 ROOT = Path(__file__).resolve().parents[1]
 PROD_REVISION = "e5a9c3f1b7d2"
@@ -92,13 +92,6 @@ def _seed(sync_url):
     with create_engine(sync_url).begin() as connection:
         connection.execute(
             text(
-                "INSERT INTO content_filter_profiles (id, name, created_at, updated_at, categories, allow_list, "
-                "block_list, strict_mode, note) VALUES (7, 'kids', '2026-09-01 00:00:00', '2026-09-01 00:00:00', "
-                "'[\"adult\"]', '[]', '[\"example.com\"]', 1, 'kept across the rollback')"
-            )
-        )
-        connection.execute(
-            text(
                 "INSERT INTO users (id, username, status, used_traffic, data_limit_reset_strategy, proxy_settings, "
                 "created_at, hwid_limit) VALUES (1, 'u1', 'active', 0, 'no_reset', '{}', '2026-08-08 00:00:00', 3)"
             )
@@ -166,7 +159,7 @@ def test_rollback_leaves_exactly_the_prod_revision_with_the_prod_schema_and_data
     assert _versions(sync_url) == [PROD_REVISION]
     assert _schema(sync_url) == schema_before
     assert _rows(sync_url) == rows_before
-    assert "content_filter_profiles" in schema_before
+    assert set(MIGRATION_OWNED_TABLES) & set(schema_before) == set()
     assert not (PASSKEY_TABLES | RELEASE_ONLY_TABLES) & set(_schema(sync_url))
     assert [line for line in steps if line.startswith("alembic downgrade")] == [
         f"alembic downgrade {PROD_REVISION}",
