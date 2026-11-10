@@ -15,6 +15,7 @@ from sqlalchemy.pool import NullPool, StaticPool
 from app.db import base
 from app.db.models import Admin, AdminRole, Node, NodeUserUsage, User
 from app.fork.jobs import usage_limits
+from app.fork.migration_guards import drop_migration_owned_tables
 from app.jobs import record_usages, reset_user_data_usage, review_users
 from app.models.proxy import ProxyTable
 from app.models.settings import General
@@ -90,6 +91,7 @@ async def recorder_db_fixture(monkeypatch: pytest.MonkeyPatch):
 
     seeded = None if ":memory:" in url else await snapshot_seeded_rows(engine)
     async with engine.begin() as conn:
+        await conn.run_sync(drop_migration_owned_tables)
         await conn.run_sync(base.Base.metadata.drop_all)
         await conn.run_sync(base.Base.metadata.create_all)
     if is_sqlite:
@@ -149,6 +151,7 @@ async def recorder_db_fixture(monkeypatch: pytest.MonkeyPatch):
     if is_sqlite:
         await _set_sqlite_foreign_keys(engine, False)
     async with engine.begin() as conn:
+        await conn.run_sync(drop_migration_owned_tables)
         await conn.run_sync(base.Base.metadata.drop_all)
         await conn.run_sync(base.Base.metadata.create_all)
     if seeded is not None:

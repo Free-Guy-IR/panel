@@ -13,6 +13,7 @@ from sqlalchemy.pool import NullPool
 
 from app.db.models import Admin, AdminRole, Base, User, UserConnectionState, UserStatus
 from app.fork.jobs import connection_limiter as job
+from app.fork.migration_guards import drop_migration_owned_tables
 from app.jobs import record_usages
 from app.models.proxy import ProxyTable
 from app.models.settings import ConnectionLimit
@@ -48,6 +49,7 @@ async def _fresh_schema(user_count: int) -> list[int]:
     json_column.server_default = None
     try:
         async with engine.begin() as conn:
+            await conn.run_sync(drop_migration_owned_tables)
             await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

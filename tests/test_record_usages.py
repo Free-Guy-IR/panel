@@ -34,6 +34,7 @@ from app.db.models import (
     UserUsageResetLogs,
 )
 from app.fork.jobs import usage_limits
+from app.fork.migration_guards import drop_migration_owned_tables
 from app.jobs import record_usages
 from app.models.proxy import ProxyTable
 from app.models.settings import ConnectionLimit, General, UsageSettings
@@ -337,6 +338,7 @@ async def session_factory(monkeypatch: pytest.MonkeyPatch, tmp_path):
     engine = create_async_engine(database_url, connect_args=connect_args, **engine_kwargs)
     seeded = None if str(tmp_path) in database_url else await snapshot_seeded_rows(engine)
     async with engine.begin() as conn:
+        await conn.run_sync(drop_migration_owned_tables)
         await conn.run_sync(base.Base.metadata.drop_all)
         await conn.run_sync(base.Base.metadata.create_all)
 
@@ -375,6 +377,7 @@ async def session_factory(monkeypatch: pytest.MonkeyPatch, tmp_path):
     yield session_factory
 
     async with engine.begin() as conn:
+        await conn.run_sync(drop_migration_owned_tables)
         await conn.run_sync(base.Base.metadata.drop_all)
         await conn.run_sync(base.Base.metadata.create_all)
     if seeded is not None:

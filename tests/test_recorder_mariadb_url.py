@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from app.db.models import Admin, AdminRole, Base, Node, User
+from app.fork.migration_guards import drop_migration_owned_tables
 from app.jobs import cleanup_subscription_accesses, record_usages
 from app.models.proxy import ProxyTable
 
@@ -159,6 +160,7 @@ async def test_subscription_access_cleanup_avoids_limit_in_subquery_on_a_mariadb
 async def test_billing_survives_on_a_real_mariadb_url(monkeypatch):
     engine = create_async_engine(REAL_MARIADB_URL, poolclass=NullPool)
     async with engine.begin() as conn:
+        await conn.run_sync(drop_migration_owned_tables)
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -207,5 +209,6 @@ async def test_billing_survives_on_a_real_mariadb_url(monkeypatch):
         assert (used, credited) == (1_000_000, 1_000_000)
     finally:
         async with engine.begin() as conn:
+            await conn.run_sync(drop_migration_owned_tables)
             await conn.run_sync(Base.metadata.drop_all)
         await engine.dispose()

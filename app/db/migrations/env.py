@@ -15,7 +15,7 @@ from app.db.dialect import sql_family
 import app.db.models
 from app.db.compiles_types import SqliteCompatibleBigInteger, WebAuthnBinary, WebAuthnChallenge, WebAuthnCredentialId
 from config import database_settings
-from app.fork.migration_guards import MIGRATION_LOCK_HELD, SqliteIdHighWater, guard_planned_steps, migration_command, migration_lock, migration_url, version_hooks
+from app.fork.migration_guards import MIGRATION_LOCK_HELD, MIGRATION_OWNED_TABLES, SqliteIdHighWater, guard_planned_steps, migration_command, migration_lock, migration_url, version_hooks
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -38,17 +38,6 @@ target_metadata = Base.metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
-
-
-MIGRATION_OWNED_TABLES = {
-    "content_filter_assignments",
-    "content_filter_profiles",
-    "content_filter_sniffing_overrides",
-    "content_filter_sniffing_repairs",
-    "traffic_log_identities",
-    "traffic_log_records",
-    "traffic_log_state",
-}
 
 
 def _include_name(name, type_, parent_names) -> bool:

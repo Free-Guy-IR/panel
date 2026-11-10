@@ -14,6 +14,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 ID_GUARDED_TABLES = ("users", "nodes")
+MIGRATION_OWNED_TABLES = (
+    "content_filter_assignments",
+    "content_filter_sniffing_overrides",
+    "content_filter_sniffing_repairs",
+    "content_filter_profiles",
+    "traffic_log_identities",
+    "traffic_log_records",
+    "traffic_log_state",
+)
 AUTOINCREMENT_OWNER = "fd192e9628a5"
 MYSQL_FAMILY = ("mysql", "mariadb")
 SORT_ORDER_REVISION = "d73f8a2c4e91"
@@ -107,6 +116,13 @@ def migration_command(fn) -> str | None:
         return None
     name = getattr(fn, "__name__", None)
     return name if name in MIGRATION_COMMANDS else None
+
+
+def drop_migration_owned_tables(connection: Connection) -> None:
+    existing = set(inspect(connection).get_table_names())
+    for table in MIGRATION_OWNED_TABLES:
+        if table in existing:
+            connection.execute(text(f"DROP TABLE {table}"))
 
 
 def mysql_lock_name(connection: Connection) -> str:
