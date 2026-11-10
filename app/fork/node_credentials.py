@@ -11,9 +11,17 @@ REQUIRED_CREDENTIALS = {
     "l2tp": ("password",),
 }
 
+REMOVED_CREDENTIALS = ("mtproto",)
+
 
 def omit_empty_credentials(proxy):
+    declared = {field.name for field in proxy.DESCRIPTOR.fields}
+    for name in REMOVED_CREDENTIALS:
+        if name in declared:
+            proxy.ClearField(name)
     for name, required in REQUIRED_CREDENTIALS.items():
+        if name not in declared:
+            continue
         section = getattr(proxy, name)
         if any(not getattr(section, attribute) for attribute in required):
             proxy.ClearField(name)
