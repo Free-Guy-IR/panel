@@ -1314,12 +1314,10 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         await node_nats_client.publish("connect_nodes_bulk", {"core_id": core_id, "force_start": True})
 
     async def _get_logs_local(self, node_id: int) -> Callable[[], AsyncIterator[asyncio.Queue]]:
-        from app.fork.traffic_log import fork_log_stream
-
         node = await node_manager.get_node(node_id)
         if node is None:
             await self.raise_error(message="Node not found", code=404)
-        return fork_log_stream(node_id, node)
+        return node.stream_logs
 
     async def _get_logs_remote(self, node_id: int) -> Callable[[], AsyncIterator[asyncio.Queue]]:
         await self.raise_error(message="Node logs are only available via node-worker", code=409)

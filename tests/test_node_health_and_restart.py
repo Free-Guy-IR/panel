@@ -397,16 +397,11 @@ async def test_a_healthy_round_loads_no_users_for_an_extra_core_that_is_already_
         async def add_backend(self, **kwargs):
             self.added.append(kwargs)
 
-    async def nothing(*args, **kwargs):
-        return None
-
     monkeypatch.setattr(NodeOperation, "_get_core_users_map", staticmethod(users_map))
     monkeypatch.setattr(
         NodeOperation, "_resolve_core_without_users", staticmethod(AsyncMock(return_value=SimpleNamespace(type=CoreType.xray)))
     )
     monkeypatch.setattr(extras_job, "GetDB", _NullDB)
-    monkeypatch.setattr(extras_job, "_attach_traffic_log", nothing)
-    monkeypatch.setattr(extras_job, "_reconcile_content_filter", nothing)
 
     pg_node = RunningNode()
     monkeypatch.setattr(extras_operation, "node_manager", SimpleNamespace(get_node=AsyncMock(return_value=pg_node)))

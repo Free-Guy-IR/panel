@@ -10,11 +10,8 @@ FORK_JOB_MODULES = (
     "cleanup_node_usages",
     "cleanup_node_user_usages",
     "connection_limiter",
-    "content_filter_reconcile",
     "node_removals",
     "pending_user_resync",
-    "traffic_log_collector",
-    "traffic_log_purge",
 )
 
 __all__ = [

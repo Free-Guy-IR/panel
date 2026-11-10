@@ -8,13 +8,12 @@ import { Separator } from '@/components/ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AdminDetails, useGetSystemResourceStats, useGetSystemUsersStats, useGetNodesSimple, NodeSimple, NodeStatus } from '@/service/api'
 import { cn } from '@/lib/utils'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAdmin } from '@/hooks/use-admin'
 import { hasPermission, isOwner } from '@/utils/rbac'
-import { extraStatisticsViews } from '@/fork'
 
 const Statistics = () => {
   const { t } = useTranslation()
@@ -29,17 +28,6 @@ const Statistics = () => {
   const canViewNodeStats = hasPermission(admin, 'nodes', 'stats')
   const canViewSystemStats = hasPermission(admin, 'system', 'read')
   const canViewFleetStats = canViewNodeStats && panelOwner
-  const forkViews = useMemo(
-    () =>
-      extraStatisticsViews().filter(
-        view => (!view.ownerOnly || panelOwner) && hasPermission(currentAdmin, view.permission.resource, view.permission.action),
-      ),
-    [currentAdmin, panelOwner],
-  )
-  const forkOnly = !canViewNodeStats && !canViewSystemStats && forkViews.length > 0
-  const resolvedViewMode = forkOnly && viewMode === 'node' ? forkViews[0].id : viewMode
-  const activeForkView = forkViews.find(view => view.id === resolvedViewMode)
-  const ForkView = activeForkView?.component
 
   // Fetch nodes for the selector
   const { data: nodesResponse, isLoading: isLoadingNodes } = useGetNodesSimple(
@@ -107,7 +95,7 @@ const Statistics = () => {
         <Separator />
       </div>
 
-      {((canViewNodeStats && (canViewSystemStats || nodesData.length > 0)) || forkViews.length > 0) && (
+      {canViewNodeStats && (canViewSystemStats || nodesData.length > 0) && (
         <div className="w-full px-3 pt-2 sm:px-4 sm:pt-4">
           <div className="transform-gpu">
             <Card>
@@ -142,51 +130,32 @@ const Statistics = () => {
                         </Button>
                       </>
                     )}
-                    {forkViews.map(view => {
-                      const ViewIcon = view.icon
-                      const isActive = resolvedViewMode === view.id
-                      return (
-                        <Button
-                          key={view.id}
-                          type="button"
-                          variant={isActive ? 'default' : 'outline'}
-                          onClick={() => setViewMode(prev => (prev === view.id ? 'node' : view.id))}
-                          className="h-9 w-full text-xs sm:h-10 sm:w-auto sm:text-sm"
-                          aria-pressed={isActive}
-                        >
-                          <ViewIcon className="h-4 w-4" />
-                          {t(view.label, { defaultValue: view.id })}
-                        </Button>
-                      )
-                    })}
-                    {(canViewNodeStats || canViewSystemStats) && (
-                      <div className="w-full sm:w-auto sm:min-w-[180px] lg:min-w-[200px]">
-                        {isLoadingNodes ? (
-                          <Skeleton className="h-9 w-full sm:h-10" />
-                        ) : (
-                          <Select value={selectedServer} onValueChange={setSelectedServer} disabled={showAllNodes || showInbounds || ForkView != null}>
-                            <SelectTrigger className="h-9 w-full text-xs sm:h-10 sm:text-sm">
-                              <SelectValue placeholder={t('selectServer')} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {canViewSystemStats && (
-                                <SelectItem value="master" className="text-xs sm:text-sm">
-                                  {t('master')}
-                                </SelectItem>
-                              )}
-                              {nodesData.map((node: NodeSimple) => (
-                                <SelectItem key={node.id} value={String(node.id)} className="text-xs sm:text-sm">
-                                  <span className="flex min-w-0 items-center gap-2">
-                                    <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', getNodeStatusDotColor(node.status))} />
-                                    <span className="min-w-0 truncate">{node.name}</span>
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      </div>
-                    )}
+                    <div className="w-full sm:w-auto sm:min-w-[180px] lg:min-w-[200px]">
+                      {isLoadingNodes ? (
+                        <Skeleton className="h-9 w-full sm:h-10" />
+                      ) : (
+                        <Select value={selectedServer} onValueChange={setSelectedServer} disabled={showAllNodes || showInbounds}>
+                          <SelectTrigger className="h-9 w-full text-xs sm:h-10 sm:text-sm">
+                            <SelectValue placeholder={t('selectServer')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {canViewSystemStats && (
+                              <SelectItem value="master" className="text-xs sm:text-sm">
+                                {t('master')}
+                              </SelectItem>
+                            )}
+                            {nodesData.map((node: NodeSimple) => (
+                              <SelectItem key={node.id} value={String(node.id)} className="text-xs sm:text-sm">
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', getNodeStatusDotColor(node.status))} />
+                                  <span className="min-w-0 truncate">{node.name}</span>
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -198,9 +167,7 @@ const Statistics = () => {
       <div className="w-full">
         <div className="w-full px-3 pt-2 sm:px-4">
           <div className="animate-slide-up transform-gpu" style={{ animationDuration: '500ms', animationDelay: '100ms', animationFillMode: 'both' }}>
-            {ForkView ? (
-              <ForkView />
-            ) : showInbounds && canViewFleetStats ? (
+            {showInbounds && canViewFleetStats ? (
               <InboundUsageChart />
             ) : showAllNodes && canViewFleetStats ? (
               <AllNodesLiveSection nodes={nodesData} />

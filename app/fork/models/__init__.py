@@ -6,18 +6,12 @@ from app.fork.models.proxy_secret_claim import ProxySecretClaim
 
 __all__ = [
     "ConnectionRestriction",
-    "ContentFilterAssignment",
-    "ContentFilterProfile",
-    "ContentFilterSniffingOverride",
     "NamedLock",
     "NodeInboundUsage",
     "NodeStatAck",
     "PendingNodeRemoval",
     "PendingUserResync",
     "ProxySecretClaim",
-    "TrafficLogIdentity",
-    "TrafficLogRecord",
-    "TrafficLogState",
     "UserConnectionLimit",
     "UserConnectionState",
     "node_additional_cores_association",
@@ -33,26 +27,6 @@ def __getattr__(name):
         from app.fork.models.node_inbound_usage import NodeInboundUsage
 
         return NodeInboundUsage
-    if name in {"ContentFilterProfile", "ContentFilterAssignment", "ContentFilterSniffingOverride"}:
-        from app.fork.models.content_filter import (
-            ContentFilterAssignment,
-            ContentFilterProfile,
-            ContentFilterSniffingOverride,
-        )
-
-        return {
-            "ContentFilterProfile": ContentFilterProfile,
-            "ContentFilterAssignment": ContentFilterAssignment,
-            "ContentFilterSniffingOverride": ContentFilterSniffingOverride,
-        }[name]
-    if name in {"TrafficLogRecord", "TrafficLogIdentity", "TrafficLogState"}:
-        from app.fork.models.traffic_log import TrafficLogIdentity, TrafficLogRecord, TrafficLogState
-
-        return {
-            "TrafficLogRecord": TrafficLogRecord,
-            "TrafficLogIdentity": TrafficLogIdentity,
-            "TrafficLogState": TrafficLogState,
-        }[name]
     if name in {"ConnectionRestriction", "UserConnectionLimit", "UserConnectionState"}:
         from app.fork.models.connection import ConnectionRestriction, UserConnectionLimit, UserConnectionState
 

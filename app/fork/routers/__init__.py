@@ -7,11 +7,9 @@ from app.fork.registry import extra_routers, register_router, registered_router_
 
 FORK_ROUTER_MODULES = (
     ("connection_limit", "connection_limit"),
-    ("content_filter", "content_filter"),
     ("core", "fork_core"),
     ("node", "fork_node"),
     ("subscription", "fork_subscription"),
-    ("traffic_log", "traffic_log"),
     ("user", "fork_user"),
 )
 

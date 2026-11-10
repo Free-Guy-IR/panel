@@ -228,17 +228,6 @@ class JobSettings(EnvSettings):
     node_stats_retention_days: int = Field(default=14, validation_alias="NODE_STATS_RETENTION_DAYS")
     cleanup_node_usages_interval: int = Field(default=3600, validation_alias="JOB_CLEANUP_NODE_USAGES_INTERVAL")
     node_usages_retention_days: int = Field(default=365, validation_alias="NODE_USAGES_RETENTION_DAYS")
-    traffic_log_enabled: bool = Field(default=True, validation_alias="TRAFFIC_LOG_ENABLED")
-    traffic_log_max_records: int = Field(default=2_000_000, ge=0, validation_alias="TRAFFIC_LOG_MAX_RECORDS")
-    traffic_log_flush_seconds: int = Field(default=5, ge=1, validation_alias="TRAFFIC_LOG_FLUSH_SECONDS")
-    traffic_log_purge_interval: int = Field(default=600, ge=1, validation_alias="TRAFFIC_LOG_PURGE_INTERVAL")
-    content_filter_reconcile_enabled: bool = Field(default=True, validation_alias="CONTENT_FILTER_RECONCILE_ENABLED")
-    content_filter_reconcile_interval: int = Field(
-        default=300, ge=1, validation_alias="JOB_CONTENT_FILTER_RECONCILE_INTERVAL"
-    )
-    content_filter_reconcile_timeout: int = Field(
-        default=180, ge=5, validation_alias="JOB_CONTENT_FILTER_RECONCILE_TIMEOUT"
-    )
 
 
 class SubmittedSecretCollision(StrEnum):

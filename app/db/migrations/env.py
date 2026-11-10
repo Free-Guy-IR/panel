@@ -40,7 +40,15 @@ target_metadata = Base.metadata
 # ... etc.
 
 
-MIGRATION_OWNED_TABLES = {"content_filter_sniffing_repairs"}
+MIGRATION_OWNED_TABLES = {
+    "content_filter_assignments",
+    "content_filter_profiles",
+    "content_filter_sniffing_overrides",
+    "content_filter_sniffing_repairs",
+    "traffic_log_identities",
+    "traffic_log_records",
+    "traffic_log_state",
+}
 
 
 def _include_name(name, type_, parent_names) -> bool:

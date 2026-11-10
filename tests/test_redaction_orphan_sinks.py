@@ -1,4 +1,3 @@
-from app.fork.content_filter.schemas import AssignmentResponse
 from app.fork.operation.node_messages import scrub_credentials
 from app.models.node import NodeResponse
 
@@ -49,24 +48,6 @@ def _node_response(message: str) -> NodeResponse:
 def test_a_node_message_stored_before_the_scrub_is_served_without_the_password():
     response = _node_response(f"Cannot connect to proxy socks5://user:{PASSWORD}@proxy.example:1080")
     assert PASSWORD not in (response.message or "")
-
-
-def test_an_assignment_error_stored_before_the_scrub_is_served_without_the_password():
-    response = AssignmentResponse.model_validate(
-        {
-            "id": 1,
-            "profile_id": 1,
-            "node_id": 1,
-            "inbound_tag": "in",
-            "is_enabled": True,
-            "enforced": False,
-            "last_checked_at": None,
-            "delivery": "node",
-            "reaches_nodes": [1],
-            "last_error": f"node 1: cannot reach http://user:{PASSWORD}@proxy.example:8080",
-        }
-    )
-    assert PASSWORD not in (response.last_error or "")
 
 
 def _connection_key(login: str, password: str):

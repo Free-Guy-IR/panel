@@ -2,31 +2,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
-from PasarGuardNodeBridge import NodeAPIError
 
-from app.fork.content_filter import service
-from app.fork.content_filter.service import EnforcementError
-from app.fork.routers import content_filter as router
 from app.telegram.handlers import error_handler
 
 PASSWORD = "Pr0xy" + "S3cret"
 LEAK = f"Cannot connect to proxy socks5://user:{PASSWORD}@proxy.example:1080"
-
-
-@pytest.mark.asyncio
-async def test_a_content_filter_probe_error_never_returns_the_proxy_password(monkeypatch):
-    node = SimpleNamespace(test_route=AsyncMock(side_effect=NodeAPIError(-1, LEAK)))
-    monkeypatch.setattr(service.node_manager, "get_node", AsyncMock(return_value=node))
-    outcome = await service.probe(1, "in", "example.com")
-    assert outcome.startswith("error:")
-    assert PASSWORD not in outcome
-
-
-def test_a_content_filter_refusal_never_answers_with_the_proxy_password():
-    with pytest.raises(HTTPException) as refused:
-        router._fail(EnforcementError(LEAK, code=503))
-    assert PASSWORD not in str(refused.value.detail)
 
 
 @pytest.mark.asyncio

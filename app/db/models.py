@@ -1130,20 +1130,10 @@ def _register_fork_model_tables() -> None:
     """
     import app.fork.models.api_key_permissions as _fork_api_key_permissions
     import app.fork.models.connection as _fork_connection
-    import app.fork.models.content_filter as _fork_content_filter
     import app.fork.models.node_inbound_usage as _fork_inbound
-    import app.fork.models.traffic_log as _fork_traffic_log
 
     for _name in ("ConnectionRestriction", "UserConnectionLimit", "UserConnectionState"):
         _obj = getattr(_fork_connection, _name, None)
-        if _obj is not None:
-            globals()[_name] = _obj
-    for _name in ("ContentFilterProfile", "ContentFilterAssignment", "ContentFilterSniffingOverride"):
-        _obj = getattr(_fork_content_filter, _name, None)
-        if _obj is not None:
-            globals()[_name] = _obj
-    for _name in ("TrafficLogRecord", "TrafficLogIdentity", "TrafficLogState"):
-        _obj = getattr(_fork_traffic_log, _name, None)
         if _obj is not None:
             globals()[_name] = _obj
     _niu = getattr(_fork_inbound, "NodeInboundUsage", None)
@@ -1163,20 +1153,6 @@ def __getattr__(name: str):
             "ConnectionRestriction": ConnectionRestriction,
             "UserConnectionLimit": UserConnectionLimit,
             "UserConnectionState": UserConnectionState,
-        }
-        globals().update(exported)
-        return exported[name]
-    if name in {"ContentFilterProfile", "ContentFilterAssignment", "ContentFilterSniffingOverride"}:
-        from app.fork.models.content_filter import (
-            ContentFilterAssignment,
-            ContentFilterProfile,
-            ContentFilterSniffingOverride,
-        )
-
-        exported = {
-            "ContentFilterProfile": ContentFilterProfile,
-            "ContentFilterAssignment": ContentFilterAssignment,
-            "ContentFilterSniffingOverride": ContentFilterSniffingOverride,
         }
         globals().update(exported)
         return exported[name]

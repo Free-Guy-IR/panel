@@ -6,16 +6,12 @@ from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.db import base
-from app.db.crud.node import remove_node
 from app.db.crud.user import remove_user
 from app.db.models import (
     Admin,
     AdminRole,
     Base,
     ConnectionRestriction,
-    ContentFilterAssignment,
-    ContentFilterProfile,
-    Node,
     User,
     UserConnectionLimit,
     UserStatus,
@@ -115,42 +111,3 @@ async def test_deleted_user_state_is_not_inherited_by_the_next_user(runtime_db):
         "access_rows": 0,
         "status_after_restore_job": "disabled",
     }
-
-
-@pytest.mark.asyncio
-async def test_deleted_node_filter_is_not_inherited_by_the_next_node(runtime_db):
-    db = runtime_db
-
-    def _node(name):
-        return Node(
-            name=name,
-            address="127.0.0.1",
-            port=62050,
-            api_port=62051,
-            server_ca="ca",
-            api_key=str(uuid4()),
-            core_config_id=None,
-        )
-
-    old = _node("old-node")
-    db.add(old)
-    await db.commit()
-    profile = ContentFilterProfile(name="blocklist")
-    db.add(profile)
-    await db.commit()
-    db.add(ContentFilterAssignment(profile_id=profile.id, node_id=old.id, inbound_tag=""))
-    await db.commit()
-
-    await remove_node(db, old)
-    await db.commit()
-
-    fresh = _node("fresh-node")
-    db.add(fresh)
-    await db.commit()
-
-    inherited = (
-        await db.execute(
-            select(func.count()).select_from(ContentFilterAssignment).where(ContentFilterAssignment.node_id == fresh.id)
-        )
-    ).scalar()
-    assert inherited == 0

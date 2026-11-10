@@ -55,8 +55,6 @@ async def test_a_failed_node_command_never_logs_the_proxy_password(caplog):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["item", "raise"])
 async def test_a_streamed_log_error_never_publishes_the_proxy_password(monkeypatch, failure):
-    from app.fork import traffic_log
-
     queue: asyncio.Queue = asyncio.Queue()
 
     @contextlib.asynccontextmanager
@@ -66,8 +64,9 @@ async def test_a_streamed_log_error_never_publishes_the_proxy_password(monkeypat
         await queue.put(NodeAPIError(-1, LEAK))
         yield queue
 
-    monkeypatch.setattr(traffic_log, "fork_log_stream", lambda node_id, node: stream)
-    monkeypatch.setattr(worker_module.node_manager, "get_node", AsyncMock(return_value=SimpleNamespace()))
+    monkeypatch.setattr(
+        worker_module.node_manager, "get_node", AsyncMock(return_value=SimpleNamespace(stream_logs=stream))
+    )
     service = worker_module.NodeWorkerService()
     published: list[bytes] = []
 

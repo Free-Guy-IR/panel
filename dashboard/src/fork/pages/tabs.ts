@@ -1,4 +1,4 @@
-import { ListChecks, Send, ShieldAlert, ShieldBan, ShieldCheck, Users, type LucideIcon } from 'lucide-react'
+import { ListChecks, Send, ShieldAlert, ShieldCheck, Users, type LucideIcon } from 'lucide-react'
 import { extraNavItems, registerNavItem, type ForkNavItem } from '../registry'
 
 export type ForkPageTab = {
@@ -8,8 +8,6 @@ export type ForkPageTab = {
   url: string
 }
 
-registerNavItem('settings', { id: 'content-filter', label: 'contentFilter.title', icon: ShieldBan, url: '/settings/content-filter', ownerOnly: true })
-registerNavItem('main', { id: 'content-filter-main', label: 'contentFilter.title', icon: ShieldBan, url: '/settings/content-filter', ownerOnly: true })
 registerNavItem('settings', { id: 'connection-limit', label: 'settings.connectionLimit.title', icon: Users, url: '/settings/connection-limit' })
 registerNavItem('settings', { id: 'connection-limit-review', label: 'settings.connectionLimit.review.navTitle', icon: ListChecks, url: '/settings/connection-limit/review' })
 registerNavItem('settings', { id: 'connection-limit-violations', label: 'settings.connectionLimit.violations.navTitle', icon: ShieldAlert, url: '/settings/connection-limit/violations' })
