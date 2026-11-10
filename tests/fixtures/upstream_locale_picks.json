@@ -3122,6 +3122,66 @@
           "removed": []
         }
       }
+    },
+    {
+      "upstream": "76b42feedeac7791e41cc08ab731d752cf4e9f08",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "settings",
+                "subscriptions",
+                "responseHeaders",
+                "placement",
+                "bodyEnd"
+              ],
+              "Body end"
+            ],
+            [
+              [
+                "settings",
+                "subscriptions",
+                "responseHeaders",
+                "placement",
+                "bodyStart"
+              ],
+              "Body start"
+            ],
+            [
+              [
+                "settings",
+                "subscriptions",
+                "responseHeaders",
+                "placement",
+                "description"
+              ],
+              "Choose whether these headers are sent as real HTTP headers, or embedded as comment lines inside the subscription body — useful when a CDN strips or blocks custom headers."
+            ],
+            [
+              [
+                "settings",
+                "subscriptions",
+                "responseHeaders",
+                "placement",
+                "header"
+              ],
+              "HTTP header (default)"
+            ],
+            [
+              [
+                "settings",
+                "subscriptions",
+                "responseHeaders",
+                "placement",
+                "title"
+              ],
+              "Header Placement"
+            ]
+          ],
+          "removed": []
+        }
+      }
     }
   ]
 }
