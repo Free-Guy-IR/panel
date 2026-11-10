@@ -51,7 +51,17 @@ def starts(monkeypatch):
         return True
 
     async def fenced(
-        pg_node, db_node, core, users, extra_cores, backend_type, force_start, old_status, held, push_on_attach=True
+        pg_node,
+        db_node,
+        core,
+        users,
+        extra_cores,
+        backend_type,
+        force_start,
+        stop_first,
+        old_status,
+        held,
+        push_on_attach=True,
     ):
         issued.append(
             Start(

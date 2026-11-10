@@ -50,7 +50,17 @@ def gated_connects(monkeypatch):
         return True
 
     async def fenced(
-        pg_node, db_node, core, users, extra_cores, backend_type, force_start, old_status, held, push_on_attach=True
+        pg_node,
+        db_node,
+        core,
+        users,
+        extra_cores,
+        backend_type,
+        force_start,
+        stop_first,
+        old_status,
+        held,
+        push_on_attach=True,
     ):
         pushes.append(Push(caller=current_caller.get(id(db_node), "?"), node_id=db_node.id, core_id=core.core_id))
         return {

@@ -26,7 +26,7 @@ def _get_db(session):
 
 
 async def _validate(db_user, include_subscription_url=True):
-    return SimpleNamespace(id=db_user.id, username=db_user.username)
+    return SimpleNamespace(id=db_user.id, username=db_user.username, proxy_settings=ProxyTable(), hwid_limit=None)
 
 
 async def _run_job(action: OnHoldTimeoutAction, users):

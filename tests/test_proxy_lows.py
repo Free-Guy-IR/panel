@@ -442,7 +442,7 @@ async def test_r2_bulk_connect_isolates_a_node_with_bad_stored_proxy(monkeypatch
             raise InvalidProxyURL(INVALID_PROXY_MESSAGE)
         return True
 
-    async def connect(db_node, core, users, extra_cores=None, *, force_start=False):
+    async def connect(db_node, core, users, extra_cores=None, *, force_start=False, stop_first=True):
         return {
             "node_id": db_node.id,
             "status": NodeStatus.connected,

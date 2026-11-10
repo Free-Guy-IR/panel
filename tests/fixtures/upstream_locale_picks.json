@@ -3081,6 +3081,47 @@
           "removed": []
         }
       }
+    },
+    {
+      "upstream": "5115de151387a5386ecf7de0150ed12b8e510c8f",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "coreConfigModal",
+                "restartNodes"
+              ],
+              "Sync Nodes"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "coreConfigModal",
+                "restartNodes"
+              ],
+              "Синхронизировать узлы"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "coreConfigModal",
+                "restartNodes"
+              ],
+              "同步节点"
+            ]
+          ],
+          "removed": []
+        }
+      }
     }
   ]
 }

@@ -62,10 +62,21 @@ def quiet_core(monkeypatch):
     async def record_sync(users):
         synced.append(sorted(user.username for user in users))
 
+    def _validated_core():
+        # node_facing() reads what nodes receive for a core.
+        return SimpleNamespace(type=CoreType.xray, to_str=lambda: "{}", exclude_inbound_tags=[])
+
+    async def get_core(core_id):
+        return None
+
     monkeypatch.setattr(
         core_module,
         "core_manager",
-        SimpleNamespace(validate_core=lambda *args, **kwargs: object(), update_core=update_core),
+        SimpleNamespace(
+            validate_core=lambda *args, **kwargs: _validated_core(),
+            update_core=update_core,
+            get_core=get_core,
+        ),
     )
     monkeypatch.setattr(notification, "create_core", no_notification)
     monkeypatch.setattr(notification, "modify_core", no_notification)

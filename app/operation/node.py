@@ -505,14 +505,12 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
 
         log = logger.info if force_start else logger.debug
         log(f'Starting "{db_node.name}" node')
-        if batch_wireguard_users:
-            try:
-                info = await pg_node.start(**start_kwargs)
-            except asyncio.CancelledError:
-                await NodeOperation._cleanup_cancelled_batched_start(db_node.id, pg_node)
-                raise
-        else:
+        try:
             info = await pg_node.start(**start_kwargs)
+        except asyncio.CancelledError:
+            if batch_wireguard_users:
+                await NodeOperation._cleanup_cancelled_batched_start(db_node.id, pg_node)
+            raise
         if batch_wireguard_users:
             try:
                 synced_node = await node_manager.sync_users_batched(
