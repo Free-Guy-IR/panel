@@ -11,7 +11,7 @@ from sqlalchemy.dialects.mysql.mariadb import MariaDBDialect
 from sqlalchemy.schema import CreateTable
 from sqlalchemy.sql import Delete, Select
 
-from app.db.compiles_types import WebAuthnBinary, WebAuthnChallenge, WebAuthnCredentialId
+from app.db.compiles_types import DateDiff, WebAuthnBinary, WebAuthnChallenge, WebAuthnCredentialId
 from app.db.crud import general, host, hwid, wireguard
 from app.db.models import UserHWID
 from app.jobs import cleanup_subscription_updates
@@ -106,6 +106,13 @@ def test_datetime_add_expression_works_on_mariadb():
     db = _MariaDBSession()
     expr = general.get_datetime_add_expression(db, column("created_at"), 30)
     assert "date_add" in str(expr).lower()
+
+
+@pytest.mark.parametrize("dialect", [mysql.dialect(), MariaDBDialect()])
+def test_reset_cycle_date_diff_counts_elapsed_seconds(dialect):
+    compiled = str(DateDiff(column("online_at"), column("created_at")).compile(dialect=dialect))
+    assert compiled == "TIMESTAMPDIFF(SECOND, created_at, online_at) / 86400"
+    assert "DATEDIFF" not in compiled
 
 
 def test_json_extract_works_on_mariadb():
