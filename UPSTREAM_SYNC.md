@@ -231,11 +231,6 @@ ec74c933405c554dccf0dd5b6d0eab05ac5f78cc by comparing the final trees of the tou
 - `51e57e1471078391693db7b2a8679c0de929134d` SUPERSEDED-BY-SQUASH: upstream branch telegram/tests adds 35 lines of test cases to tests/telegram/handlers/admin/test_user.py; squash-merged into upstream dev as 65695ac50f6e56c0d1b208781df6b10c81ab9910 (#718, 2026-10-11), whose tests/telegram tree equals the branch tip 51faba0f4 (`git diff 51faba0f4 65695ac50 -- tests/telegram` is empty), so the change is decided by that squash's Ported by design line. security: no, test-only: it adds 35 lines of cases to tests/telegram/handlers/admin/test_user.py; no application code changes
 - `1ad2a186348bb5913b2f873bd3684babb8598885` upstream bot branch coderabbit/improve-changed-function-docstrings/1c06464e adds docstrings to the amaziaWG code only. Its pull request PasarGuard/panel#933 into amaziaWG was closed without merge on 2026-09-24; the fork does not carry the AmneziaWG code it documents and keeps no explanatory docstrings. security: no, it only adds or rewrites docstrings and JSDoc lines in the AmneziaWG host, subscription and dashboard code of a closed bot branch; no statement changes and the fork lacks that code
 - `3938936be6dcd5814dca77f2f87fdbb38562224d` upstream/dev (#1019) collapses commit bodies in upstream's Telegram notifier workflow, which the fork deleted on purpose in 535c1aa01 (see 517f2bac above); there is no file to apply it to. security: yes owner-decision: 2026-10-28-main-hint-waivers
-- `58417f4f03de0c36b28ca43386ff460a6813f3d9` UNMERGED-WIP: upstream branch feat/live-core-apply applies routing and outbound edits without restarting nodes; not merged into upstream dev or a tag. until: 2026-11-16 security: no, app/routers/core.py skips the node Stop when a core edit only changes routing rules, balancers or outbounds; the edit itself and who may make it are unchanged, unmerged branch
-- `12ec21d5424227c376a207e4662e99e81a53df39` UNMERGED-WIP: upstream branch feat/live-core-apply lets a forced node start skip the stop before it; not merged into upstream dev or a tag. until: 2026-11-16 security: no, it threads a stop_first flag through app/operation/node.py and the node worker so a forced start can skip the Stop RPC; it changes restart sequencing only, unmerged branch
-- `49e8e0fc663b5158b63183877884cb15ef47ce4a` UNMERGED-WIP: upstream branch feat/live-core-apply tells when nodes can apply a core edit without a restart; not merged into upstream dev or a tag. until: 2026-11-16 security: no, it adds app/core/live_update.py, a pure comparison of two core configs that reports whether only routing rules, balancers or outbounds differ; it reads no request or stored state, unmerged
-- `a4940fc30ac8fcc1c920623333281d5db651f588` UNMERGED-WIP: upstream branch masque fixes the revision of its MASQUE settings migration c8d2e4f6a1b3; unmerged MASQUE work like 359c8cf73. until: 2026-11-16 security: no, it only changes the down_revision of the unmerged MASQUE settings migration to another parent; no schema, data or code path changes
-- `127543598f9b4353ad5dca6c3a3446770a3c5f1c` UNMERGED-WIP: upstream branch masque, a second fix to the same MASQUE migration revision; unmerged. until: 2026-11-16 security: no, it only updates the Revises line in the docstring of the same unmerged MASQUE migration; no schema, data or code path changes
 - `91cc73807860ca69f121da29c45a00495462411f` SUPERSEDED-BY-SQUASH: upstream branch fix/core-editor-api-section-followup lists the API section in the core command menus; the branch tip f4c78791b has exactly the tree of squash 2c474eb4b7d93b98000aa76d501b1afe15e5167f (#995) on upstream dev (`git diff f4c78791b 2c474eb4b` is empty), so its change is decided by that squash's Port queue line. security: no, it adds an API entry to the jump-to-section lists of the dashboard command palette and core command menu; navigation only, no request or stored value changes
 - `f4c78791b1b29e89b2dd35b72913cd2e8d17c50b` SUPERSEDED-BY-SQUASH: upstream branch fix/core-editor-api-section-followup uses a plain label for the API services heading; its tree equals squash 2c474eb4b7d93b98000aa76d501b1afe15e5167f (#995) on upstream dev, so its change is decided by that squash's Port queue line. security: no, it swaps FormLabel for Label on one dashboard heading in core-config-modal.tsx to fix a dangling for attribute; markup only, no request or stored value changes
 - `51faba0f4ae2eb0ca311d2f92110e174bc5d08d6` SUPERSEDED-BY-SQUASH: upstream branch telegram/tests test-only ruff PIE807 fix (`dict` instead of `lambda: {}`) in tests/telegram/conftest.py; squash-merged into upstream dev as 65695ac50f6e56c0d1b208781df6b10c81ab9910 (#718, 2026-10-11), whose tests/telegram tree equals the branch tip 51faba0f4 (`git diff 51faba0f4 65695ac50 -- tests/telegram` is empty), so the change is decided by that squash's Ported by design line. security: no, test-only: it replaces a lambda returning an empty dict with dict in tests/telegram/conftest.py for ruff PIE807; no application code changes
@@ -599,14 +594,15 @@ repository under `upstream-forks/`.
   commit has its decision in `upstream-forks/subscription-template.md`. If the fork ever builds the
   page from subscription-template again, it must be rebased onto upstream first.
 
-- Known red, recorded 2026-10-30: the Upstream Inventory step "Fork tracker coverage" fails on fork main
-  1c20204b6 (run 40615339461) and keeps failing with this ledger until the side ledgers land. At this ledger's head
-  on 2026-10-30 it reports node 33 unported, 16 ledger and 7 refs snapshot errors (owner PG-NODE), scripts 7
-  unported (owner SCRIPTS), node_bridge_py 20 unported (owner PUSH-GATE), core-kit 3 unported (owner PUSH-GATE),
-  subscription-template 30 unported (owner PG-MERGE, its 36 drafted lines are due 2026-11-10) and mtg 1 unported
-  (owner PG-NODE); wireguard-config-kit is OK. The decisions for most of them sit on the side-ledger branch
-  b7/side-ledgers-20261027 (head 1262f9adddf6), which lands as the next increment after this one. Every other step
-  of the job must stay green.
+- The 2026-10-30 red of the Upstream Inventory step "Fork tracker coverage" is closed. It was recorded on fork
+  main 1c20204b6 (run 40615339461) with node 33 unported plus 16 ledger and 7 refs snapshot errors, scripts 7
+  unported, node_bridge_py 20 unported, core-kit 3 unported, subscription-template 30 unported and mtg 1
+  unported, all waiting on the side ledgers of branch b7/side-ledgers-20261027. Those ledgers landed. Re-measured
+  on 2026-11-10 on this head: `python3 scripts/upstream_forks.py --today 2026-11-10` exits 0 and ends with
+  "Fork tracker coverage OK", with every ledger reporting 0 unported. What moves the step red again is the dated
+  decisions inside the side ledgers, and each ledger's own summary line prints its next date: on 2026-11-10 that is
+  2026-11-21 for upstream-forks/node.md (18 owed ports), 2026-11-25 for upstream-forks/node_bridge_py.md (2 owed)
+  and 2026-12-04 for upstream-forks/mtg.md, with the other ledgers carrying no dated decision.
 
 ## Upstream PR candidates (not read by the parity gate)
 
