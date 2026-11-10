@@ -342,6 +342,12 @@ UPSTREAM_NAMESPACES = ("refs/remotes/upstream/", "refs/upstream-tags/")
 LEDGER_FORBIDDEN_CATEGORIES = frozenset({"Cc", "Cf", "Zl", "Zp"})
 PLAIN_INLINE_TYPES = frozenset({"text", "code_inline", "softbreak"})
 DEFAULT_RELEASE_REFS = ("refs/remotes/upstream/main", "refs/remotes/upstream/dev", "refs/upstream-tags/*")
+DEFAULT_RELEASE_SCOPE_REFS = ("refs/remotes/upstream/main", "refs/upstream-tags/*")
+DEVONLY_LABEL = "dev-only (reported, not blocking)"
+DEVONLY_DETAIL = (
+    "no upstream release tag and not upstream main carry them, only upstream dev or a side branch: "
+    "each one is reported and turns unported the day a release carries it"
+)
 
 BRIDGE_PACKAGE = "pasarguard-node-bridge"
 BRIDGE_WAIVER_FILE = "upstream-bridge-waiver.toml"
@@ -3515,6 +3521,7 @@ def parity_gate(
     release_patterns=(),
     upstream=None,
     held_release_patterns=DEFAULT_HELD_RELEASE_REFS,
+    release_scope_patterns=(),
     grandfathered_bases=(),
     strict_security_design=False,
 ):
@@ -3609,6 +3616,18 @@ def parity_gate(
     final_refs += [(sha, label) for sha, label in recorded_releases if not is_prerelease_tag(label.split(" ", 1)[0])]
     prerelease_refs = [(ref, name) for ref, name in held_release_refs if is_prerelease_tag(name)]
     on_final_release = commits_on_refs(base, final_refs)
+    scope_pairs = expand_tracked(release_scope_patterns, option="--release-scope-ref", strict=False)
+    scope_refs = [pair for pair in scope_pairs if not is_prerelease_tag(pair[1])]
+    if not release_scope_patterns:
+        in_release_scope = set(in_range)
+    elif not scope_pairs:
+        in_release_scope = set(in_range)
+        ledger_errors.append(
+            "--release-scope-ref matched no existing ref, so the gate cannot tell a released commit from a "
+            "dev-only one; every upstream commit is treated as released until the patterns match"
+        )
+    else:
+        in_release_scope = set(commits_on_refs(base, scope_refs)) | set(on_final_release)
     for sha, names in sorted(commits_on_refs(base, prerelease_refs).items()):
         if sha in held and sha not in on_final_release:
             copy_notes.append(
@@ -3780,7 +3799,15 @@ def parity_gate(
             copy_notes.append(
                 f"{entry['where']}: `{sha[:12]}` is classified security: no but {hint}; re-review the classification"
             )
-    uncovered = [row for row in rows if row["sha"] not in coverage]
+    unlisted = [row for row in rows if row["sha"] not in coverage]
+    uncovered = [row for row in unlisted if row["sha"] in in_release_scope]
+    devonly = [row for row in unlisted if row["sha"] not in in_release_scope]
+    for sha, entry in sorted(resolved.items()):
+        if coverage.get(sha) == entry["kind"] and sha not in in_release_scope:
+            copy_notes.append(
+                f"{entry['where']}: `{sha[:12]}` is carried only by upstream dev or a side branch, so this entry "
+                "is no longer needed; the gate reports the commit as dev-only until a release carries it"
+            )
     counts = Counter(coverage.values())
 
     print()
@@ -3809,13 +3836,19 @@ def parity_gate(
     for kind, label in COVERAGE_LABELS.items():
         print(f"  {label:<42} {counts[kind]}")
     print(f"  {'unported':<42} {len(uncovered)}")
+    print(f"  {DEVONLY_LABEL:<42} {len(devonly)}")
 
-    if uncovered:
+    for title, group_rows in (
+        (f"Unported upstream commits ({len(uncovered)}), grouped by the tracked refs that contain them:", uncovered),
+        (f"Dev-only upstream commits ({len(devonly)}): {DEVONLY_DETAIL}", devonly),
+    ):
+        if not group_rows:
+            continue
         groups = {}
-        for row in uncovered:
+        for row in group_rows:
             groups.setdefault(tuple(sorted(containing[row["sha"]])), []).append(row)
         print()
-        print(f"Unported upstream commits ({len(uncovered)}), grouped by the tracked refs that contain them:")
+        print(title)
         for refs, group in groups.items():
             print(f"  on {', '.join(refs)} ({len(group)}):")
             for row in group:
@@ -3890,24 +3923,29 @@ def parity_gate(
             reasons.append(f"{len(snapshot_errors) + len(unrecorded)} refs snapshot error(s)")
         print(f"Upstream parity gate FAILED: {'; '.join(reasons)}")
         return 1
+    counted = f"{len(in_range)} upstream commit(s)"
+    rest = ""
+    if devonly:
+        counted = f"{len(in_range) - len(devonly)} released upstream commit(s)"
+        rest = f", and {len(devonly)} carried only by upstream dev or a side branch are reported"
     ends = [entry["expires"] for entry in entries if entry["expires"] is not None]
     ends += [deadlines[row["sha"]] for row in owed]
     first_failure = (min(ends) + timedelta(days=1)).isoformat() if ends else None
     if owed:
         print(
-            f"Upstream parity gate OK, NOT at parity: all {len(in_range)} upstream commit(s) are ported or decided in "
-            f"{ledger_path}, but {len(owed)} are owed ports; the gate fails on {first_failure} unless they are "
+            f"Upstream parity gate OK, NOT at parity: all {counted} are ported or decided in "
+            f"{ledger_path}{rest}, but {len(owed)} are owed ports; the gate fails on {first_failure} unless they are "
             "ported or re-decided"
         )
         return 0
     if first_failure:
         print(
-            f"Upstream parity gate OK: all {len(in_range)} upstream commit(s) are ported or listed in {ledger_path}; "
+            f"Upstream parity gate OK: all {counted} are ported or listed in {ledger_path}{rest}; "
             f"the earliest dated decision ends on {min(ends).isoformat()}, so the gate fails on {first_failure} "
             "unless it is re-decided"
         )
         return 0
-    print(f"Upstream parity gate OK: all {len(in_range)} upstream commit(s) are ported or listed in {ledger_path}")
+    print(f"Upstream parity gate OK: all {counted} are ported or listed in {ledger_path}{rest}")
     return 0
 
 
@@ -4419,6 +4457,17 @@ def main():
         "(repeatable; default: " + ", ".join(DEFAULT_HELD_RELEASE_REFS) + ")",
     )
     parser.add_argument(
+        "--release-scope-ref",
+        metavar="REF_OR_GLOB",
+        action="append",
+        default=[],
+        help="upstream refs whose commits are blocking when neither ported nor listed; a commit no final release "
+        "tag and none of these refs carry is reported as dev-only and does not fail the gate (repeatable; without "
+        "it every tracked commit is blocking, and the release line of this fork is "
+        + ", ".join(DEFAULT_RELEASE_SCOPE_REFS)
+        + ")",
+    )
+    parser.add_argument(
         "--grandfathered-base",
         metavar="COMMIT",
         action="append",
@@ -4529,6 +4578,7 @@ def main():
                 release_patterns=args.release_ref,
                 upstream=upstream,
                 held_release_patterns=tuple(args.held_release_ref) or DEFAULT_HELD_RELEASE_REFS,
+                release_scope_patterns=tuple(args.release_scope_ref),
                 grandfathered_bases=tuple(args.grandfathered_base),
             )
         )

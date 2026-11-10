@@ -100,6 +100,7 @@ jobs:
             --upstream-head "$SYNC_POINT" \
             --release-ref refs/remotes/upstream/main --release-ref refs/remotes/upstream/dev \
             --release-ref 'refs/upstream-tags/*' \
+            --release-scope-ref refs/remotes/upstream/main --release-scope-ref 'refs/upstream-tags/*' \
             --grandfathered-base b56ffe369f542152c52c69733205baeaf3f6e4cd \
             --refs-snapshot .upstream-refs > upstream-parity.txt 2>&1 || status=$?
           cat upstream-parity.txt

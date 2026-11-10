@@ -2021,6 +2021,14 @@ def test_the_workflow_checks_the_baseline_from_the_grandfathered_release():
     assert "--require-base-ancestor" not in workflow
 
 
+def test_the_workflow_scopes_blocking_commits_to_upstream_main_and_release_tags():
+    workflow = (SCRIPT.parent.parent / ".github" / "workflows" / "upstream-inventory.yml").read_text()
+    gate = workflow.split("name: Upstream parity gate", 1)[1].split("- name:", 1)[0]
+    assert "--release-scope-ref refs/remotes/upstream/main" in gate
+    assert "--release-scope-ref 'refs/upstream-tags/*'" in gate
+    assert "--release-scope-ref refs/remotes/upstream/dev" not in workflow
+
+
 CVE_SUBJECT = "fix(auth): reject forged session tokens (CVE-2026-12345)"
 
 
@@ -3136,3 +3144,136 @@ def test_a_package_cover_matches_exactly_and_ignores_a_closing_dot(repo, covers,
     git(path, "checkout", "-q", "main")
     result = run(path, "--head", name, "--check-bridge", "--bridge-latest", "0.9.1", "--today", "2026-10-06")
     assert result.returncode == code, result.stdout + result.stderr
+
+
+def _release_scope_repo(tmp_path):
+    path = tmp_path / "release-scope"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (
+        ("user.name", "Test"),
+        ("user.email", "test@example.com"),
+        ("commit.gpgsign", "false"),
+        ("tag.gpgsign", "false"),
+    ):
+        git(path, "config", key, value)
+    commit(path, "root", {"r.py": lines("r"), "s.py": lines("s")})
+    git(path, "tag", "v1.0")
+    git(path, "update-ref", "refs/upstream-tags/v1.0", git(path, "rev-parse", "v1.0"))
+    git(path, "update-ref", "refs/remotes/upstream/main", git(path, "rev-parse", "v1.0"))
+    git(path, "checkout", "-q", "-b", "rel", "v1.0")
+    released = commit(path, "upstream renames a local in the loader", {"r.py": lines("r", overrides={2: "R2"})})
+    git(path, "tag", "-a", "v1.1", "-m", "v1.1")
+    git(path, "update-ref", "refs/upstream-tags/v1.1", git(path, "rev-parse", "v1.1^{commit}"))
+    git(path, "checkout", "-q", "-b", "devline", "v1.0")
+    dev = commit(path, "upstream reorders the loader list", {"s.py": lines("s", overrides={3: "S3"})})
+    git(path, "update-ref", "refs/remotes/upstream/dev", dev)
+    git(path, "checkout", "-q", "-b", "side", "v1.0")
+    side = commit(path, "upstream drafts a wider loader list", {"s.py": lines("s", overrides={7: "S7"})})
+    git(path, "update-ref", "refs/remotes/upstream/feat/x", side)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    git(path, "branch", "-q", "-D", "up", "rel", "devline", "side")
+    return path, released, dev, side
+
+
+def _scope_gate(path, ledger_text, *extra):
+    (path / "UPSTREAM_SYNC.md").write_text(ledger_text)
+    return run(
+        path,
+        "--base",
+        "v1.0",
+        "--head",
+        "main",
+        "--track",
+        "refs/remotes/upstream/*",
+        "--track",
+        "refs/upstream-tags/*",
+        "--fail-on-unported",
+        "UPSTREAM_SYNC.md",
+        "--release-scope-ref",
+        "refs/remotes/upstream/main",
+        "--release-scope-ref",
+        "refs/upstream-tags/*",
+        "--today",
+        "2026-10-06",
+        *extra,
+    )
+
+
+RELEASED_WAIVER = "fork ships the same rename as its own code security: no, it renames one local variable"
+DEVONLY_TALLY = "dev-only (reported, not blocking)"
+
+
+def test_a_commit_only_a_release_tag_carries_still_fails_the_gate(tmp_path):
+    path, released, _, _ = _release_scope_repo(tmp_path)
+
+    result = _scope_gate(path, "## Waived\n")
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert released[:12] in unported_block(result.stdout)
+
+
+def test_a_dev_only_upstream_commit_is_reported_without_failing_the_gate(tmp_path):
+    path, released, dev, side = _release_scope_repo(tmp_path)
+
+    result = _scope_gate(path, f"## Waived\n\n- `{released}` {RELEASED_WAIVER}\n")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "unported") == 0
+    assert tally(result.stdout, DEVONLY_TALLY) == 2
+    block = result.stdout.split("Dev-only upstream commits", 1)[1].split("\n\n", 1)[0]
+    assert dev[:12] in block
+    assert side[:12] in block
+    assert "turns unported the day a release carries it" in result.stdout
+
+
+def test_a_dev_only_commit_blocks_again_once_a_release_tag_carries_it(tmp_path):
+    path, released, dev, _ = _release_scope_repo(tmp_path)
+    git(path, "update-ref", "refs/upstream-tags/v1.2", dev)
+
+    result = _scope_gate(path, f"## Waived\n\n- `{released}` {RELEASED_WAIVER}\n")
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert dev[:12] in unported_block(result.stdout)
+    assert tally(result.stdout, DEVONLY_TALLY) == 1
+
+
+def test_a_dev_only_commit_blocks_again_once_upstream_main_carries_it(tmp_path):
+    path, released, dev, _ = _release_scope_repo(tmp_path)
+    git(path, "update-ref", "refs/remotes/upstream/main", dev)
+
+    result = _scope_gate(path, f"## Waived\n\n- `{released}` {RELEASED_WAIVER}\n")
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert dev[:12] in unported_block(result.stdout)
+    assert tally(result.stdout, DEVONLY_TALLY) == 1
+
+
+def test_a_prerelease_tag_does_not_pull_a_dev_only_commit_into_release_scope(tmp_path):
+    path, released, dev, _ = _release_scope_repo(tmp_path)
+    git(path, "update-ref", "refs/upstream-tags/v1.2-rc1", dev)
+
+    result = _scope_gate(path, f"## Waived\n\n- `{released}` {RELEASED_WAIVER}\n")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, DEVONLY_TALLY) == 2
+
+
+def test_a_held_entry_for_a_dev_only_commit_is_reported_as_no_longer_needed(tmp_path):
+    path, released, dev, _ = _release_scope_repo(tmp_path)
+    ledger_text = (
+        f"## Waived\n\n- `{released}` {RELEASED_WAIVER}\n\n"
+        "## Held for an upstream release\n\n"
+        f"- `{dev}` dev-only, held for the next upstream release security: no, it only reorders a list\n"
+    )
+
+    result = _scope_gate(path, ledger_text)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "held until an upstream release (ledger)") == 1
+    assert tally(result.stdout, DEVONLY_TALLY) == 1
+    assert (
+        f"`{dev[:12]}` is carried only by upstream dev or a side branch, so this entry is no longer needed"
+        in result.stdout
+    )
