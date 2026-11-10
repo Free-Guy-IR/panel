@@ -296,7 +296,7 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
             if key.lower() in cls._ALWAYS_HTTP_HEADERS:
                 http_headers[key] = value
             else:
-                body_lines.append(f"#{key}: {value}")
+                body_lines.append(f"#{_single_body_line(key)}: {_single_body_line(value)}")
         return http_headers, body_lines
 
     @staticmethod
@@ -1013,3 +1013,10 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
 
         async with usage_aggregation_guard(("subscription_usage", db_user.id)):
             return await get_user_usages(db, db_user.id, start, end, query.period)
+
+
+_BODY_LINE_BREAK_RE = re.compile("[\\x00-\\x1f\\x7f-\\x9f\\u2028\\u2029]+")
+
+
+def _single_body_line(value: Any) -> str:
+    return _BODY_LINE_BREAK_RE.sub(" ", str(value)).strip()
