@@ -50,7 +50,7 @@ def _inbounds_usage(operation: NodeOperation, admin: AdminDetails):
 
 
 GUARDED = {
-    "users_sub_update_chart": (UserOperation, user_operation, "get_users_subscription_agent_counts", _sub_chart),
+    "users_sub_update_chart": (UserOperation, user_operation, "get_users_subscription_agent_stats", _sub_chart),
     "admin_usage": (AdminOperation, admin_operation, "get_admin_usages", _admin_usage),
     "nodes_usage": (NodeOperation, node_operation, "get_nodes_usage", _nodes_usage),
     "nodes_user_count": (NodeOperation, node_operation, "get_user_count_metric_stats", _nodes_user_count),
@@ -72,7 +72,6 @@ async def test_a_second_aggregation_of_the_same_chart_by_the_same_admin_is_refus
 
     monkeypatch.setattr(module, crud_name, slow_aggregate)
     if endpoint == "users_sub_update_chart":
-        monkeypatch.setattr(module, "get_users_subscription_agent_stats", slow_aggregate)
         monkeypatch.setattr(UserOperation, "_build_user_agent_chart", classmethod(lambda cls, *a, **k: "chart"))
     operation = operation_class(OperatorType.API)
 
