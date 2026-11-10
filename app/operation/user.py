@@ -2108,9 +2108,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
                 # The modify below allocates WireGuard IPs, which locks the pool rows before user rows everywhere
                 # else: take them before the reset locks the users, or a concurrent modify can deadlock with us
                 await ensure_wireguard_subnet_pools(db)
-
-            for db_user, modified_user_model, validated_groups, _, _ in prepared_updates:
-                if user_template.reset_usages:
+                for db_user, *_ in prepared_updates:
                     await reset_user_data_usage(
                         db,
                         db_user,
