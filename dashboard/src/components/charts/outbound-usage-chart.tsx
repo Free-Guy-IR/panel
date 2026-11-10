@@ -7,7 +7,7 @@ import { type ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTheme } from '@/app/providers/theme-provider'
 import useDirDetection from '@/hooks/use-dir-detection'
-import { Period, type NodeUsageStat, useGetOutboundUsage } from '@/service/api'
+import { Period, type NodeOutboundUsageStatsList, type NodeUsageStat, useGetOutboundUsage } from '@/service/api'
 import { getChartSeriesColor } from '@/utils/chart-colors'
 import { formatBytes } from '@/utils/formatByte'
 import {
@@ -101,7 +101,7 @@ export function OutboundUsageChart({ nodeId }: { nodeId?: number }) {
 
   // Series keys are not the tags themselves: recharts reads a dotted dataKey as a nested path
   const { series, chartData } = useMemo(() => {
-    const stats = data?.stats ?? {}
+    const stats = (data as NodeOutboundUsageStatsList | undefined)?.stats ?? {}
     const ranked = Object.entries(stats)
       .map(([tag, points]) => ({ tag, total: points.reduce((sum, point) => sum + statBytes(point), 0) }))
       .filter(item => item.total > 0)
@@ -129,7 +129,7 @@ export function OutboundUsageChart({ nodeId }: { nodeId?: number }) {
 
     const sortedRows = [...rows.values()].sort((a, b) => new Date(a._period_start).getTime() - new Date(b._period_start).getTime())
     return { series: seriesList, chartData: sortedRows }
-  }, [data?.stats, period, i18n.language, selectedTime, t])
+  }, [(data as NodeOutboundUsageStatsList | undefined)?.stats, period, i18n.language, selectedTime, t])
 
   const chartConfig = useMemo(() => {
     const isDark = resolvedTheme === 'dark'

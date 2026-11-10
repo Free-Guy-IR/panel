@@ -2,7 +2,7 @@ import { stripXrayHostFields } from './xray-fields'
 
 export type WireGuardOverridePayload = {
   allowed_ips?: string[]
-  mtu?: number
+  mtu?: number | null
   reserved?: string
   keepalive_seconds?: number
   dns?: string[]
