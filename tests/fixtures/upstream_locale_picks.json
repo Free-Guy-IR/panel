@@ -3182,6 +3182,135 @@
           "removed": []
         }
       }
+    },
+    {
+      "upstream": "819c9b50719c50c002fe399f52b4020205d97215",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "nodes",
+                "orderUpdateFailed"
+              ],
+              "Failed to update node order"
+            ],
+            [
+              [
+                "nodes",
+                "orderUpdated"
+              ],
+              "Node order updated"
+            ],
+            [
+              [
+                "settings.cores.orderUpdateFailed"
+              ],
+              "Failed to update core config order"
+            ],
+            [
+              [
+                "settings.cores.orderUpdated"
+              ],
+              "Core config order updated"
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "nodes",
+                "orderUpdateFailed"
+              ],
+              "به‌روزرسانی ترتیب گره‌ها ناموفق بود"
+            ],
+            [
+              [
+                "nodes",
+                "orderUpdated"
+              ],
+              "ترتیب گره‌ها به‌روزرسانی شد"
+            ],
+            [
+              [
+                "settings.cores.orderUpdateFailed"
+              ],
+              "به‌روزرسانی ترتیب پیکربندی هسته‌ها ناموفق بود"
+            ],
+            [
+              [
+                "settings.cores.orderUpdated"
+              ],
+              "ترتیب پیکربندی هسته‌ها به‌روزرسانی شد"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "nodes",
+                "orderUpdateFailed"
+              ],
+              "Не удалось обновить порядок узлов"
+            ],
+            [
+              [
+                "nodes",
+                "orderUpdated"
+              ],
+              "Порядок узлов обновлён"
+            ],
+            [
+              [
+                "settings.cores.orderUpdateFailed"
+              ],
+              "Не удалось обновить порядок конфигураций ядер"
+            ],
+            [
+              [
+                "settings.cores.orderUpdated"
+              ],
+              "Порядок конфигураций ядер обновлён"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "nodes",
+                "orderUpdateFailed"
+              ],
+              "更新节点顺序失败"
+            ],
+            [
+              [
+                "nodes",
+                "orderUpdated"
+              ],
+              "节点顺序已更新"
+            ],
+            [
+              [
+                "settings.cores.orderUpdateFailed"
+              ],
+              "更新核心配置顺序失败"
+            ],
+            [
+              [
+                "settings.cores.orderUpdated"
+              ],
+              "核心配置顺序已更新"
+            ]
+          ],
+          "removed": []
+        }
+      }
     }
   ]
 }
