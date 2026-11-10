@@ -55,14 +55,14 @@ test('both Google Drive spellings are one service and the stored spelling stays'
   assert.deepEqual(applyXdriveService({ service: 'local' }, 'google-drive'), { service: 'google-drive', secrets: ['', '', ''] })
 })
 
-test('the service select offers one Google Drive item in the stored spelling', () => {
-  assert.deepEqual(xdriveServiceSelectOptions('Google Drive'), ['local', 'Google Drive', 'template'])
-  assert.deepEqual(xdriveServiceSelectOptions('google-drive'), ['local', 'google-drive', 'template'])
-  assert.deepEqual(xdriveServiceSelectOptions('local'), ['local', 'Google Drive', 'template'])
-  assert.deepEqual(xdriveServiceSelectOptions(undefined), ['local', 'Google Drive', 'template'])
-  assert.deepEqual(xdriveServiceSelectOptions(''), ['local', 'Google Drive', 'template'])
+test('the service select offers one Google Drive item in the stored spelling and includes s3', () => {
+  assert.deepEqual(xdriveServiceSelectOptions('Google Drive'), ['local', 'Google Drive', 'template', 's3'])
+  assert.deepEqual(xdriveServiceSelectOptions('google-drive'), ['local', 'google-drive', 'template', 's3'])
+  assert.deepEqual(xdriveServiceSelectOptions('local'), ['local', 'Google Drive', 'template', 's3'])
+  assert.deepEqual(xdriveServiceSelectOptions(undefined), ['local', 'Google Drive', 'template', 's3'])
+  assert.deepEqual(xdriveServiceSelectOptions(''), ['local', 'Google Drive', 'template', 's3'])
   // An unknown stored service stays first so the select stays controlled; the kit reports it.
-  assert.deepEqual(xdriveServiceSelectOptions('dropbox'), ['dropbox', 'local', 'Google Drive', 'template'])
+  assert.deepEqual(xdriveServiceSelectOptions('dropbox'), ['dropbox', 'local', 'Google Drive', 'template', 's3'])
 })
 
 test('Google Drive secrets stay three trimmed entries', () => {
