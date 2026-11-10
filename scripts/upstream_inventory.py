@@ -221,7 +221,7 @@ WORKFLOW_GOARCH_RE = re.compile(
     r"""(?<![\w$.-])(?<!\$\{)(["']?)goarch\1(?:(=)|\s*:(?=\s|$))\s*(.*)$""", re.IGNORECASE
 )
 WORKFLOW_GOARCH_BARE_RE = re.compile(
-    r"\b(?:for|read|export|readonly|declare|typeset|local)\b[^;&|]*?(?<![\w$.{-])(?:goarch|targetarch)\b(?!\s*=)"
+    r"\b(?:for|read|export|readonly|declare|typeset|local)\b[^;&|]*?(?<![\w$.{(-])(?:goarch|targetarch)\b(?!\s*=)"
     r"|\bprintf\b[^;&|]*?-v\s*['\"]?(?:goarch|targetarch)\b",
     re.IGNORECASE,
 )
