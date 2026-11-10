@@ -3531,6 +3531,7 @@ def parity_gate(
     containing, active, skipped, heads = upstream_commits(base, tracked, require_shared_history)
     snapshot_errors = []
     unrecorded = []
+    snapshot_notes = []
     snapshot_kept = []
     pairs = []
     if snapshot_path:
@@ -3628,6 +3629,15 @@ def parity_gate(
         )
     else:
         in_release_scope = set(commits_on_refs(base, scope_refs)) | set(on_final_release)
+        ref_by_name = {name: ref for ref, name in tracked}
+        scope_tracked = {ref for ref, _ in scope_pairs}
+        off_release = [pair for pair in unrecorded if ref_by_name.get(pair[1]) not in scope_tracked]
+        unrecorded = [pair for pair in unrecorded if pair not in off_release]
+        snapshot_notes = [
+            f"upstream head {name} at {sha[:12]} is not recorded in {snapshot_path}; no release tag and not "
+            "upstream main carry it, so it is reported and not blocking"
+            for sha, name in off_release
+        ]
     for sha, names in sorted(commits_on_refs(base, prerelease_refs).items()):
         if sha in held and sha not in on_final_release:
             copy_notes.append(
@@ -3905,7 +3915,7 @@ def parity_gate(
             f"{unreasoned} port-queue, Held or Waived entries classified security: no give no reason for the no; "
             "write it as security: no, <reason>"
         )
-    notes = stale + duplicates + copy_notes + sync_notes
+    notes = stale + duplicates + copy_notes + sync_notes + snapshot_notes
     if notes:
         print()
         print(f"Ledger warnings ({len(notes)}):")

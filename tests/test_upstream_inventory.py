@@ -3277,3 +3277,56 @@ def test_a_held_entry_for_a_dev_only_commit_is_reported_as_no_longer_needed(tmp_
         f"`{dev[:12]}` is carried only by upstream dev or a side branch, so this entry is no longer needed"
         in result.stdout
     )
+
+
+SCOPE_HEADS = (
+    ("refs/remotes/upstream/main", "upstream/main"),
+    ("refs/remotes/upstream/dev", "upstream/dev"),
+    ("refs/remotes/upstream/feat/x", "upstream/feat/x"),
+    ("refs/upstream-tags/v1.0", "v1.0"),
+    ("refs/upstream-tags/v1.1", "v1.1"),
+)
+
+
+def _record_heads(path, skip):
+    text = "".join(
+        f"{git(path, 'rev-parse', ref + '^{commit}')} {name}\n" for ref, name in SCOPE_HEADS if name != skip
+    )
+    (path / ".upstream-refs").write_text(text)
+
+
+def _snapshot_scope_gate(path, released):
+    return _scope_gate(path, f"## Waived\n\n- `{released}` {RELEASED_WAIVER}\n", "--refs-snapshot", ".upstream-refs")
+
+
+def test_an_unrecorded_dev_head_is_reported_without_failing_the_gate(tmp_path):
+    path, released, dev, _ = _release_scope_repo(tmp_path)
+    _record_heads(path, skip="upstream/dev")
+
+    result = _snapshot_scope_gate(path, released)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"upstream head upstream/dev at {dev[:12]} is not recorded in .upstream-refs" in result.stdout
+    assert "no release tag and not upstream main carry it, so it is reported and not blocking" in result.stdout
+
+
+def test_an_unrecorded_upstream_main_head_still_fails_the_gate(tmp_path):
+    path, released, _, _ = _release_scope_repo(tmp_path)
+    git(path, "update-ref", "refs/remotes/upstream/main", released)
+    _record_heads(path, skip="upstream/main")
+
+    result = _snapshot_scope_gate(path, released)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"upstream head upstream/main at {released[:12]} is not recorded in .upstream-refs" in result.stdout
+    assert "refs snapshot error(s)" in result.stdout
+
+
+def test_an_unrecorded_release_tag_head_still_fails_the_gate(tmp_path):
+    path, released, _, _ = _release_scope_repo(tmp_path)
+    _record_heads(path, skip="v1.1")
+
+    result = _snapshot_scope_gate(path, released)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"upstream head v1.1 at {released[:12]} is not recorded in .upstream-refs" in result.stdout
