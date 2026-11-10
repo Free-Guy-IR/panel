@@ -499,7 +499,7 @@ async def test_modify_core_refuses_an_edit_a_live_node_on_that_core_cannot_accou
     operation = _core_operation(monkeypatch)
 
     async def _stored(db, core_id):
-        return SimpleNamespace(id=core_id, type=CoreType.singbox, name="benz")
+        return SimpleNamespace(id=core_id, type=CoreType.singbox, name="benz", config=None)
 
     async def _versions(db, core_id):
         assert core_id == 9
@@ -521,7 +521,7 @@ async def test_modify_core_accepts_the_same_edit_once_every_node_runs_a_fixed_bu
     operation = _core_operation(monkeypatch)
 
     async def _stored(db, core_id):
-        return SimpleNamespace(id=core_id, type=CoreType.singbox, name="benz")
+        return SimpleNamespace(id=core_id, type=CoreType.singbox, name="benz", config=None)
 
     async def _versions(db, core_id):
         return [("frankfurt", "0.7.1"), ("tehran", "0.7.0")]
@@ -539,7 +539,7 @@ async def test_modify_core_refuses_a_protocol_no_node_build_can_account_for(monk
     operation = _core_operation(monkeypatch)
 
     async def _stored(db, core_id):
-        return SimpleNamespace(id=core_id, type=CoreType.singbox, name="benz")
+        return SimpleNamespace(id=core_id, type=CoreType.singbox, name="benz", config=None)
 
     async def _boom(db, core_id):
         raise AssertionError("an unconditionally unsafe protocol must not need a node lookup")
