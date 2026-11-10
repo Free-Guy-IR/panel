@@ -3122,6 +3122,4270 @@
           "removed": []
         }
       }
+    },
+    {
+      "upstream": "29b6338e8de3e63e5ed3d731822eb9e73042d724",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "masque",
+                "addressPool"
+              ],
+              "Server address pool"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "addressPoolHint"
+              ],
+              "The server's own address with its prefix, at most one IPv4 and one IPv6 (for example 10.14.0.1/16 and fd14::1/64). Clients get addresses from these subnets."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "auth"
+              ],
+              "Authentication"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "authBasic"
+              ],
+              "User and password"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "authNone"
+              ],
+              "None"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "authWarp"
+              ],
+              "Cloudflare WARP keys"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "clientDns"
+              ],
+              "Client DNS"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "clientDnsHint"
+              ],
+              "DNS servers the panel puts in client configs. IP addresses only; Xray does not read this."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "headers"
+              ],
+              "Headers (JSON object)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "headersHint"
+              ],
+              "Host and Capsule-Protocol are not allowed, and Authorization is not allowed with a user or password."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "headersInvalid"
+              ],
+              "Headers must be a JSON object with text values."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "host"
+              ],
+              "Host"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "hostHint"
+              ],
+              "Optional host name or host:port, without scheme or path."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpBoth"
+              ],
+              "HTTP/3 and HTTP/2 (h3, h2)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpClientHint"
+              ],
+              "Saved as the TLS ALPN. The server must accept the same version."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpH2"
+              ],
+              "HTTP/2 over TCP (h2)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpH3"
+              ],
+              "HTTP/3 over UDP (h3)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpNeedsTls"
+              ],
+              "Set Security to TLS to choose the HTTP version."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpServerHint"
+              ],
+              "Saved as the TLS ALPN. h3 listens on UDP, h2 on TCP, and both listens on both."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpVersion"
+              ],
+              "HTTP version"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "mtu"
+              ],
+              "MTU"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "mtuHint"
+              ],
+              "Empty or 0 means 1280. Otherwise 1280 to 65535."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "mtuInvalid"
+              ],
+              "MTU must be 0 or a whole number from 1280 to 65535."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "pathHint"
+              ],
+              "Starts with /. Only the {target} and {ipproto} variables are allowed."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "portInvalid"
+              ],
+              "Enter one port from 1 to 65535."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "remoteDns"
+              ],
+              "Remote DNS"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "remoteDnsHint"
+              ],
+              "IP addresses only. Empty uses {{servers}}."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "removeClientOnly"
+              ],
+              "Remove client-only settings"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "serverAddress"
+              ],
+              "Server address"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "serverPort"
+              ],
+              "Server port"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "title"
+              ],
+              "MASQUE"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "user"
+              ],
+              "User"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "userHint"
+              ],
+              "Sent as HTTP Basic auth, so it cannot contain a colon."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpAddress"
+              ],
+              "WARP tunnel addresses"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpAddressHint"
+              ],
+              "The addresses from the registration, at most one IPv4 and one IPv6."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpDefaultsHint"
+              ],
+              "With WARP, an empty host means {{host}} and an empty path means {{path}}."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpKeysHint"
+              ],
+              "From your WARP MASQUE registration: P-256 keys as PEM or base64 DER."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpPrivateKey"
+              ],
+              "WARP private key"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpPublicKey"
+              ],
+              "WARP public key"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "xmux"
+              ],
+              "XMUX (JSON object)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "xmuxHint"
+              ],
+              "Optional connection reuse limits, as in XHTTP. Set maxConnections or maxConcurrency, not both."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "xmuxInvalid"
+              ],
+              "XMUX must be a JSON object."
+            ],
+            [
+              [
+                "coreEditor",
+                "streamForms",
+                "blockingTitle"
+              ],
+              "Fix these MASQUE or XDrive settings first"
+            ],
+            [
+              [
+                "coreEditor",
+                "streamForms",
+                "invalidInputs"
+              ],
+              "Some fields have values that cannot be saved. Fix the ones marked in red."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "capHint"
+              ],
+              "Xray caps this at {{max}}."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "clientId"
+              ],
+              "Client ID"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "clientSecret"
+              ],
+              "Client secret"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "concurrency"
+              ],
+              "Concurrency"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "decryptionHint"
+              ],
+              "Use the VLESS Encryption button below to generate a matching encryption and decryption pair."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "eagerWindowMs"
+              ],
+              "Eager window (ms)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "flowNotSupported"
+              ],
+              "XDrive does not support VLESS flow, and the users of this inbound inherit it. Set Flow to Default."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "flushIntervalMs"
+              ],
+              "Flush interval (ms)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderGoogleDrive"
+              ],
+              "Folder ID"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderGoogleDriveHint"
+              ],
+              "The ID of the Drive folder both sides share."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderLocal"
+              ],
+              "Folder path"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderLocalHint"
+              ],
+              "A directory both sides can reach, mostly for testing."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderTemplate"
+              ],
+              "Folder"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderTemplateHint"
+              ],
+              "Optional. The template reads it as {folder}."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "googleDriveHint"
+              ],
+              "OAuth credentials of the Google account that owns the folder."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "holeTimeoutMs"
+              ],
+              "Hole timeout (ms)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "maxPollIntervalMs"
+              ],
+              "Max poll interval (ms)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "numberInvalid"
+              ],
+              "Enter a whole number from 0 to 4294967295."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "pollIntervalMs"
+              ],
+              "Poll interval (ms)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "refreshToken"
+              ],
+              "Refresh token"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "secrets"
+              ],
+              "Secrets"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "secretsHint"
+              ],
+              "The template reads them as {secret0}, {secret1} and so on."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "segmentBytes"
+              ],
+              "Segment size (bytes)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "service"
+              ],
+              "Storage service"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "serviceLocal"
+              ],
+              "Local folder (local)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "serviceTemplate"
+              ],
+              "Custom template (template)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "sessionTtlSeconds"
+              ],
+              "Session TTL (seconds)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "template"
+              ],
+              "Template (JSON object)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "templateHint"
+              ],
+              "Describes the storage API requests."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "templateInvalid"
+              ],
+              "The template must be a JSON object."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "title"
+              ],
+              "XDrive"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "tlsHint"
+              ],
+              "With XDrive, TLS settings only shape the HTTPS client that talks to the storage API."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "tuning"
+              ],
+              "Tuning"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "tuningHint"
+              ],
+              "Empty or 0 uses the Xray default shown in each field."
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "masque",
+                "addressPool"
+              ],
+              "مخزن آدرس سرور"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "addressPoolHint"
+              ],
+              "آدرس خود سرور همراه با پیشوند آن، حداکثر یک IPv4 و یک IPv6 (مثلاً 10.14.0.1/16 و fd14::1/64). کاربران از این زیرشبکه‌ها آدرس می‌گیرند."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "auth"
+              ],
+              "احراز هویت"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "authBasic"
+              ],
+              "نام کاربری و رمز عبور"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "authNone"
+              ],
+              "هیچ"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "authWarp"
+              ],
+              "کلیدهای Cloudflare WARP"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "clientDns"
+              ],
+              "DNS کاربران"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "clientDnsHint"
+              ],
+              "سرورهای DNS که پنل در پیکربندی کاربران قرار می‌دهد. فقط آدرس IP؛ Xray این مقدار را نمی‌خواند."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "headers"
+              ],
+              "سرآیندها (شیء JSON)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "headersHint"
+              ],
+              "Host و Capsule-Protocol مجاز نیستند، و Authorization هم همراه با نام کاربری یا رمز عبور مجاز نیست."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "headersInvalid"
+              ],
+              "سرآیندها باید یک شیء JSON با مقادیر متنی باشند."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "host"
+              ],
+              "میزبان"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "hostHint"
+              ],
+              "نام میزبان یا host:port اختیاری، بدون پیشوند پروتکل (scheme) یا مسیر."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpBoth"
+              ],
+              "HTTP/3 و HTTP/2 (h3، h2)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpClientHint"
+              ],
+              "به‌عنوان ALPN در TLS ذخیره می‌شود. سرور باید همین نسخه را بپذیرد."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpH2"
+              ],
+              "HTTP/2 روی TCP (h2)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpH3"
+              ],
+              "HTTP/3 روی UDP (h3)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpNeedsTls"
+              ],
+              "برای انتخاب نسخه HTTP، امنیت را روی TLS بگذارید."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpServerHint"
+              ],
+              "به‌عنوان ALPN در TLS ذخیره می‌شود. h3 روی UDP، h2 روی TCP و حالت دوگانه روی هر دو گوش می‌دهد."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpVersion"
+              ],
+              "نسخه HTTP"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "mtu"
+              ],
+              "MTU"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "mtuHint"
+              ],
+              "خالی یا 0 یعنی 1280. در غیر این صورت از 1280 تا 65535."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "mtuInvalid"
+              ],
+              "MTU باید 0 یا عددی صحیح از 1280 تا 65535 باشد."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "pathHint"
+              ],
+              "با / شروع می‌شود. فقط متغیرهای {target} و {ipproto} مجاز هستند."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "portInvalid"
+              ],
+              "یک پورت از 1 تا 65535 وارد کنید."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "remoteDns"
+              ],
+              "DNS راه دور"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "remoteDnsHint"
+              ],
+              "فقط آدرس IP. اگر خالی باشد از {{servers}} استفاده می‌شود."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "removeClientOnly"
+              ],
+              "حذف تنظیمات مخصوص سمت کلاینت"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "serverAddress"
+              ],
+              "آدرس سرور"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "serverPort"
+              ],
+              "پورت سرور"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "title"
+              ],
+              "MASQUE"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "user"
+              ],
+              "نام کاربری"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "userHint"
+              ],
+              "به‌صورت HTTP Basic auth فرستاده می‌شود، پس نمی‌تواند دونقطه داشته باشد."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpAddress"
+              ],
+              "آدرس‌های تونل WARP"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpAddressHint"
+              ],
+              "آدرس‌های دریافتی از ثبت‌نام، حداکثر یک IPv4 و یک IPv6."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpDefaultsHint"
+              ],
+              "با WARP، میزبان خالی یعنی {{host}} و مسیر خالی یعنی {{path}}."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpKeysHint"
+              ],
+              "از ثبت‌نام WARP MASQUE شما: کلیدهای P-256 به‌صورت PEM یا DER با کدگذاری base64."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpPrivateKey"
+              ],
+              "کلید خصوصی WARP"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpPublicKey"
+              ],
+              "کلید عمومی WARP"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "xmux"
+              ],
+              "XMUX (شیء JSON)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "xmuxHint"
+              ],
+              "محدودیت‌های اختیاری برای استفادهٔ مجدد از اتصال، مانند XHTTP. یکی از maxConnections یا maxConcurrency را تنظیم کنید، نه هر دو را."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "xmuxInvalid"
+              ],
+              "XMUX باید یک شیء JSON باشد."
+            ],
+            [
+              [
+                "coreEditor",
+                "streamForms",
+                "blockingTitle"
+              ],
+              "ابتدا این تنظیمات MASQUE یا XDrive را اصلاح کنید"
+            ],
+            [
+              [
+                "coreEditor",
+                "streamForms",
+                "invalidInputs"
+              ],
+              "برخی فیلدها مقادیری دارند که قابل ذخیره نیستند. موارد قرمز را اصلاح کنید."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "capHint"
+              ],
+              "Xray این مقدار را حداکثر {{max}} در نظر می‌گیرد."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "clientId"
+              ],
+              "شناسه کلاینت"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "clientSecret"
+              ],
+              "کلید محرمانه کلاینت"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "concurrency"
+              ],
+              "هم‌زمانی"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "decryptionHint"
+              ],
+              "با دکمهٔ «رمزنگاری VLESS» در پایین یک جفت رمزنگاری و رمزگشایی هم‌خوان بسازید."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "eagerWindowMs"
+              ],
+              "پنجره بررسی سریع (میلی‌ثانیه)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "flowNotSupported"
+              ],
+              "XDrive از Flow در VLESS پشتیبانی نمی‌کند، و کاربران این ورودی آن را به ارث می‌برند. Flow را روی پیش‌فرض بگذارید."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "flushIntervalMs"
+              ],
+              "فاصله تخلیه بافر (میلی‌ثانیه)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderGoogleDrive"
+              ],
+              "شناسه پوشه"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderGoogleDriveHint"
+              ],
+              "شناسه پوشه‌ای در Drive که هر دو طرف آن را به اشتراک گذاشته‌اند."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderLocal"
+              ],
+              "مسیر پوشه"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderLocalHint"
+              ],
+              "پوشه‌ای که هر دو طرف به آن دسترسی دارند، بیشتر برای آزمایش."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderTemplate"
+              ],
+              "پوشه"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderTemplateHint"
+              ],
+              "اختیاری. قالب آن را با {folder} می‌خواند."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "googleDriveHint"
+              ],
+              "اطلاعات ورود OAuth حساب Google که مالک پوشه است."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "holeTimeoutMs"
+              ],
+              "مهلت قطعه گم‌شده (میلی‌ثانیه)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "maxPollIntervalMs"
+              ],
+              "حداکثر فاصله بررسی (میلی‌ثانیه)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "numberInvalid"
+              ],
+              "عددی صحیح از 0 تا 4294967295 وارد کنید."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "pollIntervalMs"
+              ],
+              "فاصله بررسی (میلی‌ثانیه)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "refreshToken"
+              ],
+              "توکن تازه‌سازی"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "secrets"
+              ],
+              "مقادیر محرمانه"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "secretsHint"
+              ],
+              "قالب آن‌ها را با {secret0}، {secret1} و به همین ترتیب می‌خواند."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "segmentBytes"
+              ],
+              "اندازه قطعه (بایت)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "service"
+              ],
+              "سرویس ذخیره‌سازی"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "serviceLocal"
+              ],
+              "پوشه محلی (local)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "serviceTemplate"
+              ],
+              "قالب سفارشی (template)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "sessionTtlSeconds"
+              ],
+              "TTL نشست (ثانیه)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "template"
+              ],
+              "قالب (شیء JSON)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "templateHint"
+              ],
+              "درخواست‌های API فضای ذخیره‌سازی را توصیف می‌کند."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "templateInvalid"
+              ],
+              "قالب باید یک شیء JSON باشد."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "title"
+              ],
+              "XDrive"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "tlsHint"
+              ],
+              "با XDrive، تنظیمات TLS فقط روی کلاینت HTTPS که با API فضای ذخیره‌سازی کار می‌کند اثر دارند."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "tuning"
+              ],
+              "تنظیمات دقیق"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "tuningHint"
+              ],
+              "خالی یا 0 یعنی مقدار پیش‌فرض Xray که در هر فیلد نمایش داده شده است."
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "masque",
+                "addressPool"
+              ],
+              "Пул адресов сервера"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "addressPoolHint"
+              ],
+              "Собственный адрес сервера с префиксом, не более одного IPv4 и одного IPv6 (например, 10.14.0.1/16 и fd14::1/64). Клиенты получают адреса из этих подсетей."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "auth"
+              ],
+              "Аутентификация"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "authBasic"
+              ],
+              "Пользователь и пароль"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "authNone"
+              ],
+              "Нет"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "authWarp"
+              ],
+              "Ключи Cloudflare WARP"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "clientDns"
+              ],
+              "DNS клиентов"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "clientDnsHint"
+              ],
+              "DNS-серверы, которые панель добавляет в конфигурации клиентов. Только IP-адреса; Xray это поле не читает."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "headers"
+              ],
+              "Заголовки (JSON-объект)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "headersHint"
+              ],
+              "Host и Capsule-Protocol не допускаются, а Authorization не допускается вместе с пользователем или паролем."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "headersInvalid"
+              ],
+              "Заголовки должны быть JSON-объектом со строковыми значениями."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "host"
+              ],
+              "Хост"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "hostHint"
+              ],
+              "Необязательное имя хоста или host:port, без схемы и пути."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpBoth"
+              ],
+              "HTTP/3 и HTTP/2 (h3, h2)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpClientHint"
+              ],
+              "Сохраняется как TLS ALPN. Сервер должен принимать ту же версию."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpH2"
+              ],
+              "HTTP/2 поверх TCP (h2)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpH3"
+              ],
+              "HTTP/3 поверх UDP (h3)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpNeedsTls"
+              ],
+              "Чтобы выбрать версию HTTP, установите для безопасности значение TLS."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpServerHint"
+              ],
+              "Сохраняется как TLS ALPN. h3 слушает UDP, h2 слушает TCP, а вариант с обоими слушает оба."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpVersion"
+              ],
+              "Версия HTTP"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "mtu"
+              ],
+              "MTU"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "mtuHint"
+              ],
+              "Пусто или 0 означает 1280. Иначе от 1280 до 65535."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "mtuInvalid"
+              ],
+              "MTU должен быть 0 или целым числом от 1280 до 65535."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "pathHint"
+              ],
+              "Начинается с /. Допустимы только переменные {target} и {ipproto}."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "portInvalid"
+              ],
+              "Введите один порт от 1 до 65535."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "remoteDns"
+              ],
+              "Удалённый DNS"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "remoteDnsHint"
+              ],
+              "Только IP-адреса. Если пусто, используются {{servers}}."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "removeClientOnly"
+              ],
+              "Удалить настройки только для клиента"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "serverAddress"
+              ],
+              "Адрес сервера"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "serverPort"
+              ],
+              "Порт сервера"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "title"
+              ],
+              "MASQUE"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "user"
+              ],
+              "Пользователь"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "userHint"
+              ],
+              "Передаётся как HTTP Basic auth, поэтому не может содержать двоеточие."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpAddress"
+              ],
+              "Адреса туннеля WARP"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpAddressHint"
+              ],
+              "Адреса из регистрации, не более одного IPv4 и одного IPv6."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpDefaultsHint"
+              ],
+              "С WARP пустой хост означает {{host}}, а пустой путь означает {{path}}."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpKeysHint"
+              ],
+              "Из вашей регистрации WARP MASQUE: ключи P-256 в формате PEM или DER в base64."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpPrivateKey"
+              ],
+              "Приватный ключ WARP"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpPublicKey"
+              ],
+              "Публичный ключ WARP"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "xmux"
+              ],
+              "XMUX (JSON-объект)"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "xmuxHint"
+              ],
+              "Необязательные ограничения повторного использования соединений, как в XHTTP. Задайте maxConnections или maxConcurrency, но не оба."
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "xmuxInvalid"
+              ],
+              "XMUX должен быть JSON-объектом."
+            ],
+            [
+              [
+                "coreEditor",
+                "streamForms",
+                "blockingTitle"
+              ],
+              "Сначала исправьте эти настройки MASQUE или XDrive"
+            ],
+            [
+              [
+                "coreEditor",
+                "streamForms",
+                "invalidInputs"
+              ],
+              "В некоторых полях значения, которые нельзя сохранить. Исправьте поля, отмеченные красным."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "capHint"
+              ],
+              "Xray ограничивает это значение до {{max}}."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "clientId"
+              ],
+              "ID клиента"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "clientSecret"
+              ],
+              "Секрет клиента"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "concurrency"
+              ],
+              "Параллелизм"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "decryptionHint"
+              ],
+              "Нажмите кнопку «Шифрование VLESS» ниже, чтобы сгенерировать согласованную пару шифрования и расшифровки."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "eagerWindowMs"
+              ],
+              "Окно частого опроса (мс)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "flowNotSupported"
+              ],
+              "XDrive не поддерживает flow в VLESS, а пользователи этого входящего наследуют его. Установите для поля «Поток (Flow)» значение «По умолчанию»."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "flushIntervalMs"
+              ],
+              "Интервал сброса (мс)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderGoogleDrive"
+              ],
+              "ID папки"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderGoogleDriveHint"
+              ],
+              "ID папки Drive, общей для обеих сторон."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderLocal"
+              ],
+              "Путь к папке"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderLocalHint"
+              ],
+              "Каталог, доступный обеим сторонам, в основном для тестов."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderTemplate"
+              ],
+              "Папка"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderTemplateHint"
+              ],
+              "Необязательно. Шаблон получает её как {folder}."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "googleDriveHint"
+              ],
+              "Учётные данные OAuth аккаунта Google, которому принадлежит папка."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "holeTimeoutMs"
+              ],
+              "Тайм-аут пропущенного сегмента (мс)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "maxPollIntervalMs"
+              ],
+              "Максимальный интервал опроса (мс)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "numberInvalid"
+              ],
+              "Введите целое число от 0 до 4294967295."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "pollIntervalMs"
+              ],
+              "Интервал опроса (мс)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "refreshToken"
+              ],
+              "Токен обновления"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "secrets"
+              ],
+              "Секреты"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "secretsHint"
+              ],
+              "Шаблон получает их как {secret0}, {secret1} и так далее."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "segmentBytes"
+              ],
+              "Размер сегмента (байты)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "service"
+              ],
+              "Сервис хранилища"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "serviceLocal"
+              ],
+              "Локальная папка (local)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "serviceTemplate"
+              ],
+              "Свой шаблон (template)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "sessionTtlSeconds"
+              ],
+              "TTL сессии (секунды)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "template"
+              ],
+              "Шаблон (JSON-объект)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "templateHint"
+              ],
+              "Описывает запросы к API хранилища."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "templateInvalid"
+              ],
+              "Шаблон должен быть JSON-объектом."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "title"
+              ],
+              "XDrive"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "tlsHint"
+              ],
+              "С XDrive настройки TLS влияют только на HTTPS-клиент, который обращается к API хранилища."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "tuning"
+              ],
+              "Тонкая настройка"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "tuningHint"
+              ],
+              "Пусто или 0: используется значение Xray по умолчанию, указанное в каждом поле."
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "masque",
+                "addressPool"
+              ],
+              "服务器地址池"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "addressPoolHint"
+              ],
+              "服务器自身的地址及其前缀，最多一个 IPv4 和一个 IPv6（例如 10.14.0.1/16 和 fd14::1/64）。客户端从这些子网获取地址。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "auth"
+              ],
+              "身份验证"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "authBasic"
+              ],
+              "用户名和密码"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "authNone"
+              ],
+              "无"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "authWarp"
+              ],
+              "Cloudflare WARP 密钥"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "clientDns"
+              ],
+              "客户端 DNS"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "clientDnsHint"
+              ],
+              "面板写入客户端配置的 DNS 服务器。仅限 IP 地址；Xray 不读取此项。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "headers"
+              ],
+              "请求头（JSON 对象）"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "headersHint"
+              ],
+              "不允许使用 Host 和 Capsule-Protocol，设置了用户名或密码时也不允许使用 Authorization。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "headersInvalid"
+              ],
+              "头部必须是值为文本的 JSON 对象。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "host"
+              ],
+              "主机"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "hostHint"
+              ],
+              "可选的主机名或 host:port，不含协议和路径。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpBoth"
+              ],
+              "HTTP/3 和 HTTP/2（h3, h2）"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpClientHint"
+              ],
+              "保存为 TLS ALPN。服务器必须接受相同的版本。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpH2"
+              ],
+              "基于 TCP 的 HTTP/2（h2）"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpH3"
+              ],
+              "基于 UDP 的 HTTP/3（h3）"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpNeedsTls"
+              ],
+              "将安全设置为 TLS 后才能选择 HTTP 版本。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpServerHint"
+              ],
+              "保存为 TLS ALPN。h3 监听 UDP，h2 监听 TCP，两者都选时同时监听两者。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "httpVersion"
+              ],
+              "HTTP 版本"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "mtu"
+              ],
+              "MTU"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "mtuHint"
+              ],
+              "留空或 0 表示 1280，否则为 1280 到 65535。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "mtuInvalid"
+              ],
+              "MTU 必须为 0 或 1280 到 65535 之间的整数。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "pathHint"
+              ],
+              "以 / 开头。只允许使用 {target} 和 {ipproto} 变量。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "portInvalid"
+              ],
+              "请输入一个 1 到 65535 之间的端口。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "remoteDns"
+              ],
+              "远程 DNS"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "remoteDnsHint"
+              ],
+              "仅限 IP 地址。留空则使用 {{servers}}。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "removeClientOnly"
+              ],
+              "移除仅用于客户端的设置"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "serverAddress"
+              ],
+              "服务器地址"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "serverPort"
+              ],
+              "服务器端口"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "title"
+              ],
+              "MASQUE"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "user"
+              ],
+              "用户名"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "userHint"
+              ],
+              "以 HTTP Basic 认证发送，因此不能包含冒号。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpAddress"
+              ],
+              "WARP 隧道地址"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpAddressHint"
+              ],
+              "注册信息中的地址，最多一个 IPv4 和一个 IPv6。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpDefaultsHint"
+              ],
+              "使用 WARP 时，主机留空表示 {{host}}，路径留空表示 {{path}}。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpKeysHint"
+              ],
+              "来自 WARP MASQUE 注册信息：PEM 或 base64 DER 格式的 P-256 密钥。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpPrivateKey"
+              ],
+              "WARP 私钥"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "warpPublicKey"
+              ],
+              "WARP 公钥"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "xmux"
+              ],
+              "XMUX（JSON 对象）"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "xmuxHint"
+              ],
+              "可选的连接复用限制，与 XHTTP 相同。可设置 maxConnections 或 maxConcurrency，但不能同时设置。"
+            ],
+            [
+              [
+                "coreEditor",
+                "masque",
+                "xmuxInvalid"
+              ],
+              "XMUX 必须是 JSON 对象。"
+            ],
+            [
+              [
+                "coreEditor",
+                "streamForms",
+                "blockingTitle"
+              ],
+              "请先修正以下 MASQUE 或 XDrive 设置"
+            ],
+            [
+              [
+                "coreEditor",
+                "streamForms",
+                "invalidInputs"
+              ],
+              "部分字段的值无法保存。请修正标红的字段。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "capHint"
+              ],
+              "Xray 将此值的上限设为 {{max}}。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "clientId"
+              ],
+              "客户端 ID"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "clientSecret"
+              ],
+              "客户端密钥"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "concurrency"
+              ],
+              "并发数"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "decryptionHint"
+              ],
+              "使用下方的「VLESS 加密」按钮生成一对匹配的加密和解密设置。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "eagerWindowMs"
+              ],
+              "快速轮询窗口（毫秒）"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "flowNotSupported"
+              ],
+              "XDrive 不支持 VLESS flow，而此入站的用户会继承该设置。请将「流 (Flow)」设为默认。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "flushIntervalMs"
+              ],
+              "刷新间隔（毫秒）"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderGoogleDrive"
+              ],
+              "文件夹 ID"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderGoogleDriveHint"
+              ],
+              "双方共享的 Drive 文件夹的 ID。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderLocal"
+              ],
+              "文件夹路径"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderLocalHint"
+              ],
+              "双方都能访问的目录，主要用于测试。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderTemplate"
+              ],
+              "文件夹"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderTemplateHint"
+              ],
+              "可选。模板通过 {folder} 读取它。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "googleDriveHint"
+              ],
+              "拥有该文件夹的 Google 账号的 OAuth 凭据。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "holeTimeoutMs"
+              ],
+              "缺失分段超时（毫秒）"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "maxPollIntervalMs"
+              ],
+              "最大轮询间隔（毫秒）"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "numberInvalid"
+              ],
+              "请输入 0 到 4294967295 之间的整数。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "pollIntervalMs"
+              ],
+              "轮询间隔（毫秒）"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "refreshToken"
+              ],
+              "刷新令牌"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "secrets"
+              ],
+              "密钥"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "secretsHint"
+              ],
+              "模板通过 {secret0}、{secret1} 等读取它们。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "segmentBytes"
+              ],
+              "分段大小（字节）"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "service"
+              ],
+              "存储服务"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "serviceLocal"
+              ],
+              "本地文件夹（local）"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "serviceTemplate"
+              ],
+              "自定义模板（template）"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "sessionTtlSeconds"
+              ],
+              "会话 TTL（秒）"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "template"
+              ],
+              "模板（JSON 对象）"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "templateHint"
+              ],
+              "描述存储 API 的请求。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "templateInvalid"
+              ],
+              "模板必须是 JSON 对象。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "title"
+              ],
+              "XDrive"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "tlsHint"
+              ],
+              "使用 XDrive 时，TLS 设置只影响与存储 API 通信的 HTTPS 客户端。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "tuning"
+              ],
+              "调优"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "tuningHint"
+              ],
+              "留空或 0 时使用各字段中显示的 Xray 默认值。"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    },
+    {
+      "upstream": "8e2277de86935579752f92900b815d2e55bd319d",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "allowedSourceIPs"
+              ],
+              "Allowed source IPs"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "blockedSourceIPs"
+              ],
+              "Blocked source IPs"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "filterHint"
+              ],
+              "Inbound only. Place filter last so it is the outermost TCP layer. Blocked IPs take precedence over allowed IPs."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "sourceIPsPlaceholder"
+              ],
+              "Add CIDR or geoip:cn"
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "allowedSourceIPs"
+              ],
+              "IPهای مبدأ مجاز"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "blockedSourceIPs"
+              ],
+              "IPهای مبدأ مسدودشده"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "filterHint"
+              ],
+              "فقط برای ورودی. فیلتر را به‌عنوان آخرین لایه TCP قرار دهید تا بیرونی‌ترین لایه باشد. IPهای مسدودشده بر IPهای مجاز اولویت دارند."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "sourceIPsPlaceholder"
+              ],
+              "CIDR یا geoip:cn اضافه کنید"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "allowedSourceIPs"
+              ],
+              "Разрешённые IP-адреса источника"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "blockedSourceIPs"
+              ],
+              "Заблокированные IP-адреса источника"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "filterHint"
+              ],
+              "Только для входящего трафика. Разместите фильтр последним, чтобы он был внешним слоем TCP. Заблокированные IP имеют приоритет над разрешёнными."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "sourceIPsPlaceholder"
+              ],
+              "Добавьте CIDR или geoip:cn"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "allowedSourceIPs"
+              ],
+              "允许的来源 IP"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "blockedSourceIPs"
+              ],
+              "阻止的来源 IP"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "filterHint"
+              ],
+              "仅适用于入站流量。请将过滤器放在最后，使其成为最外层 TCP 遮罩。阻止列表优先于允许列表。"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "sourceIPsPlaceholder"
+              ],
+              "添加 CIDR 或 geoip:cn"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    },
+    {
+      "upstream": "921bc7997e21890a7a62f0e556cbd5a42e1d06e6",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpBytes"
+              ],
+              "fixed hex bytes (optional 0x prefix)"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpCounter"
+              ],
+              "4-byte counter, incremented for each send"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpDigits"
+              ],
+              "random digits (0-9)"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpExample"
+              ],
+              "Example:"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpLetters"
+              ],
+              "random letters (a-zA-Z)"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpNonce"
+              ],
+              "8 random bytes"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpRandom"
+              ],
+              "N random bytes, or a random count from A to B"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpSyntaxIntro"
+              ],
+              "Join these parts in order to build one packet. The expression is evaluated again for every send."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpSyntaxTitle"
+              ],
+              "Expression packet syntax"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpTime"
+              ],
+              "current Unix time in seconds, 4 bytes, big endian"
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpBytes"
+              ],
+              "بایت‌های ثابت شانزده‌شانزدهی (پیشوند 0x اختیاری است)"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpCounter"
+              ],
+              "شمارندهٔ ۴ بایتی که با هر ارسال افزایش می‌یابد"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpDigits"
+              ],
+              "رقم‌های تصادفی (0-9)"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpExample"
+              ],
+              "نمونه:"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpLetters"
+              ],
+              "حروف تصادفی (a-zA-Z)"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpNonce"
+              ],
+              "۸ بایت تصادفی"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpRandom"
+              ],
+              "N بایت تصادفی یا تعداد تصادفی بین A و B"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpSyntaxIntro"
+              ],
+              "این بخش‌ها به‌ترتیب به هم وصل می‌شوند تا یک بسته بسازند. عبارت برای هر ارسال دوباره ارزیابی می‌شود."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpSyntaxTitle"
+              ],
+              "ساختار عبارت بسته"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpTime"
+              ],
+              "زمان کنونی یونیکس بر حسب ثانیه، ۴ بایت با ترتیب big endian"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpBytes"
+              ],
+              "заданные байты в hex (префикс 0x необязателен)"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpCounter"
+              ],
+              "4-байтовый счётчик, увеличивается при каждой отправке"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpDigits"
+              ],
+              "случайные цифры (0-9)"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpExample"
+              ],
+              "Пример:"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpLetters"
+              ],
+              "случайные буквы (a-zA-Z)"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpNonce"
+              ],
+              "8 случайных байт"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpRandom"
+              ],
+              "N случайных байт или случайное количество от A до B"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpSyntaxIntro"
+              ],
+              "Соедините эти части по порядку для создания одного пакета. Выражение вычисляется заново при каждой отправке."
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpSyntaxTitle"
+              ],
+              "Синтаксис выражения пакета"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpTime"
+              ],
+              "текущее время Unix в секундах, 4 байта, порядок big endian"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpBytes"
+              ],
+              "固定的十六进制字节（可选 0x 前缀）"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpCounter"
+              ],
+              "4 字节计数器，每次发送递增"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpDigits"
+              ],
+              "随机数字 (0-9)"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpExample"
+              ],
+              "示例："
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpLetters"
+              ],
+              "随机字母 (a-zA-Z)"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpNonce"
+              ],
+              "8 个随机字节"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpRandom"
+              ],
+              "N 个随机字节，或 A 到 B 个随机字节"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpSyntaxIntro"
+              ],
+              "按顺序连接这些部分以构建一个数据包。每次发送时都会重新计算表达式。"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpSyntaxTitle"
+              ],
+              "数据包表达式语法"
+            ],
+            [
+              [
+                "hostsDialog",
+                "finalmask",
+                "noiseExpTime"
+              ],
+              "当前 Unix 时间（秒），4 字节，大端序"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    },
+    {
+      "upstream": "9e68477be17616a46f863249a675831268123244",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "usersView",
+                "actions"
+              ],
+              "User actions"
+            ],
+            [
+              [
+                "usersView",
+                "carryOver"
+              ],
+              "Carry over"
+            ],
+            [
+              [
+                "usersView",
+                "columnsHint"
+              ],
+              "Choose extra columns and drag their handles to reorder them. Usage and actions stay at the end."
+            ],
+            [
+              [
+                "usersView",
+                "customize"
+              ],
+              "Customize view"
+            ],
+            [
+              [
+                "usersView",
+                "description"
+              ],
+              "Add optional columns or mobile details while keeping the original layout. Changes are saved in this browser."
+            ],
+            [
+              [
+                "usersView",
+                "desktop"
+              ],
+              "Desktop columns"
+            ],
+            [
+              [
+                "usersView",
+                "dragField"
+              ],
+              "Drag to reorder {{field}}"
+            ],
+            [
+              [
+                "usersView",
+                "durationDays_one"
+              ],
+              "{{count}} day"
+            ],
+            [
+              [
+                "usersView",
+                "durationDays_other"
+              ],
+              "{{count}} days"
+            ],
+            [
+              [
+                "usersView",
+                "durationHours_one"
+              ],
+              "{{count}} hour"
+            ],
+            [
+              [
+                "usersView",
+                "durationHours_other"
+              ],
+              "{{count}} hours"
+            ],
+            [
+              [
+                "usersView",
+                "durationMinutes_one"
+              ],
+              "{{count}} minute"
+            ],
+            [
+              [
+                "usersView",
+                "durationMinutes_other"
+              ],
+              "{{count}} minutes"
+            ],
+            [
+              [
+                "usersView",
+                "durationSeconds_one"
+              ],
+              "{{count}} second"
+            ],
+            [
+              [
+                "usersView",
+                "durationSeconds_other"
+              ],
+              "{{count}} seconds"
+            ],
+            [
+              [
+                "usersView",
+                "expandedHint"
+              ],
+              "Choose extra properties below the original expanded details. Drag their handles to reorder them."
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "auto_delete_in_days"
+              ],
+              "Auto-delete delay"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "created_at"
+              ],
+              "Created at"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "creator"
+              ],
+              "Created by"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "data_limit_reset_strategy"
+              ],
+              "Traffic reset"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "edit_at"
+              ],
+              "Edited at"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "groups"
+              ],
+              "Groups"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "hwid_count"
+              ],
+              "Device count"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "hwid_limit"
+              ],
+              "Device limit"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "next_plan"
+              ],
+              "Next plan"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "note"
+              ],
+              "Note"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "on_hold_expire_duration"
+              ],
+              "Duration after activation"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "on_hold_timeout"
+              ],
+              "Activation deadline"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "remaining_traffic"
+              ],
+              "Remaining traffic"
+            ],
+            [
+              [
+                "usersView",
+                "fixedDesktop"
+              ],
+              "Username, ID, online indicator, status, expiry, usage and actions keep their original display and positions."
+            ],
+            [
+              [
+                "usersView",
+                "fixedMobile"
+              ],
+              "The compact row and expanded usage, expiry, online status, ID and actions keep their original display."
+            ],
+            [
+              [
+                "usersView",
+                "mobile"
+              ],
+              "Mobile fields"
+            ],
+            [
+              [
+                "usersView",
+                "pendingActivation"
+              ],
+              "Pending activation"
+            ],
+            [
+              [
+                "usersView",
+                "preview"
+              ],
+              "Preview"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "day"
+              ],
+              "Daily"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "month"
+              ],
+              "Monthly"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "no_reset"
+              ],
+              "Never"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "week"
+              ],
+              "Weekly"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "year"
+              ],
+              "Yearly"
+            ],
+            [
+              [
+                "usersView",
+                "resetDefaults"
+              ],
+              "Reset to default"
+            ],
+            [
+              [
+                "usersView",
+                "search"
+              ],
+              "Search properties…"
+            ],
+            [
+              [
+                "usersView",
+                "storageError"
+              ],
+              "Your view was applied, but this browser could not save it. It may reset after a reload."
+            ],
+            [
+              [
+                "usersView",
+                "template"
+              ],
+              "Template"
+            ],
+            [
+              [
+                "usersView",
+                "unlimited"
+              ],
+              "Unlimited"
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "usersView",
+                "actions"
+              ],
+              "عملیات کاربر"
+            ],
+            [
+              [
+                "usersView",
+                "carryOver"
+              ],
+              "انتقال باقی‌مانده"
+            ],
+            [
+              [
+                "usersView",
+                "columnsHint"
+              ],
+              "ستون‌های اضافی را انتخاب کنید و با کشیدن دستگیره مرتب کنید. مصرف و عملیات در انتها می‌مانند."
+            ],
+            [
+              [
+                "usersView",
+                "customize"
+              ],
+              "شخصی‌سازی نمایش"
+            ],
+            [
+              [
+                "usersView",
+                "description"
+              ],
+              "ستون‌ها یا جزئیات اختیاری را بدون تغییر چیدمان اصلی اضافه کنید. تنظیمات در این مرورگر ذخیره می‌شوند."
+            ],
+            [
+              [
+                "usersView",
+                "desktop"
+              ],
+              "ستون‌های دسکتاپ"
+            ],
+            [
+              [
+                "usersView",
+                "dragField"
+              ],
+              "برای جابه‌جایی {{field}} بکشید"
+            ],
+            [
+              [
+                "usersView",
+                "durationDays"
+              ],
+              "{{count}} روز"
+            ],
+            [
+              [
+                "usersView",
+                "durationHours"
+              ],
+              "{{count}} ساعت"
+            ],
+            [
+              [
+                "usersView",
+                "durationMinutes"
+              ],
+              "{{count}} دقیقه"
+            ],
+            [
+              [
+                "usersView",
+                "durationSeconds"
+              ],
+              "{{count}} ثانیه"
+            ],
+            [
+              [
+                "usersView",
+                "expandedHint"
+              ],
+              "اطلاعات اضافی را برای نمایش زیر جزئیات اصلی انتخاب کنید و با کشیدن دستگیره مرتب کنید."
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "auto_delete_in_days"
+              ],
+              "تأخیر حذف خودکار"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "created_at"
+              ],
+              "زمان ایجاد"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "creator"
+              ],
+              "ایجادکننده"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "data_limit_reset_strategy"
+              ],
+              "بازنشانی حجم"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "edit_at"
+              ],
+              "زمان ویرایش"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "groups"
+              ],
+              "گروه‌ها"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "hwid_count"
+              ],
+              "تعداد دستگاه‌ها"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "hwid_limit"
+              ],
+              "محدودیت دستگاه"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "next_plan"
+              ],
+              "پلن بعدی"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "note"
+              ],
+              "یادداشت"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "on_hold_expire_duration"
+              ],
+              "مدت اعتبار پس از فعال‌سازی"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "on_hold_timeout"
+              ],
+              "مهلت فعال‌سازی"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "remaining_traffic"
+              ],
+              "حجم باقی‌مانده"
+            ],
+            [
+              [
+                "usersView",
+                "fixedDesktop"
+              ],
+              "نام کاربری، شناسه، نشانگر اتصال، وضعیت، انقضا، مصرف و عملیات با ظاهر و جایگاه اصلی نمایش داده می‌شوند."
+            ],
+            [
+              [
+                "usersView",
+                "fixedMobile"
+              ],
+              "ردیف فشرده و نمایش بازشده مصرف، انقضا، آخرین اتصال، شناسه و عملیات با ظاهر اصلی حفظ می‌شوند."
+            ],
+            [
+              [
+                "usersView",
+                "mobile"
+              ],
+              "اطلاعات موبایل"
+            ],
+            [
+              [
+                "usersView",
+                "pendingActivation"
+              ],
+              "در انتظار فعال‌سازی"
+            ],
+            [
+              [
+                "usersView",
+                "preview"
+              ],
+              "پیش‌نمایش"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "day"
+              ],
+              "روزانه"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "month"
+              ],
+              "ماهانه"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "no_reset"
+              ],
+              "هرگز"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "week"
+              ],
+              "هفتگی"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "year"
+              ],
+              "سالانه"
+            ],
+            [
+              [
+                "usersView",
+                "resetDefaults"
+              ],
+              "بازنشانی به پیش‌فرض"
+            ],
+            [
+              [
+                "usersView",
+                "search"
+              ],
+              "جستجوی اطلاعات…"
+            ],
+            [
+              [
+                "usersView",
+                "storageError"
+              ],
+              "نمایش اعمال شد، اما مرورگر نتوانست آن را ذخیره کند. ممکن است پس از بارگذاری مجدد بازنشانی شود."
+            ],
+            [
+              [
+                "usersView",
+                "template"
+              ],
+              "قالب"
+            ],
+            [
+              [
+                "usersView",
+                "unlimited"
+              ],
+              "نامحدود"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "usersView",
+                "actions"
+              ],
+              "Действия пользователя"
+            ],
+            [
+              [
+                "usersView",
+                "carryOver"
+              ],
+              "Перенос остатка"
+            ],
+            [
+              [
+                "usersView",
+                "columnsHint"
+              ],
+              "Выберите дополнительные столбцы и перетащите их за ручки. Расход трафика и действия остаются в конце."
+            ],
+            [
+              [
+                "usersView",
+                "customize"
+              ],
+              "Настроить вид"
+            ],
+            [
+              [
+                "usersView",
+                "description"
+              ],
+              "Добавьте столбцы или подробности, сохранив исходный вид. Настройки сохраняются в этом браузере."
+            ],
+            [
+              [
+                "usersView",
+                "desktop"
+              ],
+              "Столбцы таблицы"
+            ],
+            [
+              [
+                "usersView",
+                "dragField"
+              ],
+              "Перетащить {{field}}"
+            ],
+            [
+              [
+                "usersView",
+                "durationDays"
+              ],
+              "{{count}} дн."
+            ],
+            [
+              [
+                "usersView",
+                "durationHours"
+              ],
+              "{{count}} ч"
+            ],
+            [
+              [
+                "usersView",
+                "durationMinutes"
+              ],
+              "{{count}} мин"
+            ],
+            [
+              [
+                "usersView",
+                "durationSeconds"
+              ],
+              "{{count}} с"
+            ],
+            [
+              [
+                "usersView",
+                "expandedHint"
+              ],
+              "Выберите свойства под исходными подробностями и перетащите их за ручки для изменения порядка."
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "auto_delete_in_days"
+              ],
+              "Задержка автоудаления"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "created_at"
+              ],
+              "Дата создания"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "creator"
+              ],
+              "Создатель"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "data_limit_reset_strategy"
+              ],
+              "Сброс трафика"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "edit_at"
+              ],
+              "Дата изменения"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "groups"
+              ],
+              "Группы"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "hwid_count"
+              ],
+              "Количество устройств"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "hwid_limit"
+              ],
+              "Лимит устройств"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "next_plan"
+              ],
+              "Следующий план"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "note"
+              ],
+              "Заметка"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "on_hold_expire_duration"
+              ],
+              "Срок после активации"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "on_hold_timeout"
+              ],
+              "Крайний срок активации"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "remaining_traffic"
+              ],
+              "Остаток трафика"
+            ],
+            [
+              [
+                "usersView",
+                "fixedDesktop"
+              ],
+              "Имя, ID, индикатор подключения, статус, срок действия, расход трафика и действия сохраняют исходный вид и положение."
+            ],
+            [
+              [
+                "usersView",
+                "fixedMobile"
+              ],
+              "Компактная строка и раскрытые сведения о трафике, сроке, подключении, ID и действиях сохраняют исходный вид."
+            ],
+            [
+              [
+                "usersView",
+                "mobile"
+              ],
+              "Поля на телефоне"
+            ],
+            [
+              [
+                "usersView",
+                "pendingActivation"
+              ],
+              "Ожидает активации"
+            ],
+            [
+              [
+                "usersView",
+                "preview"
+              ],
+              "Предпросмотр"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "day"
+              ],
+              "Ежедневно"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "month"
+              ],
+              "Ежемесячно"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "no_reset"
+              ],
+              "Никогда"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "week"
+              ],
+              "Еженедельно"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "year"
+              ],
+              "Ежегодно"
+            ],
+            [
+              [
+                "usersView",
+                "resetDefaults"
+              ],
+              "Сбросить настройки"
+            ],
+            [
+              [
+                "usersView",
+                "search"
+              ],
+              "Поиск свойств…"
+            ],
+            [
+              [
+                "usersView",
+                "storageError"
+              ],
+              "Вид применён, но браузер не смог его сохранить. После перезагрузки настройки могут сброситься."
+            ],
+            [
+              [
+                "usersView",
+                "template"
+              ],
+              "Шаблон"
+            ],
+            [
+              [
+                "usersView",
+                "unlimited"
+              ],
+              "Без ограничений"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "usersView",
+                "actions"
+              ],
+              "用户操作"
+            ],
+            [
+              [
+                "usersView",
+                "carryOver"
+              ],
+              "结转流量"
+            ],
+            [
+              [
+                "usersView",
+                "columnsHint"
+              ],
+              "选择额外列并拖动手柄调整顺序。流量和操作始终位于末尾。"
+            ],
+            [
+              [
+                "usersView",
+                "customize"
+              ],
+              "自定义视图"
+            ],
+            [
+              [
+                "usersView",
+                "description"
+              ],
+              "添加可选列或手机详情，同时保留原来的布局。设置保存在此浏览器中。"
+            ],
+            [
+              [
+                "usersView",
+                "desktop"
+              ],
+              "桌面列"
+            ],
+            [
+              [
+                "usersView",
+                "dragField"
+              ],
+              "拖动以调整{{field}}的顺序"
+            ],
+            [
+              [
+                "usersView",
+                "durationDays"
+              ],
+              "{{count}}天"
+            ],
+            [
+              [
+                "usersView",
+                "durationHours"
+              ],
+              "{{count}}小时"
+            ],
+            [
+              [
+                "usersView",
+                "durationMinutes"
+              ],
+              "{{count}}分钟"
+            ],
+            [
+              [
+                "usersView",
+                "durationSeconds"
+              ],
+              "{{count}}秒"
+            ],
+            [
+              [
+                "usersView",
+                "expandedHint"
+              ],
+              "选择在原有展开详情下方显示的额外属性，拖动手柄调整顺序。"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "auto_delete_in_days"
+              ],
+              "自动删除延迟"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "created_at"
+              ],
+              "创建时间"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "creator"
+              ],
+              "创建者"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "data_limit_reset_strategy"
+              ],
+              "流量重置"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "edit_at"
+              ],
+              "修改时间"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "groups"
+              ],
+              "分组"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "hwid_count"
+              ],
+              "设备数量"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "hwid_limit"
+              ],
+              "设备限制"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "next_plan"
+              ],
+              "下个套餐"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "note"
+              ],
+              "备注"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "on_hold_expire_duration"
+              ],
+              "激活后有效期"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "on_hold_timeout"
+              ],
+              "激活截止时间"
+            ],
+            [
+              [
+                "usersView",
+                "fields",
+                "remaining_traffic"
+              ],
+              "剩余流量"
+            ],
+            [
+              [
+                "usersView",
+                "fixedDesktop"
+              ],
+              "用户名、ID、在线指示器、状态、到期时间、流量和操作保留原来的显示方式和位置。"
+            ],
+            [
+              [
+                "usersView",
+                "fixedMobile"
+              ],
+              "紧凑行及展开后的流量、到期时间、在线状态、ID和操作保留原来的显示方式。"
+            ],
+            [
+              [
+                "usersView",
+                "mobile"
+              ],
+              "手机字段"
+            ],
+            [
+              [
+                "usersView",
+                "pendingActivation"
+              ],
+              "等待激活"
+            ],
+            [
+              [
+                "usersView",
+                "preview"
+              ],
+              "预览"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "day"
+              ],
+              "每天"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "month"
+              ],
+              "每月"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "no_reset"
+              ],
+              "从不"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "week"
+              ],
+              "每周"
+            ],
+            [
+              [
+                "usersView",
+                "reset",
+                "year"
+              ],
+              "每年"
+            ],
+            [
+              [
+                "usersView",
+                "resetDefaults"
+              ],
+              "恢复默认"
+            ],
+            [
+              [
+                "usersView",
+                "search"
+              ],
+              "搜索属性…"
+            ],
+            [
+              [
+                "usersView",
+                "storageError"
+              ],
+              "视图已应用，但浏览器无法保存。重新加载后可能恢复默认。"
+            ],
+            [
+              [
+                "usersView",
+                "template"
+              ],
+              "模板"
+            ],
+            [
+              [
+                "usersView",
+                "unlimited"
+              ],
+              "无限制"
+            ]
+          ],
+          "removed": []
+        }
+      }
     }
   ]
 }
