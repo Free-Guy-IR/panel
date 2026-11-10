@@ -15,6 +15,7 @@ FIXTURES_USED = re.compile(r"^\s*(\S+::\S+) \(fixtures used: ([^)]*)\)")
 def interleaved_run(tmp_path_factory) -> tuple[subprocess.CompletedProcess, dict[str, set[str]]]:
     tmp_path = tmp_path_factory.mktemp("collection_order")
     env = dict(os.environ)
+    env.pop("PYTEST_ADDOPTS", None)
     env["TEST_FROM"] = "local"
     env["DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path / 'order.db'}"
     result = subprocess.run(
