@@ -1,3 +1,5 @@
+from html import escape
+
 from aiogram import F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import ExceptionTypeFilter
@@ -32,7 +34,7 @@ async def handle_exception(event: ErrorEvent, state: FSMContext = None):
 
     error = scrub_credentials(error)
     if update.message:
-        msg = await update.message.answer(error)
+        msg = await update.message.answer(escape(error))
         if state:
             await state.update_data(messages_to_delete=[msg.message_id])
 
