@@ -176,7 +176,8 @@ async def forget_inactive_restrictions(db: AsyncSession, user_id: int) -> int:
     for start in range(0, len(stale), RELEASE_LOCK_BATCH_SIZE):
         result = await db.execute(
             delete(ConnectionRestriction).where(
-                ConnectionRestriction.id.in_(stale[start : start + RELEASE_LOCK_BATCH_SIZE])
+                ConnectionRestriction.id.in_(stale[start : start + RELEASE_LOCK_BATCH_SIZE]),
+                ConnectionRestriction.active.is_(False),
             )
         )
         forgotten += result.rowcount or 0
