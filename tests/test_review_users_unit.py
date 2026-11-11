@@ -30,6 +30,7 @@ from app.db.models import (
     UserUsageResetLogs,
     users_groups_association,
 )
+from app.fork.jobs import status_review, usage_limits
 from app.jobs import review_users
 from app.models.settings import General, HWIDSettings, OnHoldTimeoutAction
 from app.models.user import UserNotificationResponse
@@ -467,6 +468,8 @@ async def test_on_hold_timeout_action_only_hits_users_whose_timeout_expired(db_s
 
     with (
         patch.object(review_users, "GetDB", _get_db),
+        patch.object(status_review, "GetDB", _get_db),
+        patch.object(usage_limits, "GetDB", _get_db),
         patch.object(
             review_users,
             "general_settings",
@@ -537,6 +540,8 @@ async def test_user_put_back_on_hold_by_activate_all_gets_the_timeout_action(db_
 
     with (
         patch.object(review_users, "GetDB", _get_db),
+        patch.object(status_review, "GetDB", _get_db),
+        patch.object(usage_limits, "GetDB", _get_db),
         patch.object(
             review_users,
             "general_settings",
@@ -577,16 +582,23 @@ async def test_bad_next_plan_does_not_stall_other_next_plan_users(db_session):
         # Touches the loaded relations, so a user left expired by a rollback fails here.
         return UserNotificationResponse.model_validate(db_user)
 
+    synced_ids: list[int] = []
+
+    async def _record_sync(users):
+        synced_ids.extend(user.id for user in users)
+
     with (
         patch.object(review_users, "GetDB", _get_db),
-        patch.object(review_users, "sync_users", AsyncMock()) as sync,
+        patch.object(status_review, "GetDB", _get_db),
+        patch.object(usage_limits, "GetDB", _get_db),
+        patch.object(review_users, "sync_users", AsyncMock(side_effect=_record_sync)),
         patch.object(review_users.user_operator, "validate_user", side_effect=_validate),
         patch("app.jobs.review_users.notification.user_data_reset_by_next", AsyncMock()),
         patch("app.jobs.review_users.notification.user_status_change", AsyncMock()),
     ):
         await review_users.limit_users_job()
 
-    assert sorted(user.id for user in sync.await_args.args[0]) == [ids["plan-before"], ids["plan-after"]]
+    assert sorted(synced_ids) == [ids["plan-before"], ids["plan-after"]]
     db_session.expire_all()
     rows = {user.username: user for user in (await db_session.execute(select(User))).scalars()}
     assert rows["plan-before"].data_limit == 1000
