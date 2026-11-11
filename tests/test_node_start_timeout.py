@@ -316,6 +316,7 @@ async def test_force_start_without_stop_first_keeps_core_running(monkeypatch: py
     assert result is started
     attach.assert_not_awaited()
     pg_node.stop.assert_not_awaited()
+    pg_node.start.assert_awaited_once()
 
 
 @pytest.mark.asyncio
