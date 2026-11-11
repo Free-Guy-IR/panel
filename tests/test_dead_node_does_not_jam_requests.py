@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import importlib
 import os
 import time
 from unittest.mock import AsyncMock
@@ -21,11 +22,12 @@ from app.db.models import Node, NodeConnectionType, NodeStatus
 from app.fork.operation import node_extras
 from app.jobs import node_checker
 from app.node import node_manager
+from app.operation import node as node_operation
 from app.operation.node import NodeOperation
 from tests.api import DATABASE_URL, IS_SQLITE, app
 from tests.api.helpers import unique_name
 from tests.api.sample_data import XRAY_CONFIG
-from tests.test_node_connect_stale_snapshot import Remote, _ca_pem, _model_class
+from tests.test_node_connect_stale_snapshot import CORE_VERSION, Remote, _ca_pem, _model_class
 
 PROD_DEFAULT_TIMEOUT = 60
 PROD_INTERNAL_TIMEOUT = 15
@@ -37,6 +39,7 @@ NODE_CHECK_TIMEOUT = PROD_NODE_CHECK_TIMEOUT // SCALE
 ANSWER_WITHIN = 8.0
 GIVE_UP_AFTER = 12 * DEAD_DEFAULT_TIMEOUT
 HEALTH_CHECK_PROBE = "Health check timeout"
+DEAD_RESTART_BUDGET = 5 + 4 * DEAD_DEFAULT_TIMEOUT + DEAD_INTERNAL_TIMEOUT
 NOTIFICATIONS = (
     "create_core",
     "modify_core",
@@ -65,6 +68,13 @@ else:
     own_connections = create_async_engine(DATABASE_URL, poolclass=NullPool)
 
 Session = async_sessionmaker(autocommit=False, autoflush=False, expire_on_commit=False, bind=own_connections)
+
+
+def background_connects():
+    try:
+        return importlib.import_module("app.fork.operation.node_background_connects")
+    except ModuleNotFoundError:
+        return None
 
 
 def load() -> str:
@@ -187,6 +197,9 @@ class Panel:
     async def __aexit__(self, *exc_info):
         for watcher in self.watchers:
             watcher.cancel()
+        module = background_connects()
+        if module is not None:
+            await module.cancel_background_connects()
         for node_id in list((await node_manager.get_nodes()).keys()):
             await node_manager.remove_node(node_id, remote_stop=False)
         await self.client.aclose()
@@ -223,6 +236,12 @@ class Panel:
         pg_node = await node_manager.update_node(row)
         if health is not Health.NOT_CONNECTED:
             await pg_node.set_health(health)
+        return row
+
+    async def just_died_node(self, core_id: int) -> Node:
+        row = await self._seed(core_id, port=self.hole_port, status=NodeStatus.connected, message=None)
+        pg_node = await node_manager.update_node(row)
+        await pg_node.set_health(Health.HEALTHY)
         return row
 
     async def healthy_node(self, core_id: int) -> tuple[Node, LiveRemote]:
@@ -391,3 +410,128 @@ async def test_the_dashboards_realtime_stats_do_not_wait_for_a_node_that_just_di
     assert elapsed < ANSWER_WITHIN, (
         f"the dashboard poll waited for a node the health check has not flagged yet; {measured}"
     )
+
+
+def healthy_status_written(row: Node) -> bool:
+    return row.status == NodeStatus.connected and row.xray_version == CORE_VERSION
+
+
+def dead_status_written(row: Node) -> bool:
+    return row.status == NodeStatus.error and row.message != HEALTH_CHECK_PROBE
+
+
+async def _written(node_id: int, written) -> bool:
+    row = await node_row(node_id)
+    return row is not None and written(row)
+
+
+async def _restarted(remote: LiveRemote) -> bool:
+    return bool(remote.started_with)
+
+
+def edit_core_and_restart(panel: Panel, core_id: int, marker: str):
+    payload = core_payload(unique_name("deadnode_core"), marker)
+    return panel.client.put(f"/api/core/{core_id}", params={"restart_nodes": "true"}, json=payload)
+
+
+RESTARTS = {
+    "core_edit_with_restart": lambda panel, core_id, ids, marker: edit_core_and_restart(panel, core_id, marker),
+    "core_restart": lambda panel, core_id, ids, marker: panel.client.post(f"/api/core/{core_id}/restart"),
+    "nodes_bulk_reconnect": lambda panel, core_id, ids, marker: panel.client.post(
+        "/api/nodes/bulk/reconnect", json={"ids": ids}
+    ),
+    "nodes_reconnect_by_core": lambda panel, core_id, ids, marker: panel.client.post(
+        "/api/nodes/reconnect", params={"core_id": core_id}
+    ),
+}
+
+
+def assert_restart_answer(endpoint: str, answer: httpx.Response, core_id: int, names: list[str]) -> None:
+    if endpoint == "core_edit_with_restart":
+        assert answer.status_code == 200, answer.text
+        assert answer.json()["id"] == core_id, answer.text
+    elif endpoint == "core_restart":
+        assert answer.status_code == 204, answer.text
+        assert answer.content == b"", answer.text
+    elif endpoint == "nodes_bulk_reconnect":
+        assert answer.status_code == 200, answer.text
+        assert sorted(answer.json()["nodes"]) == sorted(names), answer.text
+        assert answer.json()["count"] == len(names), answer.text
+    else:
+        assert answer.status_code == 200, answer.text
+        assert answer.json() == {}, answer.text
+
+
+@pytest.mark.parametrize("endpoint", list(RESTARTS))
+async def test_restarting_a_core_with_a_dead_node_answers_promptly_and_still_restarts_both(panel, endpoint):
+    core_id = await panel.core()
+    healthy, remote = await panel.healthy_node(core_id)
+    dead = await panel.dead_node(core_id)
+    marker = unique_name("after")
+    healthy_written = panel.watch_status_write(healthy.id, healthy_status_written)
+
+    answer, elapsed = await panel.timed(RESTARTS[endpoint](panel, core_id, [dead.id, healthy.id], marker))
+    dead_written_after = await eventually(lambda: _written(dead.id, dead_status_written), timeout=DEAD_RESTART_BUDGET)
+    await asyncio.sleep(0.2)
+
+    measured = report(
+        f"{endpoint}: request {elapsed:.1f}s, healthy status written at "
+        f"{healthy_written.get('at', float('nan')):.1f}s, dead status written "
+        f"{'never' if dead_written_after is None else f'{elapsed + dead_written_after:.1f}s'} after the request "
+        f"started ({load()}, default_timeout={DEAD_DEFAULT_TIMEOUT}s)"
+    )
+    assert_restart_answer(endpoint, answer, core_id, [dead.name, healthy.name])
+    assert remote.started_with, f"the healthy node was never restarted; {measured}"
+    if endpoint == "core_edit_with_restart":
+        assert marker in remote.started_with[-1], "the healthy node was restarted with the old core config"
+    assert dead_written_after is not None, f"the dead node's restart outcome was never written; {measured}"
+    assert "at" in healthy_written and healthy_written["at"] < ANSWER_WITHIN, (
+        f"the healthy node's status waited for the dead node; {measured}"
+    )
+    assert elapsed < ANSWER_WITHIN, f"the request waited for the dead node; {measured}"
+
+
+async def test_reconnecting_a_single_dead_node_answers_before_its_timeout(panel):
+    core_id = await panel.core()
+    dead = await panel.dead_node(core_id)
+
+    answer, elapsed = await panel.timed(panel.client.post(f"/api/node/{dead.id}/reconnect"))
+    dead_written_after = await eventually(lambda: _written(dead.id, dead_status_written), timeout=DEAD_RESTART_BUDGET)
+
+    measured = report(
+        f"POST /api/node/{{id}}/reconnect of a dead node: request {elapsed:.1f}s "
+        f"({load()}, default_timeout={DEAD_DEFAULT_TIMEOUT}s)"
+    )
+    assert answer.status_code == 200, answer.text
+    assert answer.json() == {}, answer.text
+    assert dead_written_after is not None, f"the reconnect outcome was never written; {measured}"
+    assert elapsed < ANSWER_WITHIN, f"POST /api/node/{{id}}/reconnect waited for the dead node; {measured}"
+
+
+@pytest.mark.parametrize("dead_count", [node_operation.CONNECT_CONCURRENCY, node_operation.CONNECT_CONCURRENCY + 2])
+@pytest.mark.parametrize("dead_rows", ["error", "connected"])
+async def test_a_core_restart_reaches_a_healthy_node_behind_a_full_slate_of_dead_ones(panel, dead_rows, dead_count):
+    core_id = await panel.core()
+    for _ in range(dead_count):
+        if dead_rows == "error":
+            await panel.dead_node(core_id)
+        else:
+            await panel.just_died_node(core_id)
+    healthy, remote = await panel.healthy_node(core_id)
+    healthy_written = panel.watch_status_write(healthy.id, healthy_status_written)
+
+    restart = asyncio.create_task(panel.timed(panel.client.post(f"/api/core/{core_id}/restart")))
+    reached = await eventually(lambda: _restarted(remote), timeout=GIVE_UP_AFTER)
+    answer, elapsed = await restart
+    await eventually(lambda: _written(healthy.id, healthy_status_written), timeout=GIVE_UP_AFTER)
+    await asyncio.sleep(0.3)
+
+    measured = report(
+        f"{dead_count} dead nodes with {dead_rows} rows: request {elapsed:.1f}s, healthy Start sent "
+        f"{'never' if reached is None else f'{reached:.1f}s'}, healthy status written "
+        f"{healthy_written.get('at', float('nan')):.1f}s ({load()}, default_timeout={DEAD_DEFAULT_TIMEOUT}s)"
+    )
+    assert answer.status_code == 204, answer.text
+    assert reached is not None and reached < ANSWER_WITHIN, measured
+    assert "at" in healthy_written and healthy_written["at"] < ANSWER_WITHIN, measured
+    assert elapsed < ANSWER_WITHIN, measured
