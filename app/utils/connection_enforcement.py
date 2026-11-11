@@ -155,6 +155,34 @@ async def _restriction_ids(db: AsyncSession, user_ids: list[int], *predicates) -
     return sorted(found)
 
 
+async def lock_active_restriction(db: AsyncSession, user_id: int) -> ConnectionRestriction | None:
+    for restriction_id in await _restriction_ids(db, [user_id], ConnectionRestriction.active.is_(True)):
+        restriction = (
+            await db.execute(
+                select(ConnectionRestriction)
+                .where(ConnectionRestriction.id == restriction_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar()
+        if restriction is not None and restriction.active:
+            return restriction
+    return None
+
+
+async def forget_inactive_restrictions(db: AsyncSession, user_id: int) -> int:
+    stale = await _restriction_ids(db, [user_id], ConnectionRestriction.active.is_(False))
+    forgotten = 0
+    for start in range(0, len(stale), RELEASE_LOCK_BATCH_SIZE):
+        result = await db.execute(
+            delete(ConnectionRestriction).where(
+                ConnectionRestriction.id.in_(stale[start : start + RELEASE_LOCK_BATCH_SIZE])
+            )
+        )
+        forgotten += result.rowcount or 0
+    return forgotten
+
+
 async def due_to_restore(db: AsyncSession, *, everyone: bool = False) -> list[tuple[ConnectionRestriction, User]]:
     """Restrictions whose time is up - or all of them, when enforcement is off.
 
