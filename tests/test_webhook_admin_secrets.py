@@ -129,3 +129,11 @@ async def test_webhook_payloads_keep_the_public_admin_fields(enqueued):
     for payload in acted:
         assert payload["by"]["username"] == "actor"
         assert payload["by"]["telegram_id"] == ACTING_TELEGRAM_ID
+
+
+@pytest.mark.asyncio
+async def test_every_webhook_payload_carries_the_time_its_event_was_created(enqueued):
+    before = datetime.now(UTC).timestamp()
+    await _deliver_everything()
+    times = [call.args[0]["enqueued_at"] for call in enqueued.await_args_list]
+    assert len(times) == 2 * 2 * 14 + 4 and all(before <= value <= datetime.now(UTC).timestamp() for value in times)
