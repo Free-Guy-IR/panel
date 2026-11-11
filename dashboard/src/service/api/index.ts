@@ -350,13 +350,6 @@ export const AdminCreateStatus = {
   disabled: 'disabled',
 } as const;
 
-export interface CustomVariableInput {
-  /** @maxLength 64 */
-  key: string;
-  /** @maxLength 512 */
-  value?: string;
-}
-
 export interface RoleLimits {
   max_users?: number | null;
   data_limit_min?: number | null;
@@ -382,7 +375,7 @@ export interface AdminCreate {
   sub_domain?: string | null;
   profile_title?: string | null;
   support_url?: string | null;
-  custom_variables?: CustomVariableInput[] | null;
+  custom_variables?: CustomVariable[] | null;
   note?: string | null;
   notification_enable?: UserNotificationEnable | null;
   role_id: number;
@@ -490,7 +483,7 @@ export interface AdminModify {
   sub_domain?: string | null;
   profile_title?: string | null;
   support_url?: string | null;
-  custom_variables?: CustomVariableInput[] | null;
+  custom_variables?: CustomVariable[] | null;
   note?: string | null;
   notification_enable?: UserNotificationEnable | null;
   role_id?: number | null;
@@ -1903,7 +1896,7 @@ export interface General {
 export interface GeneralInput {
   default_method?: ShadowsocksMethods;
   on_hold_timeout_action?: OnHoldTimeoutAction;
-  custom_variables?: CustomVariableInput[] | null;
+  custom_variables?: CustomVariable[] | null;
   usage?: UsageSettings;
   node_health?: NodeHealthSettings;
   stop_nodes_on_shutdown?: boolean;
@@ -2744,7 +2737,7 @@ export interface SubscriptionInput {
   disable_sub_template?: boolean;
   randomize_order?: boolean;
   /** @maxItems 100 */
-  custom_variables?: CustomVariableInput[];
+  custom_variables?: CustomVariable[];
   clients_limit?: number;
 }
 
