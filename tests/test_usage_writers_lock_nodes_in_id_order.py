@@ -19,6 +19,7 @@ pytestmark = pytest.mark.skipif(
 
 BOUND = 60
 ROUNDS = 12
+INNODB_TRX_CACHE_IDLE_SECONDS = 0.25
 
 
 def _errno(err: BaseException) -> int | None:
@@ -44,7 +45,7 @@ async def _until_a_transaction_waits(engine, writer: asyncio.Task) -> None:
             raise AssertionError(f"the user usage writer finished without waiting for the node row: {writer.result()}")
         if await _waiting_transactions(engine):
             return
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(INNODB_TRX_CACHE_IDLE_SECONDS)
     raise AssertionError("the user usage writer never waited for the node row")
 
 
