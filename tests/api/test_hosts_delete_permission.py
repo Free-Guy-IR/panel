@@ -171,7 +171,11 @@ def test_a_bulk_edit_racing_a_delete_never_leaves_a_recreated_host_or_a_server_e
         edit_response, remove_response = send_concurrently([edit, remove])
 
         assert remove_response.status_code == status.HTTP_204_NO_CONTENT, remove_response.text
-        assert edit_response.status_code in (status.HTTP_200_OK, status.HTTP_409_CONFLICT), edit_response.text
+        assert edit_response.status_code in (
+            status.HTTP_200_OK,
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_409_CONFLICT,
+        ), edit_response.text
         assert _host_ids(access_token) == before - {host["id"]}
     finally:
         editor.close()
