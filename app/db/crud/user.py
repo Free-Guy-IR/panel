@@ -2227,10 +2227,9 @@ async def bulk_set_owner(db: AsyncSession, users: list[User], admin: Admin) -> l
         old_admin_id, used_traffic = locked.get(user.id, (user.admin_id, int(user.used_traffic or 0)))
         if old_admin_id is not None and old_admin_id == admin.id:
             continue
-        # Only traffic that moves from another admin counts, like set_owner.
         if old_admin_id is not None:
             admin_traffic_changes[old_admin_id] = admin_traffic_changes.get(old_admin_id, 0) - used_traffic
-            admin_traffic_changes[admin.id] = admin_traffic_changes.get(admin.id, 0) + used_traffic
+        admin_traffic_changes[admin.id] = admin_traffic_changes.get(admin.id, 0) + used_traffic
         user.admin = admin
 
     # Update old admins' traffic
