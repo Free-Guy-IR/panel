@@ -5,6 +5,7 @@ from app.utils.helpers import MAX_FORMAT_SPEC_NUMBER, has_oversized_format_spec
 MAX_CUSTOM_VARIABLES = 100
 MAX_FORMAT_GROWTH = 4096
 _CONVERT = {None: lambda value: value, "s": str, "r": repr, "a": ascii}
+_RENDERED_SAMPLES = {"DAYS_LEFT": ("", 0), "USAGE_PERCENTAGE": ("", 0.0)}
 
 
 def is_plain_field(field: str, conversion: str | None) -> bool:
@@ -36,15 +37,12 @@ def check_template_value(value: str) -> str:
         raise ValueError("Invalid formatting variables: use plain variable names such as {USERNAME}")
     if any(is_character_spec(spec) for _, spec, _ in fields):
         raise ValueError("Invalid formatting variables")
-    for _, spec, conversion in fields:
-        for sample in ("",) if conversion else ("", 0, 0.0):
+    for field, spec, conversion in fields:
+        for sample in ("",) if conversion else _RENDERED_SAMPLES.get(field, ("",)):
             try:
                 format(sample, spec)
             except ValueError, TypeError:
-                continue
-            break
-        else:
-            raise ValueError("Invalid formatting variables")
+                raise ValueError("Invalid formatting variables") from None
     return value
 
 
