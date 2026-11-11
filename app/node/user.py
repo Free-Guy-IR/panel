@@ -166,7 +166,7 @@ def _serialize_user_for_node(
 
     return create_user(
         str(id),
-        omit_empty_credentials(create_proxy(**usable_credentials(proxy_kwargs))),
+        omit_empty_credentials(create_proxy(**usable_credentials(proxy_kwargs, id))),
         inbounds,
     )
 

@@ -1,3 +1,7 @@
+from app.utils.logger import get_logger
+
+logger = get_logger("node-user")
+
 REQUIRED_CREDENTIALS = {
     "vmess": ("id",),
     "vless": ("id",),
@@ -21,8 +25,9 @@ def omit_empty_credentials(proxy):
     return proxy
 
 
-def usable_credentials(proxy_kwargs: dict) -> dict:
+def usable_credentials(proxy_kwargs: dict, user_id) -> dict:
     masque_pass = proxy_kwargs.get("masque_pass")
     if masque_pass is None or (isinstance(masque_pass, str) and masque_pass):
         return proxy_kwargs
+    logger.warning(f"Dropping an unusable stored MASQUE password for user {user_id}")
     return {key: value for key, value in proxy_kwargs.items() if key != "masque_pass"}
