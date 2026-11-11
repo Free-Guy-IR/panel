@@ -182,3 +182,31 @@ async def test_a_probe_that_ends_while_a_connect_is_running_leaves_the_status_to
 
     assert not writes, f"a probe wrote over a connect that was still running: {writes}"
     assert Health.BROKEN not in bridge.health_sets, f"a probe marked a bridge mid-connect: {bridge.health_sets}"
+
+
+class _NotConnectedBridge(_OldBridge):
+    async def get_health(self):
+        return Health.NOT_CONNECTED
+
+
+async def test_an_abandoned_check_whose_own_connect_hangs_is_still_recorded(wired, monkeypatch):
+    from app.fork.operation.node_connect_generation import bump_connect_generation
+
+    writes = wired
+    bridge = _NotConnectedBridge(ConnectionError("never"))
+    db_node = SimpleNamespace(id=9206, name="n9206", status=NodeStatus.connected, default_timeout=5, internal_timeout=5)
+    monkeypatch.setattr(node_checker, "NODE_CHECK_TIMEOUT", 0.3)
+
+    async def own_connect_hangs(db, node_id, **kwargs):
+        bump_connect_generation(node_id)
+        try:
+            await asyncio.sleep(3600)
+        finally:
+            bump_connect_generation(node_id)
+
+    monkeypatch.setattr(node_checker.node_operator, "connect_single_node", own_connect_hangs)
+
+    await node_checker._bounded_health_check(db_node, bridge)
+
+    assert any(w[0] == NodeStatus.error for w in writes), f"an abandoned check of its own hung connect was dropped: {writes}"
+    assert bridge.health_sets[-1] is Health.BROKEN

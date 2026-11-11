@@ -1,5 +1,6 @@
 import asyncio
 import time
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 from PasarGuardNodeBridge import Health, NodeAPIError, PasarGuardNode
@@ -11,6 +12,7 @@ from app.db.crud.node import get_limited_nodes, get_nodes
 from app.db.models import Node, NodeStatus
 from app.fork.jobs import after_healthy_node_check
 from app.fork.node_health import hold_for_usage_collection
+from app.fork.operation.node_connect_generation import connect_generation, superseded
 from app.fork.operation.node_extras import resync_while_a_start_may_land
 from app.fork.operation.node_messages import scrub_credentials
 from app.fork.operation.node_snapshots import drain_node_usage, flush_drained_usage
@@ -55,7 +57,12 @@ async def _resync_users(db_node: Node) -> bool:
         return False
 
 
-async def _mark_abandoned_check(db_node: Node, node: PasarGuardNode, message: str) -> None:
+async def _mark_abandoned_check(
+    db_node: Node, node: PasarGuardNode, message: str, generation: int | None = None
+) -> None:
+    if generation is not None and superseded(db_node.id, generation):
+        logger.info(f"[{db_node.name}] Dropping an abandoned health check that a newer connect superseded")
+        return
     try:
         await node.set_health(Health.BROKEN)
         async with GetDB() as db:
@@ -207,9 +214,19 @@ async def _set_node_health(node: PasarGuardNode, health: Health, node_name: str)
         logger.exception("[%s] Failed to set node health to %s", node_name, health.name)
 
 
+_check_connects: ContextVar[list[int] | None] = ContextVar("health_check_connects", default=None)
+
+
+def _note_own_connect(node_id: int) -> None:
+    started = _check_connects.get()
+    if started is not None:
+        started.append(node_id)
+
+
 async def _repair_node(node_id: int) -> None:
     if not _owns_health_checks():
         return
+    _note_own_connect(node_id)
     async with GetDB() as db:
         await node_operator.connect_single_node(db, node_id, health_check=True)
 
@@ -315,13 +332,17 @@ async def process_node_health_check(db_node: Node, node: PasarGuardNode):
 
     node_health = await _node_health_settings()
     attempt = _ProbeAttempt()
-    probed = await _check_node(db_node, node, attempt, node_health)
+    probed = await _check_node(db_node, node, attempt, node_health, connect_generation(db_node.id))
     if probed is not Health.INVALID:
         await _record_probe(db_node, node, probed, attempt, node_health)
 
 
 async def _check_node(
-    db_node: Node, node: PasarGuardNode, attempt: _ProbeAttempt, node_health: NodeHealthSettings
+    db_node: Node,
+    node: PasarGuardNode,
+    attempt: _ProbeAttempt,
+    node_health: NodeHealthSettings,
+    generation: int | None = None,
 ) -> Health:
     attempt.started = time.monotonic()
     try:
@@ -335,6 +356,13 @@ async def _check_node(
     except Exception:
         _health_streaks.pop(db_node.id, None)
         raise
+    if (
+        health in (Health.BROKEN, Health.NOT_CONNECTED)
+        and generation is not None
+        and superseded(db_node.id, generation)
+    ):
+        logger.info(f"[{db_node.name}] Dropping a health-check result that a newer or running connect superseded")
+        return Health.INVALID
     # A code above 0 is a reply from the node; the bridge uses 0 and below when none came.
     attempt.unanswered = health is Health.BROKEN and (error_code is None or error_code <= 0)
     if health is Health.BROKEN and is_core_starting_error(error_code, error_message):
@@ -455,6 +483,7 @@ async def _check_node(
         if db_node.status == NodeStatus.error:
             await _repair_node(db_node.id)
         else:
+            _note_own_connect(db_node.id)
             async with GetDB() as db:
                 await node_operator.connect_single_node(db, db_node.id)
         return health
@@ -545,6 +574,9 @@ async def _bounded_health_check(db_node: Node, node: PasarGuardNode | None):
     if node is None:
         return
     async with NODE_CHECK_SEM:
+        generation = connect_generation(db_node.id)
+        own_connects: list[int] = []
+        token = _check_connects.set(own_connects)
         try:
             await asyncio.wait_for(process_node_health_check(db_node, node), timeout=NODE_CHECK_TIMEOUT)
         except TimeoutError:
@@ -554,10 +586,12 @@ async def _bounded_health_check(db_node: Node, node: PasarGuardNode | None):
                 "the node is marked broken and the next round will try again"
             )
             _health_streaks.pop(db_node.id, None)
-            await _mark_abandoned_check(db_node, node, message)
+            await _mark_abandoned_check(db_node, node, message, None if own_connects else generation)
         except Exception as exc:
             _health_streaks.pop(db_node.id, None)
             logger.error("[%s] Health check failed: %s", db_node.name, exc, exc_info=exc)
+        finally:
+            _check_connects.reset(token)
 
 
 async def node_health_check():

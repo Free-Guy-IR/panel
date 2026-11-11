@@ -33,6 +33,7 @@ from app.db.models import Node, NodeStatus
 from app.fork.cores.singbox_guard import singbox_index_keyed_inbounds, unsafe_singbox_node_message
 from app.fork.crud.node import CoreConfigMissing
 from app.fork.node_error_status import node_error_status
+from app.fork.operation.node_connect_generation import bump_connect_generation
 from app.fork.operation.node_connect_jobs import is_retiring, run_withdrawable_connect
 from app.fork.operation.node_extras import (
     _BACKEND_TYPE_BY_CORE,  # noqa: F401
@@ -599,9 +600,13 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             if connect_snapshot_superseded(db_node.id, snapshot):
                 logger.debug(f'Dropping a stale connect of "{db_node.name}" node, a newer config already reached it')
                 return None
-            return await NodeOperation._connect_node_inner(
-                db_node, core, users, extra_cores, force_start, stop_first, push_on_attach, snapshot
-            )
+            bump_connect_generation(db_node.id)
+            try:
+                return await NodeOperation._connect_node_inner(
+                    db_node, core, users, extra_cores, force_start, stop_first, push_on_attach, snapshot
+                )
+            finally:
+                bump_connect_generation(db_node.id)
 
         return await run_withdrawable_connect(db_node.id, connect_under_the_lock)
 
