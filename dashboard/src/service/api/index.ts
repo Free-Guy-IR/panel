@@ -151,10 +151,13 @@ export type HostsPermissionsRead = boolean | {[key: string]: PermissionScope | n
 
 export type HostsPermissionsUpdate = boolean | {[key: string]: PermissionScope | number} | null;
 
+export type HostsPermissionsDelete = boolean | {[key: string]: PermissionScope | number} | null;
+
 export interface HostsPermissions {
   create?: HostsPermissionsCreate;
   read?: HostsPermissionsRead;
   update?: HostsPermissionsUpdate;
+  delete?: HostsPermissionsDelete;
 }
 
 export type SettingsPermissionsRead = boolean | {[key: string]: PermissionScope | number} | null;
