@@ -4,7 +4,6 @@ type DraftSigView = {
   kind: string
   sbDraft: unknown
   ovDraft: unknown
-  mtDraft: unknown
   l2tpDraft: unknown
 }
 

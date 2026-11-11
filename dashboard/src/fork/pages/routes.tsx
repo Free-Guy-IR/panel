@@ -3,7 +3,6 @@ import type { RouteObject } from 'react-router'
 import { LoadingSpinner } from '@/components/common/loading-spinner'
 import { lazyWithChunkRecovery } from '@/utils/chunk-recovery'
 import { extraRoutes, registerRoute } from '../registry'
-import { OwnerOnly } from './owner-only'
 
 const ConnectionLimitSettings = lazyWithChunkRecovery(() => import('./connection-limit'))
 const ConnectionLimitReview = lazyWithChunkRecovery(() => import('./connection-limit-review'))
