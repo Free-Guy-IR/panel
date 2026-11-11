@@ -34,3 +34,21 @@ def test_an_oversized_width_still_gets_the_width_message(value):
 
     assert "width and precision must be numbers up to 256" in str(host_refused.value)
     assert "width and precision must be numbers up to 256" in str(variable_refused.value)
+
+
+@pytest.mark.parametrize("value", ["{USERNAME!}", "{USERNAME!rr}"])
+def test_a_custom_variable_with_balanced_braces_does_not_get_the_brace_message(value):
+    with pytest.raises(ValidationError) as refused:
+        CustomVariableInput(key="PROMO", value=value)
+
+    message = str(refused.value)
+    assert "needs a partner" not in message
+    assert "Invalid formatting variables" in message
+
+
+@pytest.mark.parametrize("value", ["{USERNAME!r", "{USERNAME:{x}", "{a!r:{b}"])
+def test_an_unclosed_field_still_gets_the_brace_message(value):
+    with pytest.raises(ValidationError) as refused:
+        CustomVariableInput(key="PROMO", value=value)
+
+    assert "needs a partner" in str(refused.value)

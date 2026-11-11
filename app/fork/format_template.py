@@ -25,9 +25,31 @@ def is_unparseable(value: str) -> bool:
     return False
 
 
+def has_stray_brace(value: str) -> bool:
+    depth = 0
+    index = 0
+    while index < len(value):
+        char = value[index]
+        if depth == 0 and char in "{}" and value.startswith(char * 2, index):
+            index += 2
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            if depth == 0:
+                return True
+            depth -= 1
+        index += 1
+    return depth != 0
+
+
 def check_template_value(value: str) -> str:
     if is_unparseable(value):
-        raise ValueError('Invalid formatting variables: every "{" and "}" needs a partner; write {{ or }} for a brace')
+        if has_stray_brace(value):
+            raise ValueError(
+                'Invalid formatting variables: every "{" and "}" needs a partner; write {{ or }} for a brace'
+            )
+        raise ValueError("Invalid formatting variables")
     if has_oversized_format_spec(value):
         raise ValueError(
             f"Invalid formatting variables: width and precision must be numbers up to {MAX_FORMAT_SPEC_NUMBER}"
