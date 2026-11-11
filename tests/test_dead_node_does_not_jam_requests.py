@@ -533,5 +533,6 @@ async def test_a_core_restart_reaches_a_healthy_node_behind_a_full_slate_of_dead
     )
     assert answer.status_code == 204, answer.text
     assert reached is not None and reached < ANSWER_WITHIN, measured
+    assert reached < DEAD_INTERNAL_TIMEOUT, f"the healthy node's Start waited for the dead nodes' probes; {measured}"
     assert "at" in healthy_written and healthy_written["at"] < ANSWER_WITHIN, measured
     assert elapsed < ANSWER_WITHIN, measured
