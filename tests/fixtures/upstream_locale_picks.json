@@ -7849,6 +7849,1934 @@
           "removed": []
         }
       }
+    },
+    {
+      "upstream": "0097556b218117951c838a7f9b13c287d328716a",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "remoteDns"
+              ],
+              "MASQUE remote DNS servers"
+            ],
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "remoteDnsHint"
+              ],
+              "Leave empty to use the inbound DNS servers"
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "remoteDns"
+              ],
+              "سرورهای DNS راه دور MASQUE"
+            ],
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "remoteDnsHint"
+              ],
+              "برای استفاده از سرورهای DNS ورودی، خالی بگذارید"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "remoteDns"
+              ],
+              "Удалённые DNS-серверы MASQUE"
+            ],
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "remoteDnsHint"
+              ],
+              "Оставьте пустым, чтобы использовать DNS-серверы входящего подключения"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "remoteDns"
+              ],
+              "MASQUE 远程 DNS 服务器"
+            ],
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "remoteDnsHint"
+              ],
+              "留空则使用入站 DNS 服务器"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    },
+    {
+      "upstream": "65f2dadc0f61ff33e315a8294a7db95d325b5d7f",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "xmuxHint"
+              ],
+              "Requires Xray 26.10.17 or newer on the client. Leave all fields blank for Xray defaults: one tunnel, reusable for 1800-3000 seconds. Setting any field replaces those defaults. Max Connections and Max Concurrency cannot both be set."
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "xmuxHint"
+              ],
+              "به Xray نسخهٔ 26.10.17 یا جدیدتر روی کلاینت نیاز دارد. برای پیش‌فرض‌های Xray همه فیلدها را خالی بگذارید: یک تونل با زمان استفادهٔ مجدد ۱۸۰۰ تا ۳۰۰۰ ثانیه. با تنظیم هر فیلد، این پیش‌فرض‌ها جایگزین می‌شوند. حداکثر اتصال و حداکثر همزمانی را نمی‌توان هم‌زمان تنظیم کرد."
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "xmuxHint"
+              ],
+              "Требуется Xray 26.10.17 или новее на клиенте. Оставьте все поля пустыми для значений Xray по умолчанию: один туннель, повторное использование в течение 1800–3000 секунд. При задании любого поля эти значения заменяются. Максимум соединений и максимум параллельных потоков нельзя задавать одновременно."
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "xmuxHint"
+              ],
+              "客户端需要 Xray 26.10.17 或更新版本。全部留空时使用 Xray 默认值：一个隧道，可复用 1800–3000 秒。设置任一字段后，这些默认值将被替换。最大连接数和最大并发数不能同时设置。"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    },
+    {
+      "upstream": "da27446f28e88a41a08d8c42919241ae053eeb22",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "xmuxHint"
+              ],
+              "Requires Xray 26.10.21 or newer on the client. Leave all fields blank for Xray defaults: one tunnel, reusable for 1800-3000 seconds. Setting any field replaces those defaults. Max Connections and Max Concurrency cannot both be set."
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "xmuxHint"
+              ],
+              "به Xray نسخهٔ 26.10.21 یا جدیدتر روی کلاینت نیاز دارد. برای پیش‌فرض‌های Xray همه فیلدها را خالی بگذارید: یک تونل با زمان استفادهٔ مجدد ۱۸۰۰ تا ۳۰۰۰ ثانیه. با تنظیم هر فیلد، این پیش‌فرض‌ها جایگزین می‌شوند. حداکثر اتصال و حداکثر همزمانی را نمی‌توان هم‌زمان تنظیم کرد."
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "xmuxHint"
+              ],
+              "Требуется Xray 26.10.21 или новее на клиенте. Оставьте все поля пустыми для значений Xray по умолчанию: один туннель, повторное использование в течение 1800-3000 секунд. При задании любого поля эти значения заменяются. Максимум соединений и максимум параллельных потоков нельзя задавать одновременно."
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "hostsDialog",
+                "masque",
+                "xmuxHint"
+              ],
+              "客户端需要 Xray 26.10.21 或更新版本。全部留空时使用 Xray 默认值：一个隧道，可复用 1800-3000 秒。设置任一字段后，这些默认值将被替换。最大连接数和最大并发数不能同时设置。"
+            ]
+          ],
+          "removed": []
+        }
+      }
+    },
+    {
+      "upstream": "9708b0cd4be7624af7c2defa38cbf4e22e774949",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "addItem"
+              ],
+              "Add"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoOutboundsInterface"
+              ],
+              "Auto Outbounds Interface"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoRouteAddPlaceholder"
+              ],
+              "Add route CIDR"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoRouteItems"
+              ],
+              "Route CIDRs"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemDnsToGateway"
+              ],
+              "Auto System DNS to Gateway"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemDnsToGatewayHint"
+              ],
+              "Point system DNS queries to the gateway address (Linux / FreeBSD)."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemRoutingTable"
+              ],
+              "Auto System Routing Table"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemRoutingTableHint"
+              ],
+              "One CIDR per line, e.g. 0.0.0.0/0"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeak"
+              ],
+              "WFP Leak Blocking Rules"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeakAddPlaceholder"
+              ],
+              "Add rule (e.g. dns, tcp/853)"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeakHint"
+              ],
+              "Rules: dns, misconfigtun, windnsclient, tcp/853, udp/853, tcp/<port>, udp/<port>"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeakItems"
+              ],
+              "WFP Rules"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "desc"
+              ],
+              "Adapter Description"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dns"
+              ],
+              "DNS"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dnsAddPlaceholder"
+              ],
+              "Add DNS server"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dnsHint"
+              ],
+              "One DNS server per line, e.g. 1.1.1.1"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dnsItems"
+              ],
+              "DNS servers"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gateway"
+              ],
+              "Gateway"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gatewayAddPlaceholder"
+              ],
+              "Add gateway CIDR"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gatewayHint"
+              ],
+              "One CIDR per line, e.g. 10.0.0.1/16"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gatewayItems"
+              ],
+              "Gateway CIDRs"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "mtu"
+              ],
+              "MTU"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "name"
+              ],
+              "Interface Name"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noAutoRouteItems"
+              ],
+              "No route CIDR added."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noAutoSystemWfpBlockLeakItems"
+              ],
+              "No WFP rules added."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noDnsItems"
+              ],
+              "No DNS server added."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noGatewayItems"
+              ],
+              "No gateway CIDR added."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "userLevel"
+              ],
+              "User Level"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "validation",
+                "tunMtuRange"
+              ],
+              "MTU must be a positive whole number."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "validation",
+                "tunUserLevelInvalid"
+              ],
+              "User level must be a non-negative whole number."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "xhttp",
+                "h2Params"
+              ],
+              "HTTP/2 Parameters (h2Params)"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "xhttp",
+                "h2ParamsHint"
+              ],
+              "Optional HTTP/2 server configuration JSON (e.g. maxConcurrentStreams, pingTimeout)."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "xhttp",
+                "h2ParamsInvalid"
+              ],
+              "HTTP/2 parameters must be a valid JSON object."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderS3"
+              ],
+              "Bucket Path / Prefix"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderS3Hint"
+              ],
+              "Relative path or prefix inside the bucket."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3AccessKeyId"
+              ],
+              "Access Key ID"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Bucket"
+              ],
+              "Bucket Name"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Endpoint"
+              ],
+              "Endpoint URL"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Hint"
+              ],
+              "Provide credentials and bucket configuration for S3 storage."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3PathStyle"
+              ],
+              "Path-style addressing"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3PathStyleHint"
+              ],
+              "Use path-style URLs (endpoint/bucket) rather than virtual-hosted style."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Region"
+              ],
+              "Region"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3SecretAccessKey"
+              ],
+              "Secret Access Key"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3SessionToken"
+              ],
+              "Session Token (optional)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "serviceS3"
+              ],
+              "Amazon S3 / S3-compatible (s3)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "xmux"
+              ],
+              "XMUX (JSON object)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "xmuxHint"
+              ],
+              "Optional connection reuse limits, as in XHTTP. Set maxConnections or maxConcurrency, not both."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "xmuxInvalid"
+              ],
+              "XMUX must be a JSON object."
+            ],
+            [
+              [
+                "hostsDialog",
+                "xdrive",
+                "xmuxHint"
+              ],
+              "Connection reuse limits for XDrive. Set maxConnections or maxConcurrency, not both."
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "addItem"
+              ],
+              "افزودن"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoOutboundsInterface"
+              ],
+              "رابط خروجی خودکار"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoRouteAddPlaceholder"
+              ],
+              "افزودن CIDR مسیر"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoRouteItems"
+              ],
+              "CIDRهای مسیر"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemDnsToGateway"
+              ],
+              "هدایت خودکار DNS سیستم به دروازه"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemDnsToGatewayHint"
+              ],
+              "هدایت پرس‌وجوهای DNS سیستم به آدرس گیت‌وی (لینوکس / FreeBSD)."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemRoutingTable"
+              ],
+              "جدول مسیریابی خودکار سیستم"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemRoutingTableHint"
+              ],
+              "یک CIDR در هر خط، مثلاً 0.0.0.0/0"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeak"
+              ],
+              "قوانین جلوگیری از نشت WFP"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeakAddPlaceholder"
+              ],
+              "افزودن قانون (مثلاً dns, tcp/853)"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeakHint"
+              ],
+              "قوانین: dns, misconfigtun, windnsclient, tcp/853, udp/853, tcp/<port>, udp/<port>"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeakItems"
+              ],
+              "قوانین WFP"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "desc"
+              ],
+              "توضیحات آداپتور"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dns"
+              ],
+              "DNS"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dnsAddPlaceholder"
+              ],
+              "افزودن سرور DNS"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dnsHint"
+              ],
+              "یک سرور DNS در هر خط، مثلاً 1.1.1.1"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dnsItems"
+              ],
+              "سرورهای DNS"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gateway"
+              ],
+              "دروازه (Gateway)"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gatewayAddPlaceholder"
+              ],
+              "افزودن CIDR دروازه"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gatewayHint"
+              ],
+              "یک CIDR در هر خط، مثلاً 10.0.0.1/16"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gatewayItems"
+              ],
+              "CIDRهای دروازه"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "mtu"
+              ],
+              "MTU"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "name"
+              ],
+              "نام رابط"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noAutoRouteItems"
+              ],
+              "هیچ CIDR مسیری اضافه نشده است."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noAutoSystemWfpBlockLeakItems"
+              ],
+              "هیچ قانون WFP اضافه نشده است."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noDnsItems"
+              ],
+              "هیچ سرور DNSای اضافه نشده است."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noGatewayItems"
+              ],
+              "هیچ CIDR دروازه‌ای اضافه نشده است."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "userLevel"
+              ],
+              "سطح کاربر (User Level)"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "validation",
+                "tunMtuRange"
+              ],
+              "MTU باید یک عدد صحیح مثبت باشد."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "validation",
+                "tunUserLevelInvalid"
+              ],
+              "سطح کاربر باید یک عدد صحیح نامنفی باشد."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "xhttp",
+                "h2Params"
+              ],
+              "پارامترهای HTTP/2 (h2Params)"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "xhttp",
+                "h2ParamsHint"
+              ],
+              "JSON اختیاری برای پیکربندی سرور HTTP/2 (مانند maxConcurrentStreams, pingTimeout)."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "xhttp",
+                "h2ParamsInvalid"
+              ],
+              "پارامترهای HTTP/2 باید یک شیء JSON معتبر باشد."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderS3"
+              ],
+              "مسیر باکت / پیشوند"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderS3Hint"
+              ],
+              "مسیر نسبی یا پیشوند داخل باکت."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3AccessKeyId"
+              ],
+              "شناسه دسترسی (Access Key ID)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Bucket"
+              ],
+              "نام باکت (Bucket)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Endpoint"
+              ],
+              "آدرس Endpoint"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Hint"
+              ],
+              "اطلاعات دسترسی و پیکربندی باکت ذخیره‌سازی S3 را وارد کنید."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3PathStyle"
+              ],
+              "آدرس‌دهی Path-style"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3PathStyleHint"
+              ],
+              "استفاده از آدرس‌های Path-style (endpoint/bucket) به جای virtual-hosted."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Region"
+              ],
+              "منطقه (Region)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3SecretAccessKey"
+              ],
+              "کلید محرمانه (Secret Access Key)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3SessionToken"
+              ],
+              "توکن نشست (اختیاری)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "serviceS3"
+              ],
+              "سرویس Amazon S3 یا سازگار با S3 (s3)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "xmux"
+              ],
+              "XMUX (شیء JSON)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "xmuxHint"
+              ],
+              "محدودیت‌های اختیاری استفادهٔ مجدد از اتصال، مانند XHTTP. حداکثر اتصالات یا حداکثر همزمانی را تنظیم کنید، نه هر دو."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "xmuxInvalid"
+              ],
+              "XMUX باید یک شیء JSON باشد."
+            ],
+            [
+              [
+                "hostsDialog",
+                "xdrive",
+                "xmuxHint"
+              ],
+              "محدودیت‌های استفادهٔ مجدد از اتصال برای XDrive. حداکثر اتصالات یا حداکثر همزمانی را تنظیم کنید، نه هر دو."
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "addItem"
+              ],
+              "Добавить"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoOutboundsInterface"
+              ],
+              "Интерфейс автовыхода"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoRouteAddPlaceholder"
+              ],
+              "Добавить CIDR маршрута"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoRouteItems"
+              ],
+              "CIDR маршрутов"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemDnsToGateway"
+              ],
+              "Автонаправление системного DNS на шлюз"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemDnsToGatewayHint"
+              ],
+              "Направлять системные DNS-запросы на адрес шлюза (Linux / FreeBSD)."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemRoutingTable"
+              ],
+              "Таблица автомаршрутизации системы"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemRoutingTableHint"
+              ],
+              "Один CIDR на строку, например 0.0.0.0/0"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeak"
+              ],
+              "Правила блокировки утечек WFP"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeakAddPlaceholder"
+              ],
+              "Добавить правило (напр. dns, tcp/853)"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeakHint"
+              ],
+              "Правила: dns, misconfigtun, windnsclient, tcp/853, udp/853, tcp/<порт>, udp/<порт>"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeakItems"
+              ],
+              "Правила WFP"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "desc"
+              ],
+              "Описание адаптера"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dns"
+              ],
+              "DNS"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dnsAddPlaceholder"
+              ],
+              "Добавить DNS-сервер"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dnsHint"
+              ],
+              "Один DNS-сервер на строку, например 1.1.1.1"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dnsItems"
+              ],
+              "DNS-серверы"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gateway"
+              ],
+              "Шлюз (Gateway)"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gatewayAddPlaceholder"
+              ],
+              "Добавить CIDR шлюза"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gatewayHint"
+              ],
+              "Один CIDR на строку, например 10.0.0.1/16"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gatewayItems"
+              ],
+              "CIDR шлюзов"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "mtu"
+              ],
+              "MTU"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "name"
+              ],
+              "Имя интерфейса"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noAutoRouteItems"
+              ],
+              "Маршруты не добавлены."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noAutoSystemWfpBlockLeakItems"
+              ],
+              "Правила WFP не добавлены."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noDnsItems"
+              ],
+              "DNS-серверы не добавлены."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noGatewayItems"
+              ],
+              "Шлюзы не добавлены."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "userLevel"
+              ],
+              "Уровень пользователя (User Level)"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "validation",
+                "tunMtuRange"
+              ],
+              "MTU должен быть положительным целым числом."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "validation",
+                "tunUserLevelInvalid"
+              ],
+              "Уровень пользователя должен быть неотрицательным целым числом."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "xhttp",
+                "h2Params"
+              ],
+              "Параметры HTTP/2 (h2Params)"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "xhttp",
+                "h2ParamsHint"
+              ],
+              "Необязательный JSON конфигурации сервера HTTP/2 (напр. maxConcurrentStreams, pingTimeout)."
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "xhttp",
+                "h2ParamsInvalid"
+              ],
+              "Параметры HTTP/2 должны быть корректным объектом JSON."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderS3"
+              ],
+              "Путь к бакету / префикс"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderS3Hint"
+              ],
+              "Относительный путь или префикс внутри бакета."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3AccessKeyId"
+              ],
+              "Идентификатор ключа доступа (Access Key ID)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Bucket"
+              ],
+              "Имя бакета"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Endpoint"
+              ],
+              "URL эндпоинта"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Hint"
+              ],
+              "Укажите учётные данные и конфигурацию бакета для S3."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3PathStyle"
+              ],
+              "Path-style адресация"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3PathStyleHint"
+              ],
+              "Использовать URL вида path-style (endpoint/bucket) вместо virtual-hosted."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Region"
+              ],
+              "Регион"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3SecretAccessKey"
+              ],
+              "Секретный ключ доступа (Secret Access Key)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3SessionToken"
+              ],
+              "Токен сессии (необязательно)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "serviceS3"
+              ],
+              "Amazon S3 / S3-совместимое хранилище (s3)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "xmux"
+              ],
+              "XMUX (объект JSON)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "xmuxHint"
+              ],
+              "Необязательные ограничения повторного использования соединений, как в XHTTP. Укажите максимум соединений или максимум параллельных потоков, но не оба одновременно."
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "xmuxInvalid"
+              ],
+              "XMUX должен быть объектом JSON."
+            ],
+            [
+              [
+                "hostsDialog",
+                "xdrive",
+                "xmuxHint"
+              ],
+              "Ограничения повторного использования соединений для XDrive. Укажите максимум соединений или максимум параллельных потоков, но не оба одновременно."
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "addItem"
+              ],
+              "添加"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoOutboundsInterface"
+              ],
+              "自动出站接口"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoRouteAddPlaceholder"
+              ],
+              "添加路由 CIDR"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoRouteItems"
+              ],
+              "路由 CIDR 列表"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemDnsToGateway"
+              ],
+              "系统 DNS 自动指向网关"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemDnsToGatewayHint"
+              ],
+              "将系统 DNS 查询指向网关地址（Linux / FreeBSD）。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemRoutingTable"
+              ],
+              "系统自动路由表"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemRoutingTableHint"
+              ],
+              "每行一个 CIDR，例如 0.0.0.0/0"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeak"
+              ],
+              "WFP 泄露防护规则"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeakAddPlaceholder"
+              ],
+              "添加规则（例如 dns, tcp/853）"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeakHint"
+              ],
+              "规则：dns, misconfigtun, windnsclient, tcp/853, udp/853, tcp/<端口>, udp/<端口>"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "autoSystemWfpBlockLeakItems"
+              ],
+              "WFP 规则列表"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "desc"
+              ],
+              "适配器描述"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dns"
+              ],
+              "DNS"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dnsAddPlaceholder"
+              ],
+              "添加 DNS 服务器"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dnsHint"
+              ],
+              "每行一个 DNS 服务器，例如 1.1.1.1"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "dnsItems"
+              ],
+              "DNS 服务器列表"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gateway"
+              ],
+              "网关 (Gateway)"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gatewayAddPlaceholder"
+              ],
+              "添加网关 CIDR"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gatewayHint"
+              ],
+              "每行一个 CIDR，例如 10.0.0.1/16"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "gatewayItems"
+              ],
+              "网关 CIDR 列表"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "mtu"
+              ],
+              "MTU"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "name"
+              ],
+              "接口名称"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noAutoRouteItems"
+              ],
+              "未添加路由 CIDR。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noAutoSystemWfpBlockLeakItems"
+              ],
+              "未添加 WFP 规则。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noDnsItems"
+              ],
+              "未添加 DNS 服务器。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "noGatewayItems"
+              ],
+              "未添加网关 CIDR。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "tun",
+                "userLevel"
+              ],
+              "用户级别 (User Level)"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "validation",
+                "tunMtuRange"
+              ],
+              "MTU 必须为正整数。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "validation",
+                "tunUserLevelInvalid"
+              ],
+              "用户级别必须为非负整数。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "xhttp",
+                "h2Params"
+              ],
+              "HTTP/2 参数 (h2Params)"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "xhttp",
+                "h2ParamsHint"
+              ],
+              "可选的 HTTP/2 服务端配置 JSON（例如 maxConcurrentStreams, pingTimeout）。"
+            ],
+            [
+              [
+                "coreEditor",
+                "inbound",
+                "xhttp",
+                "h2ParamsInvalid"
+              ],
+              "HTTP/2 参数必须是有效的 JSON 对象。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderS3"
+              ],
+              "存储桶路径 / 前缀"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "folderS3Hint"
+              ],
+              "存储桶内的相对路径或前缀。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3AccessKeyId"
+              ],
+              "访问密钥 ID (Access Key ID)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Bucket"
+              ],
+              "存储桶名称 (Bucket)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Endpoint"
+              ],
+              "终端节点 URL (Endpoint)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Hint"
+              ],
+              "提供 S3 存储的凭据和存储桶配置。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3PathStyle"
+              ],
+              "路径样式寻址 (Path-style)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3PathStyleHint"
+              ],
+              "使用路径样式 URL (endpoint/bucket) 而非虚拟主机样式。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3Region"
+              ],
+              "区域 (Region)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3SecretAccessKey"
+              ],
+              "私有访问密钥 (Secret Access Key)"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "s3SessionToken"
+              ],
+              "会话令牌（可选）"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "serviceS3"
+              ],
+              "Amazon S3 / S3 兼容存储（s3）"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "xmux"
+              ],
+              "XMUX（JSON 对象）"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "xmuxHint"
+              ],
+              "可选的连接复用限制，类似 XHTTP。设置最大连接数或最大并发数，不能同时设置。"
+            ],
+            [
+              [
+                "coreEditor",
+                "xdrive",
+                "xmuxInvalid"
+              ],
+              "XMUX 必须是 JSON 对象。"
+            ],
+            [
+              [
+                "hostsDialog",
+                "xdrive",
+                "xmuxHint"
+              ],
+              "XDrive 连接复用限制。设置最大连接数或最大并发数，不能同时设置。"
+            ]
+          ],
+          "removed": []
+        }
+      }
     }
   ]
 }
