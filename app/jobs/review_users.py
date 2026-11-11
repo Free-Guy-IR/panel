@@ -1,6 +1,7 @@
 import asyncio
 from datetime import UTC, datetime as dt, timedelta as td
 
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import notification, scheduler
@@ -26,6 +27,7 @@ from app.fork.jobs.status_review import (
     start_on_hold_users_under_lock,
 )
 from app.fork.jobs.usage_limits import limit_users_under_lock
+from app.fork.proxy_secrets.locks import NamedLockMissing
 from app.jobs.dependencies import SYSTEM_ADMIN
 from app.models.settings import OnHoldTimeoutAction, Webhook
 from app.models.user import UserNotificationResponse
@@ -98,6 +100,8 @@ async def apply_status_changes(db: AsyncSession, users: list[User], status: User
             reset_ids.append(user_ids[index])
         except NextPlanUnavailable:
             await apply_status_changes(db, [db_user], status)
+        except (DBAPIError, NamedLockMissing):
+            raise
         except Exception:
             # One bad next plan must not stall every user after it: skip it, the next run retries it.
             logger.exception(f'Failed to activate next plan of user "{username}", skipped')
