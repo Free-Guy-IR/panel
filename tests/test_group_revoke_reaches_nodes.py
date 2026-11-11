@@ -8,6 +8,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.db.models import Admin, AdminRole, Base, CoreConfig, Group, ProxyInbound, User
+from app.fork.proxy_secrets.locks import LOCK_UNAVAILABLE_DETAIL
 from app.models.core import CoreType
 from app.models.group import BulkGroupSelection
 from app.models.proxy import ProxyTable
@@ -57,7 +58,8 @@ async def repair(monkeypatch, sessions):
     from app.fork.proxy_secrets import group_repair
     from app.operation import group as group_module
 
-    state = SimpleNamespace(pushed=[], tasks=[])
+    state = SimpleNamespace(pushed=[], tasks=[], contended=True)
+    real_allocation = group_repair.sync_users_allocations
 
     class _TestGetDB:
         def __init__(self):
@@ -79,7 +81,9 @@ async def repair(monkeypatch, sessions):
         return None
 
     async def contended(db, users, **kwargs):
-        raise LOCK_WAIT_TIMEOUT
+        if state.contended:
+            raise LOCK_WAIT_TIMEOUT
+        return await real_allocation(db, users, **kwargs)
 
     real_schedule = group_repair.schedule_allocation_repair
 
@@ -134,27 +138,36 @@ async def _seed(sessions):
 
 
 @pytest.mark.asyncio
-async def test_disabling_a_group_reaches_the_nodes_even_when_the_address_release_is_contended(sessions, repair):
+async def test_a_disable_whose_address_release_is_contended_stores_nothing_and_a_retry_reaches_the_nodes(
+    sessions, repair
+):
     seed = await _seed(sessions)
     operation = GroupOperation(operator_type=OperatorType.API)
 
-    async with sessions() as db:
-        with pytest.raises(HTTPException) as raised:
-            await operation.bulk_set_groups_disabled(
+    async def disable():
+        async with sessions() as db:
+            return await operation.bulk_set_groups_disabled(
                 db, BulkGroupSelection(ids={seed.group_id}), OWNER, is_disabled=True
             )
-    assert raised.value.status_code == 503
-    for task in repair.tasks:
-        await task
 
+    with pytest.raises(HTTPException) as raised:
+        await disable()
     async with sessions() as db:
-        group = await db.get(Group, seed.group_id)
-        assert group.is_disabled is True
+        disabled_after_the_refusal = await db.scalar(select(Group.is_disabled).where(Group.id == seed.group_id))
+    pushed_after_the_refusal = list(repair.pushed)
 
+    repair.contended = False
+    await disable()
+
+    assert raised.value.status_code == 503
+    assert raised.value.detail == LOCK_UNAVAILABLE_DETAIL
+    assert disabled_after_the_refusal is False
+    assert pushed_after_the_refusal == []
+    assert repair.tasks == []
+    async with sessions() as db:
+        assert await db.scalar(select(Group.is_disabled).where(Group.id == seed.group_id)) is True
     pushes = [inbounds for user_id, inbounds in repair.pushed if user_id == seed.user_id]
-    assert pushes and pushes[-1] == [], (
-        f"group is disabled in the database but its member was never pushed without it (pushes: {pushes})"
-    )
+    assert pushes == [[]], f"the retried disable must push the member without the group's inbounds once: {pushes}"
 
 
 async def _markers(sessions):
@@ -166,9 +179,8 @@ async def _markers(sessions):
 
 
 @pytest.mark.asyncio
-async def test_a_group_change_that_cannot_finish_leaves_a_durable_marker_that_the_drain_job_finishes(
-    sessions, monkeypatch, repair
-):
+async def test_a_group_change_whose_push_never_ran_leaves_a_marker_that_the_drain_job_finishes(sessions, monkeypatch):
+    from app import notification
     from app.fork.proxy_secrets import group_repair
 
     seed = await _seed(sessions)
@@ -176,15 +188,26 @@ async def test_a_group_change_that_cannot_finish_leaves_a_durable_marker_that_th
         await db.execute(update(Group).where(Group.id == seed.group_id).values(is_disabled=True))
         await db.commit()
     operation = GroupOperation(operator_type=OperatorType.API)
-    monkeypatch.setattr(group_repair, "schedule_allocation_repair", lambda user_ids: None)
+
+    async def the_process_stops_before_the_push(db, user_ids, push):
+        raise RuntimeError("the process stopped before the push")
+
+    async def nothing(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(group_repair, "push_committed_users", the_process_stops_before_the_push)
+    for name in ("modify_group", "remove_group"):
+        monkeypatch.setattr(notification, name, nothing)
 
     async with sessions() as db:
-        with pytest.raises(HTTPException) as raised:
+        with pytest.raises(RuntimeError):
             await operation.bulk_set_groups_disabled(
                 db, BulkGroupSelection(ids={seed.group_id}), OWNER, is_disabled=False
             )
-    assert raised.value.status_code == 503
     assert [user_id for user_id, _ in await _markers(sessions)] == [seed.user_id]
+    async with sessions() as db:
+        committed = await db.scalar(select(User.proxy_settings).where(User.id == seed.user_id))
+    assert committed["wireguard"]["peer_ips"]
 
     monkeypatch.undo()
     pushed = []

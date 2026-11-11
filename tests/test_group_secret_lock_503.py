@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
-from sqlalchemy import delete, event, select, text, update
+from sqlalchemy import delete, event, insert, select, text, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -297,6 +297,27 @@ def _in_request_attempts(sessions, failure):
     return 1 if _loses_the_transaction(sessions, failure) else 2
 
 
+async def _store_without_the_second_step(sessions, user_id, *, enable_group_id=None, add_group_id=None):
+    from app.fork.proxy_secrets import resync_markers
+
+    async with sessions() as db:
+        if enable_group_id is not None:
+            await db.execute(update(Group).where(Group.id == enable_group_id).values(is_disabled=False))
+        if add_group_id is not None:
+            await db.execute(insert(users_groups_association).values(user_id=user_id, groups_id=add_group_id))
+        await resync_markers.mark_users(db, [user_id])
+        await db.commit()
+
+
+async def _marked(sessions, user_id):
+    from app.fork.models.pending_user_resync import PendingUserResync
+
+    async with sessions() as db:
+        return (
+            await db.scalar(select(PendingUserResync.user_id).where(PendingUserResync.user_id == user_id)) is not None
+        )
+
+
 async def _reaches_the_wireguard_inbound(sessions, user_id):
     async with sessions() as db:
         found = await db.scalar(
@@ -325,7 +346,7 @@ def _warnings(caplog):
 @pytest.mark.parametrize("path", ["modify_group", "bulk_add_groups", "bulk_set_groups_disabled"])
 @pytest.mark.parametrize("failure", list(FAILURES), ids=list(FAILURES))
 @pytest.mark.asyncio
-async def test_a_group_change_that_cannot_take_the_secret_lock_twice_answers_503_and_keeps_nothing_of_the_grant_step(
+async def test_a_group_change_that_cannot_take_the_secret_lock_twice_answers_503_and_stores_nothing(
     sessions, monkeypatch, repair, path, failure
 ):
     seed = await _seed(sessions)
@@ -337,20 +358,48 @@ async def test_a_group_change_that_cannot_take_the_secret_lock_twice_answers_503
             await change(db)
         await db.commit()
 
-    lost = _loses_the_transaction(sessions, FAILURES[failure])
     assert raised.value.status_code == 503
+    assert raised.value.detail == LOCK_UNAVAILABLE_DETAIL
     assert calls.count == _in_request_attempts(sessions, FAILURES[failure])
-    if lost:
-        assert raised.value.detail == LOCK_UNAVAILABLE_DETAIL
-        assert repair.scheduled == []
-    else:
-        assert "saved" in raised.value.detail
-        assert repair.scheduled == [[seed.users[member]]]
-    assert await _reaches_the_wireguard_inbound(sessions, seed.users[member]) is not lost
+    assert repair.scheduled == []
+    assert await _reaches_the_wireguard_inbound(sessions, seed.users[member]) is False
+    assert await _marked(sessions, seed.users[member]) is False
     state = await _phase_two_state(sessions, seed.users[member])
     assert state.peer_ips == []
     assert state.openvpn is None
     assert state.pool_rows == 0
+
+
+@pytest.mark.parametrize("path", ["modify_group", "bulk_add_groups", "bulk_set_groups_disabled"])
+@pytest.mark.asyncio
+async def test_a_group_change_refused_for_the_lock_succeeds_when_it_is_retried_after_the_lock_frees(
+    sessions, monkeypatch, repair, path
+):
+    seed = await _seed(sessions)
+    calls = _failing_lock(monkeypatch, FAILURES["mysql-lock-wait-timeout"], failures_before_success=2)
+    _, member, change = _group_change(seed, path)
+
+    async with sessions() as db:
+        with pytest.raises(HTTPException) as raised:
+            await change(db)
+    reached_after_the_refusal = await _reaches_the_wireguard_inbound(sessions, seed.users[member])
+    refused = await _phase_two_state(sessions, seed.users[member])
+
+    async with sessions() as db:
+        await change(db)
+
+    assert raised.value.status_code == 503
+    assert raised.value.detail == LOCK_UNAVAILABLE_DETAIL
+    assert reached_after_the_refusal is False
+    assert refused.peer_ips == []
+    assert calls.count == 3
+    assert repair.scheduled == []
+    assert await _reaches_the_wireguard_inbound(sessions, seed.users[member]) is True
+    assert await _marked(sessions, seed.users[member]) is False
+    state = await _phase_two_state(sessions, seed.users[member])
+    assert len(state.peer_ips) == 1
+    assert state.openvpn
+    assert state.pool_rows == 1
 
 
 @pytest.mark.parametrize("path", ["modify_group", "bulk_add_groups", "bulk_set_groups_disabled"])
@@ -374,24 +423,22 @@ async def test_a_lock_that_clears_before_the_retry_completes_the_group_change_in
 
 
 @pytest.mark.asyncio
-async def test_a_group_change_that_still_fails_is_finished_by_the_background_repair(
+async def test_a_background_repair_that_fails_at_first_finishes_on_a_later_attempt(
     sessions, monkeypatch, repair, caplog
 ):
+    from app.fork.proxy_secrets import group_repair
+
     seed = await _seed(sessions)
     member = seed.users["paused_member"]
-    calls = _failing_lock(monkeypatch, FAILURES["lock-row-missing"], failures_before_success=3)
-    _, _, change = _group_change(seed, "bulk_set_groups_disabled")
+    calls = _failing_lock(monkeypatch, FAILURES["lock-row-missing"], failures_before_success=1)
+    await _store_without_the_second_step(sessions, member, enable_group_id=seed.groups["paused"])
 
-    async with sessions() as db:
-        with pytest.raises(HTTPException) as raised:
-            await change(db)
-
-    assert raised.value.status_code == 503
+    group_repair.schedule_allocation_repair([member])
     assert repair.scheduled == [[member]]
     healed = await repair.tasks[0]
 
     assert healed is True
-    assert calls.count == 4
+    assert calls.count == 2
     assert repair.synced == [[member]]
     state = await _phase_two_state(sessions, member)
     assert state.peer_ips
@@ -405,18 +452,18 @@ async def test_a_group_change_that_still_fails_is_finished_by_the_background_rep
 async def test_a_background_repair_that_never_gets_the_lock_gives_up_with_an_error_and_writes_nothing(
     sessions, monkeypatch, repair, caplog
 ):
+    from app.fork.proxy_secrets import group_repair
+
     seed = await _seed(sessions)
     member = seed.users["paused_member"]
     calls = _failing_lock(monkeypatch, FAILURES["mysql-lock-wait-timeout"], failures_before_success=None)
-    _, _, change = _group_change(seed, "bulk_set_groups_disabled")
+    await _store_without_the_second_step(sessions, member, enable_group_id=seed.groups["paused"])
 
-    async with sessions() as db:
-        with pytest.raises(HTTPException):
-            await change(db)
+    group_repair.schedule_allocation_repair([member])
     healed = await repair.tasks[0]
 
     assert healed is False
-    assert calls.count == _in_request_attempts(sessions, FAILURES["mysql-lock-wait-timeout"]) + 3
+    assert calls.count == 3
     assert repair.synced == []
     state = await _phase_two_state(sessions, member)
     assert state.peer_ips == []
@@ -429,15 +476,13 @@ async def test_a_background_repair_that_never_gets_the_lock_gives_up_with_an_err
     assert "gave up" in errors[0] and str(member) in errors[0]
 
 
-async def _fail_the_enable_then_run(sessions, monkeypatch, seed, second_change):
+async def _schedule_a_repair_then_run(sessions, monkeypatch, seed, second_change):
     from app.fork.proxy_secrets import group_repair
 
     monkeypatch.setattr(group_repair, "REPAIR_DELAYS_SECONDS", (REPAIR_HOLD_SECONDS, 0.05, 0.05))
-    _failing_lock(monkeypatch, FAILURES["lock-row-missing"], failures_before_success=2)
-    _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
-    async with sessions() as db:
-        with pytest.raises(HTTPException):
-            await enable(db)
+    member = seed.users["paused_member"]
+    await _store_without_the_second_step(sessions, member, enable_group_id=seed.groups["paused"])
+    group_repair.schedule_allocation_repair([member])
     async with sessions() as db:
         await second_change(db)
 
@@ -448,7 +493,7 @@ async def test_a_member_removed_before_the_repair_runs_ends_with_nothing(session
     member = seed.users["paused_member"]
     operation = _groups()
 
-    await _fail_the_enable_then_run(
+    await _schedule_a_repair_then_run(
         sessions,
         monkeypatch,
         seed,
@@ -469,7 +514,7 @@ async def test_a_member_healed_by_a_later_change_is_not_given_a_second_address_o
     member = seed.users["paused_member"]
     operation = _groups()
 
-    await _fail_the_enable_then_run(
+    await _schedule_a_repair_then_run(
         sessions,
         monkeypatch,
         seed,
@@ -522,21 +567,6 @@ async def test_a_repair_still_pending_at_shutdown_is_cancelled_with_a_warning(re
     assert group_repair.cancel_pending_repairs in shutdown_functions
 
 
-def _switchable_lock(monkeypatch):
-    from app.fork.proxy_secrets import entitled as entitled_module
-
-    real_acquire = entitled_module.acquire_proxy_secrets_lock
-    switch = SimpleNamespace(failing=True)
-
-    async def acquire(db):
-        if switch.failing:
-            raise FAILURES["lock-row-missing"]
-        return await real_acquire(db)
-
-    monkeypatch.setattr(entitled_module, "acquire_proxy_secrets_lock", acquire)
-    return switch
-
-
 @pytest.mark.asyncio
 async def test_a_failure_arriving_while_its_users_repair_runs_gets_a_pass_that_reads_the_newer_change(
     sessions, monkeypatch, repair
@@ -545,33 +575,24 @@ async def test_a_failure_arriving_while_its_users_repair_runs_gets_a_pass_that_r
 
     seed = await _seed(sessions)
     member = seed.users["paused_member"]
-    operation = _groups()
-    switch = _switchable_lock(monkeypatch)
     first_pass_committed = asyncio.Event()
-    second_change_failed = asyncio.Event()
+    second_change_stored = asyncio.Event()
     passes = []
 
     async def gated_sync(users):
         passes.append(sorted(user.id for user in users))
         if len(passes) == 1:
             first_pass_committed.set()
-            await second_change_failed.wait()
+            await second_change_stored.wait()
 
     monkeypatch.setattr(group_repair, "sync_users", gated_sync)
-    _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
+    await _store_without_the_second_step(sessions, member, enable_group_id=seed.groups["paused"])
+    group_repair.schedule_allocation_repair([member])
+    await asyncio.wait_for(first_pass_committed.wait(), 30)
 
-    async with sessions() as db:
-        with pytest.raises(HTTPException):
-            await enable(db)
-    switch.failing = False
-    await first_pass_committed.wait()
-
-    switch.failing = True
-    async with sessions() as db:
-        with pytest.raises(HTTPException):
-            await operation.bulk_add_groups(db, BulkGroup(group_ids={seed.groups["mtp"]}, users={member}), OWNER)
-    switch.failing = False
-    second_change_failed.set()
+    await _store_without_the_second_step(sessions, member, add_group_id=seed.groups["mtp"])
+    group_repair.schedule_allocation_repair([member])
+    second_change_stored.set()
 
     assert await repair.tasks[0] is True
     assert passes == [[member], [member]]
@@ -590,7 +611,6 @@ async def test_users_that_keep_changing_stop_the_repair_at_the_pass_bound_with_a
 
     seed = await _seed(sessions)
     member = seed.users["paused_member"]
-    switch = _switchable_lock(monkeypatch)
     monkeypatch.setattr(group_repair, "REPAIR_MAX_PASSES", 2)
     passes = []
 
@@ -599,12 +619,8 @@ async def test_users_that_keep_changing_stop_the_repair_at_the_pass_bound_with_a
         group_repair.schedule_allocation_repair([member])
 
     monkeypatch.setattr(group_repair, "sync_users", another_failure_every_pass)
-    _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
-
-    async with sessions() as db:
-        with pytest.raises(HTTPException):
-            await enable(db)
-    switch.failing = False
+    await _store_without_the_second_step(sessions, member, enable_group_id=seed.groups["paused"])
+    group_repair.schedule_allocation_repair([member])
 
     assert await repair.tasks[0] is False
     assert passes == [[member], [member]]
