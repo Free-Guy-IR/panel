@@ -445,7 +445,7 @@ async def test_admin_bulk_activate_and_disable_sync_users_without_usage_logs_or_
     monkeypatch.setattr("app.operation.admin.sync_users", fake_sync_users)
     statements = _record_statements(db_session)
     operation = AdminOperation(OperatorType.API)
-    actor = SimpleNamespace(username="tester")
+    actor = SimpleNamespace(username="tester", is_owner=True)
 
     if how == "activate":
         await operation._activate_all_disabled_users_for_admin(db_session, admin, actor)
