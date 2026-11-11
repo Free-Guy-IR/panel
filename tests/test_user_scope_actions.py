@@ -420,3 +420,31 @@ async def test_hwid_actions_reach_users_inside_the_admin_groups(method, args, cr
 
     assert _membership_query_groups(db) == [[ALLOWED_GROUP_ID]] * lookups
     hwid_crud.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_set_owner_by_username_uses_the_set_owner_scope_not_update():
+    op = UserOperation(OperatorType.API)
+    admin = _admin(read={"scope": 2}, update={"scope": 2}, set_owner={"scope": 1})
+    moved = SimpleNamespace(username="moved")
+
+    with (
+        patch("app.operation.get_admin", new_callable=AsyncMock),
+        patch("app.operation.user.ensure_owner_target_allowed", new_callable=AsyncMock),
+        patch.object(UserOperation, "_set_owner", new_callable=AsyncMock, return_value=moved) as set_owner,
+    ):
+        with (
+            patch("app.operation.get_user", new_callable=AsyncMock, side_effect=_user_owned_by(FOREIGN_OWNER_ID)),
+            pytest.raises(HTTPException) as exc,
+        ):
+            await op.set_owner(AsyncMock(), "someone-elses-user", "new-owner", admin)
+
+        assert (exc.value.status_code, exc.value.detail) == (404, "User not found")
+        set_owner.assert_not_awaited()
+
+        with patch("app.operation.get_user", new_callable=AsyncMock, side_effect=_user_owned_by(admin.id)) as get_user:
+            result = await op.set_owner(AsyncMock(), "own-user", "new-owner", admin)
+
+        assert result is moved
+        assert get_user.await_args.kwargs["admin_id"] == admin.id
+        set_owner.assert_awaited_once()
