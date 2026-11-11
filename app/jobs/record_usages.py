@@ -334,7 +334,7 @@ def build_node_user_usage_upsert(dialect: str, upsert_params: list[dict]):
             ["created_at", "user_id", "node_id", "used_traffic"],
             insert_select_stmt,
         )
-        stmt = stmt.on_duplicate_key_update(used_traffic=NodeUserUsage.used_traffic + stmt.inserted.used_traffic)
+        stmt = stmt.on_duplicate_key_update(used_traffic=NodeUserUsage.used_traffic + insert_source.c.used_traffic)
         return [(stmt, stmt_params)]
 
     stmt = sqlite_insert(NodeUserUsage).from_select(
@@ -725,6 +725,12 @@ async def record_user_stats_batched(all_node_params: dict, usage_coefficients: d
     if not all_node_params:
         return []
     return _prepare_node_user_usage_params(all_node_params, usage_coefficients, _get_time_bucket())
+
+
+async def share_lock_nodes(conn, node_ids) -> None:
+    ordered = sorted({int(node_id) for node_id in node_ids if node_id is not None})
+    if ordered:
+        await conn.execute(select(Node.id).where(Node.id.in_(ordered)).order_by(Node.id).with_for_update(read=True))
 
 
 async def write_node_user_usage_rows(conn, dialect: str, chart_rows: list[dict]) -> None:
@@ -1358,6 +1364,8 @@ async def apply_fenced_user_usage(
         if coalesce_history:
             deferred_history.extend({**row, "epoch": committed_epochs[int(row["uid"])]} for row in kept_chart_rows)
         else:
+            if sql_family(dialect) == "mysql":
+                await share_lock_nodes(conn, [row["node_id"] for row in kept_chart_rows])
             await write_node_user_usage_rows(conn, dialect, kept_chart_rows)
 
         admin_totals = defaultdict(int)
