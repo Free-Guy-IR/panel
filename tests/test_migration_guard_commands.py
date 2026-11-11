@@ -17,6 +17,7 @@ from app.fork.db_rollback import current_heads, rollback
 from tests.test_upstream_v551_migration_splice import (
     FORK_HEAD,
     HEAD,
+    MERGE,
     PROD_REVISION,
     V551_MERGE,
     _config,
@@ -412,7 +413,7 @@ def test_a_database_stamped_by_the_repointed_v551_merge_is_refused_without_chang
         )
         _execute(url, f"UPDATE alembic_version SET version_num = '{V551_MERGE}'")
 
-        with pytest.raises(migration_guards.StrayMigrationObjectError, match=f"alembic stamp --purge {HEAD}"):
+        with pytest.raises(migration_guards.StrayMigrationObjectError, match=f"alembic stamp --purge {MERGE}"):
             _quiet(upgrade, config, "head")
 
         assert _versions(url) == [V551_MERGE]
@@ -450,7 +451,7 @@ def test_a_repointed_v551_database_without_max_requests_is_still_refused_without
         _execute(url, f"UPDATE alembic_version SET version_num = '{V551_MERGE}'")
         assert _v560_columns(url) == {kept}
 
-        with pytest.raises(migration_guards.StrayMigrationObjectError, match=f"alembic stamp --purge {HEAD}"):
+        with pytest.raises(migration_guards.StrayMigrationObjectError, match=f"alembic stamp --purge {MERGE}"):
             _quiet(upgrade, config, "head")
 
         assert _versions(url) == [V551_MERGE]
