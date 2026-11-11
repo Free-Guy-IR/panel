@@ -24,7 +24,7 @@ from app.db.models import (
     inbounds_groups_association,
     users_groups_association,
 )
-from app.fork.proxy_secrets.locks import NamedLockMissing
+from app.fork.proxy_secrets.locks import LOCK_UNAVAILABLE_DETAIL, NamedLockMissing
 from app.models.core import CoreType
 from app.models.group import BulkGroup, BulkGroupSelection, GroupModify
 from app.models.proxy import ProxyTable
@@ -287,10 +287,31 @@ def _failing_lock(monkeypatch, failure, *, failures_before_success):
     return calls
 
 
-def _in_request_attempts(sessions, failure):
+def _loses_the_transaction(sessions, failure):
     from app.fork.proxy_secrets.locks import MYSQL_FAMILY, is_deadlock
 
-    return 1 if sessions.kw["bind"].dialect.name in MYSQL_FAMILY and is_deadlock(failure) else 2
+    return sessions.kw["bind"].dialect.name in MYSQL_FAMILY and is_deadlock(failure)
+
+
+def _in_request_attempts(sessions, failure):
+    return 1 if _loses_the_transaction(sessions, failure) else 2
+
+
+async def _reaches_the_wireguard_inbound(sessions, user_id):
+    async with sessions() as db:
+        found = await db.scalar(
+            select(Group.id)
+            .join(users_groups_association, users_groups_association.c.groups_id == Group.id)
+            .join(inbounds_groups_association, inbounds_groups_association.c.group_id == Group.id)
+            .join(ProxyInbound, ProxyInbound.id == inbounds_groups_association.c.inbound_id)
+            .where(
+                users_groups_association.c.user_id == user_id,
+                Group.is_disabled.is_(False),
+                ProxyInbound.tag == WG_TAG,
+            )
+            .limit(1)
+        )
+    return found is not None
 
 
 def _errors(caplog):
@@ -316,10 +337,16 @@ async def test_a_group_change_that_cannot_take_the_secret_lock_twice_answers_503
             await change(db)
         await db.commit()
 
+    lost = _loses_the_transaction(sessions, FAILURES[failure])
     assert raised.value.status_code == 503
-    assert "saved" in raised.value.detail
     assert calls.count == _in_request_attempts(sessions, FAILURES[failure])
-    assert repair.scheduled == [[seed.users[member]]]
+    if lost:
+        assert raised.value.detail == LOCK_UNAVAILABLE_DETAIL
+        assert repair.scheduled == []
+    else:
+        assert "saved" in raised.value.detail
+        assert repair.scheduled == [[seed.users[member]]]
+    assert await _reaches_the_wireguard_inbound(sessions, seed.users[member]) is not lost
     state = await _phase_two_state(sessions, seed.users[member])
     assert state.peer_ips == []
     assert state.openvpn is None
@@ -380,7 +407,7 @@ async def test_a_background_repair_that_never_gets_the_lock_gives_up_with_an_err
 ):
     seed = await _seed(sessions)
     member = seed.users["paused_member"]
-    calls = _failing_lock(monkeypatch, FAILURES["deadlock"], failures_before_success=None)
+    calls = _failing_lock(monkeypatch, FAILURES["mysql-lock-wait-timeout"], failures_before_success=None)
     _, _, change = _group_change(seed, "bulk_set_groups_disabled")
 
     async with sessions() as db:
@@ -389,7 +416,7 @@ async def test_a_background_repair_that_never_gets_the_lock_gives_up_with_an_err
     healed = await repair.tasks[0]
 
     assert healed is False
-    assert calls.count == _in_request_attempts(sessions, FAILURES["deadlock"]) + 3
+    assert calls.count == _in_request_attempts(sessions, FAILURES["mysql-lock-wait-timeout"]) + 3
     assert repair.synced == []
     state = await _phase_two_state(sessions, member)
     assert state.peer_ips == []
