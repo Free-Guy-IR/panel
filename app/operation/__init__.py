@@ -107,7 +107,9 @@ class BaseOperation:
         if self.operator_type in [OperatorType.API, OperatorType.WEB]:
             raise HTTPException(status_code=code, detail=str(message))
         else:
-            raise ValueError(message)
+            error = ValueError(message)
+            error.code = code
+            raise error
 
     async def handle_rpc_error(self, exc: RuntimeError):
         """Convert NATS RPC errors to appropriate HTTP responses."""

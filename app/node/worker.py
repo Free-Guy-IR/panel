@@ -121,8 +121,11 @@ class NodeWorkerService(BaseRpcService):
                 await msg.respond(json.dumps({"ok": True, "data": result}).encode())
             except Exception as exc:
                 error_msg = str(exc)
+                carried_code = getattr(exc, "code", None)
                 # Determine error code based on error message content
-                if "NotFound" in error_msg or "not found" in error_msg.lower():
+                if type(carried_code) is int and 400 <= carried_code <= 599:
+                    error_code = carried_code
+                elif "NotFound" in error_msg or "not found" in error_msg.lower():
                     error_code = 404
                 elif "not allowed" in error_msg.lower() or "permission" in error_msg.lower():
                     error_code = 403
