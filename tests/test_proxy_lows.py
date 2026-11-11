@@ -248,6 +248,8 @@ async def test_r2_rename_of_a_connected_node_with_bad_stored_proxy_is_not_refuse
     operation = _node_operation()
     operation.get_validated_node = AsyncMock(return_value=stored)
     monkeypatch.setattr(op_module, "modify_node", AsyncMock(return_value=stored))
+    monkeypatch.setattr(op_module, "get_node_by_id", AsyncMock(return_value=stored))
+    monkeypatch.setattr(op_module, "GetDB", MagicMock())
     status_update = AsyncMock()
     operation._update_single_node_status = status_update
     monkeypatch.setattr(operation, "_connect_single_node_background", AsyncMock())

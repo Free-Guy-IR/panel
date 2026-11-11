@@ -33,7 +33,7 @@ from app.db.models import Node, NodeStatus
 from app.fork.cores.singbox_guard import singbox_index_keyed_inbounds, unsafe_singbox_node_message
 from app.fork.crud.node import CoreConfigMissing
 from app.fork.node_error_status import node_error_status
-from app.fork.operation.node_connect_jobs import run_withdrawable_connect
+from app.fork.operation.node_connect_jobs import is_retiring, run_withdrawable_connect
 from app.fork.operation.node_extras import (
     _BACKEND_TYPE_BY_CORE,  # noqa: F401
     _CONNECT_LOCKS,  # noqa: F401
@@ -313,7 +313,11 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
 
     @staticmethod
     async def _register_if_wanted(db_node: Node) -> bool:
+        if is_retiring(db_node.id):
+            return False
         async with _connect_lock(db_node.id):
+            if is_retiring(db_node.id):
+                return False
             async with GetDB() as fresh:
                 current = await get_node_by_id(fresh, db_node.id, load_usage_logs=False)
             if current is None or current.status in (NodeStatus.disabled, NodeStatus.limited):
@@ -1202,7 +1206,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         return await self._update_geofiles_impl(node_id, node_geofiles_update)
 
     async def _update_node_local(self, db_node: Node) -> None:
-        await node_manager.update_node(db_node)
+        await NodeOperation._register_if_wanted(db_node)
 
     async def _update_node_sync(self, db_node: Node) -> None:
         await self._update_node_local(db_node)
