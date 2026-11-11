@@ -97,13 +97,13 @@ from .general import (
 )
 from .group import get_groups_by_ids
 from .wireguard import (
+    committed_tags_of_groups,
     lock_for_allocation_release,
     lock_users_subnets,
     release_locked_allocations,
     release_users_allocations,
     sync_user_allocations,
     sync_users_allocations,
-    tags_from_groups,
     with_stored_peer_ips,
 )
 
@@ -1196,7 +1196,7 @@ async def create_user(
 
     db.add(db_user)
     await db.flush()
-    await sync_user_allocations(db, db_user, accessible_tags=await tags_from_groups(groups))
+    await sync_user_allocations(db, db_user, accessible_tags=await committed_tags_of_groups(db, groups))
 
     if new_user.next_plan:
         db_user.next_plan = NextPlan(user_id=db_user.id, **new_user.next_plan.model_dump())
@@ -1231,7 +1231,7 @@ async def create_users_bulk(
 
     db.add_all(db_users)
     await db.flush()
-    group_tags = await tags_from_groups(groups)
+    group_tags = await committed_tags_of_groups(db, groups)
     await sync_users_allocations(db, db_users, tags_by_user={user.id: group_tags for user in db_users})
 
     next_plans: list[NextPlan] = []
@@ -1386,7 +1386,7 @@ async def modify_user(
         db_user.proxy_settings = with_stored_peer_ips(modify.proxy_settings.dict(), db_user.proxy_settings)
     if modify.group_ids is not None:
         db_user.groups = groups or await get_groups_by_ids(db, modify.group_ids, load_users=False, load_inbounds=True)
-        await sync_user_allocations(db, db_user, accessible_tags=await tags_from_groups(db_user.groups))
+        await sync_user_allocations(db, db_user, accessible_tags=await committed_tags_of_groups(db, db_user.groups))
 
     await refresh_user_state_for_update(db, db_user, MODIFY_STATUS_KEYS)
 
@@ -1639,7 +1639,7 @@ async def reset_user_by_next(db: AsyncSession, db_user: User, *, clean_chart_dat
         await db_user.next_plan.awaitable_attrs.user_template
         await db_user.next_plan.user_template.awaitable_attrs.groups
         db_user.groups = db_user.next_plan.user_template.groups
-        await sync_user_allocations(db, db_user, accessible_tags=await tags_from_groups(db_user.groups))
+        await sync_user_allocations(db, db_user, accessible_tags=await committed_tags_of_groups(db, db_user.groups))
         from app.fork.proxy_secrets.entitled import grant_entitled_secrets_after_plan_change
 
         await grant_entitled_secrets_after_plan_change(db, db_user)

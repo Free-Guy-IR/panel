@@ -12,8 +12,8 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from app.db import AsyncSession, GetDB
 from app.db.crud.user import get_users_by_ids
-from app.db.crud.wireguard import get_wg_cores, sync_users_allocations, wg_namespaces
-from app.db.models import Admin, Group, User, WireGuardSubnet
+from app.db.crud.wireguard import sync_users_allocations
+from app.db.models import Admin, Group, User
 from app.fork.proxy_secrets import resync_markers
 from app.fork.proxy_secrets.entitled import grant_entitled_secrets
 from app.fork.proxy_secrets.errors import describe_failure
@@ -201,18 +201,10 @@ async def allocate_and_grant_in_the_change(db: AsyncSession, users: Sequence[Use
         await _attempt_twice(db, users, user_ids)
 
 
-async def lock_allocation_rows(db: AsyncSession, user_ids: Iterable[int]) -> None:
+async def lock_scope_users(db: AsyncSession, user_ids: Iterable[int]) -> None:
     ordered = sorted(set(user_ids))
     if not ordered or not holds_row_locks(db):
         return
-    networks = sorted(wg_namespaces(await get_wg_cores(db)))
-    if networks:
-        await db.execute(
-            select(WireGuardSubnet.network)
-            .where(WireGuardSubnet.network.in_(networks))
-            .order_by(WireGuardSubnet.network)
-            .with_for_update()
-        )
     for start in range(0, len(ordered), ROW_LOCK_CHUNK):
         chunk = ordered[start : start + ROW_LOCK_CHUNK]
         await db.execute(select(User.id).where(User.id.in_(chunk)).order_by(User.id).with_for_update())
@@ -220,7 +212,7 @@ async def lock_allocation_rows(db: AsyncSession, user_ids: Iterable[int]) -> Non
 
 async def lock_and_mark_group_members(db: AsyncSession, group_ids: Iterable[int]) -> None:
     user_ids = await resync_markers.group_member_ids(db, group_ids)
-    await lock_allocation_rows(db, user_ids)
+    await lock_scope_users(db, user_ids)
     await resync_markers.mark_users(db, user_ids)
 
 
@@ -228,7 +220,7 @@ async def lock_and_mark_bulk_group_scope(
     db: AsyncSession, bulk_model, allowed_group_ids: list[int] | None = None
 ) -> None:
     user_ids = await resync_markers.bulk_group_scope_ids(db, bulk_model, allowed_group_ids)
-    await lock_allocation_rows(db, user_ids)
+    await lock_scope_users(db, user_ids)
     await resync_markers.mark_users(db, user_ids)
 
 

@@ -4,6 +4,7 @@ import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_interface, ip_network
+from types import SimpleNamespace
 
 from sqlalchemy import and_, delete, false, insert, inspect, select, update
 from sqlalchemy.dialects.mysql import insert as mysql_insert
@@ -286,6 +287,19 @@ async def tags_from_groups(groups: Iterable) -> set[str]:
     return tags
 
 
+async def committed_tags_of_groups(db: AsyncSession, groups: Iterable) -> set[str]:
+    group_ids = sorted({group.id for group in groups or []})
+    if not group_ids:
+        return set()
+    statement = (
+        select(ProxyInbound.tag)
+        .join(inbounds_groups_association, inbounds_groups_association.c.inbound_id == ProxyInbound.id)
+        .join(Group, and_(Group.id == inbounds_groups_association.c.group_id, Group.is_disabled.is_(False)))
+        .where(Group.id.in_(group_ids))
+    )
+    return {tag for (tag,) in await _committed_rows(db, statement)}
+
+
 def _user_public_key(db_user_settings: dict | None) -> str | None:
     return ((db_user_settings or {}).get("wireguard") or {}).get("public_key")
 
@@ -396,6 +410,29 @@ async def get_wg_cores(db: AsyncSession) -> list[CoreConfig]:
     """Cores with managed WireGuard interfaces, across both backend types."""
     result = await db.execute(select(CoreConfig))
     return [core for core in result.scalars().all() if wg_core_interfaces(core)]
+
+
+async def _committed_wg_cores(db: AsyncSession) -> list:
+    statement = select(
+        CoreConfig.id,
+        CoreConfig.type,
+        CoreConfig.config,
+        CoreConfig.exclude_inbound_tags,
+        CoreConfig.fallbacks_inbound_tags,
+    )
+    cores = [
+        SimpleNamespace(
+            id=core_id,
+            type=core_type,
+            config=config,
+            exclude_inbound_tags=exclude_inbound_tags,
+            fallbacks_inbound_tags=fallbacks_inbound_tags,
+        )
+        for core_id, core_type, config, exclude_inbound_tags, fallbacks_inbound_tags in await _committed_rows(
+            db, statement
+        )
+    ]
+    return [core for core in cores if wg_core_interfaces(core)]
 
 
 def _accessible_tags_stmt(*, tags: Iterable[str] | None = None, user_ids: Iterable[int] | None = None):
@@ -592,7 +629,7 @@ async def sync_users_allocations(
     if not users:
         return []
     fresh_tags = tags_by_user is None
-    namespaces = wg_namespaces(await get_wg_cores(db))
+    namespaces = wg_namespaces(await _committed_wg_cores(db))
     if tags_by_user is None:
         tags_by_user = await get_users_accessible_tags(db, [user.id for user in users])
     rows = await _lock_subnet_rows(db, _touched_subnet_keys(namespaces, users, tags_by_user))
@@ -685,7 +722,7 @@ async def lock_for_allocation_release(db: AsyncSession) -> LockedWireGuardPools:
     from app.fork.proxy_secrets.locks import acquire_proxy_secrets_lock
 
     await acquire_proxy_secrets_lock(db)
-    namespaces = wg_namespaces(await get_wg_cores(db))
+    namespaces = wg_namespaces(await _committed_wg_cores(db))
     return LockedWireGuardPools(namespaces=namespaces, rows=await _lock_subnet_rows(db, namespaces))
 
 
