@@ -5,7 +5,9 @@ from sqlalchemy import select
 
 from app.db.models import Admin
 from app.models.admin import hash_password
+from app.models.api_key import APIKeyUpdate
 from tests.api import TestSession, client
+from tests.api.api_key_actor import run_as_key
 from tests.api.helpers import auth_headers, strong_password, unique_name
 
 KEY_EDITOR = {"api_keys": {"read": True, "update": True}}
@@ -72,8 +74,15 @@ def test_an_owner_custom_key_cannot_promote_itself_to_owner_level():
         assert _role_create_status(key_headers) == status.HTTP_403_FORBIDDEN
 
         promoted = client.patch(f"/api/api_key/{key['id']}", headers=key_headers, json={"inherit_permissions": True})
+        operation = run_as_key(
+            key["api_key"],
+            "modify_api_key",
+            key_id=key["id"],
+            model=APIKeyUpdate.model_validate({"inherit_permissions": True}),
+        )
 
-        assert promoted.status_code == status.HTTP_403_FORBIDDEN, promoted.text
+        assert promoted.status_code == status.HTTP_401_UNAUTHORIZED, promoted.text
+        assert operation == status.HTTP_403_FORBIDDEN
         assert _role_create_status(key_headers) == status.HTTP_403_FORBIDDEN
         stored = client.get(f"/api/api_key/{key['id']}", headers=session).json()
         assert stored["inherit_permissions"] is False

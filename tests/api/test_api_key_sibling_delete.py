@@ -1,6 +1,8 @@
 from fastapi import status
 
+from app.models.api_key import BulkAPIKeySelection
 from tests.api import client
+from tests.api.api_key_actor import OPERATION_DONE, run_as_key
 from tests.api.concurrent_requests import send_concurrently
 from tests.api.test_api_key_sibling_update import _create_key, _create_owner, _drop, _session
 
@@ -18,6 +20,10 @@ def _bulk_delete(headers: dict[str, str], ids: list[int]):
     return client.post("/api/api_keys/bulk/delete", headers=headers, json={"ids": ids})
 
 
+def _selection(ids: list[int]) -> BulkAPIKeySelection:
+    return BulkAPIKeySelection(ids=ids)
+
+
 def test_a_narrow_key_cannot_delete_a_broader_sibling_key():
     owner = _create_owner()
     try:
@@ -26,8 +32,10 @@ def test_a_narrow_key_cannot_delete_a_broader_sibling_key():
         broad = _create_key(session, BROAD)
 
         response = client.delete(f"/api/api_key/{broad['id']}", headers={"X-Api-Key": narrow["api_key"]})
+        operation = run_as_key(narrow["api_key"], "delete_api_key", key_id=broad["id"])
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.text
+        assert operation == status.HTTP_403_FORBIDDEN
         assert _exists(session, broad["id"])
     finally:
         _drop(owner["username"])
@@ -41,8 +49,10 @@ def test_a_custom_key_cannot_delete_an_inheriting_sibling_key():
         bot_key = _create_key(session, None)
 
         response = client.delete(f"/api/api_key/{bot_key['id']}", headers={"X-Api-Key": narrow["api_key"]})
+        operation = run_as_key(narrow["api_key"], "delete_api_key", key_id=bot_key["id"])
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.text
+        assert operation == status.HTTP_403_FORBIDDEN
         assert _exists(session, bot_key["id"])
     finally:
         _drop(owner["username"])
@@ -55,10 +65,13 @@ def test_a_narrow_key_cannot_bulk_delete_a_broader_sibling_key():
         narrow = _create_key(session, KEY_DELETER)
         within = _create_key(session, {"api_keys": {"read": True}})
         broad = _create_key(session, BROAD)
+        ids = [within["id"], broad["id"]]
 
-        response = _bulk_delete({"X-Api-Key": narrow["api_key"]}, [within["id"], broad["id"]])
+        response = _bulk_delete({"X-Api-Key": narrow["api_key"]}, ids)
+        operation = run_as_key(narrow["api_key"], "bulk_delete_api_keys", bulk_api_keys=_selection(ids))
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.text
+        assert operation == status.HTTP_403_FORBIDDEN
         assert _exists(session, broad["id"])
         assert _exists(session, within["id"])
     finally:
@@ -73,29 +86,37 @@ def test_a_custom_key_cannot_bulk_delete_an_inheriting_sibling_key():
         bot_key = _create_key(session, None)
 
         response = _bulk_delete({"X-Api-Key": narrow["api_key"]}, [bot_key["id"]])
+        operation = run_as_key(narrow["api_key"], "bulk_delete_api_keys", bulk_api_keys=_selection([bot_key["id"]]))
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.text
+        assert operation == status.HTTP_403_FORBIDDEN
         assert _exists(session, bot_key["id"])
     finally:
         _drop(owner["username"])
 
 
-def test_a_key_may_still_delete_a_sibling_within_its_own_permissions_and_itself():
+def test_a_key_deletes_a_sibling_within_its_permissions_and_itself_only_through_the_operation():
     owner = _create_owner()
     try:
         session = _session(owner)
         deleter = _create_key(session, KEY_DELETER)
         within = _create_key(session, {"api_keys": {"read": True}})
         bulk_within = _create_key(session, {"api_keys": {"delete": True}})
+        key = {"X-Api-Key": deleter["api_key"]}
 
-        single = client.delete(f"/api/api_key/{within['id']}", headers={"X-Api-Key": deleter["api_key"]})
-        bulk = _bulk_delete({"X-Api-Key": deleter["api_key"]}, [bulk_within["id"]])
-        own = client.delete(f"/api/api_key/{deleter['id']}", headers={"X-Api-Key": deleter["api_key"]})
+        refused = [
+            client.delete(f"/api/api_key/{within['id']}", headers=key).status_code,
+            _bulk_delete(key, [bulk_within["id"]]).status_code,
+            client.delete(f"/api/api_key/{deleter['id']}", headers=key).status_code,
+        ]
+        assert refused == [status.HTTP_401_UNAUTHORIZED] * 3
+        assert all(_exists(session, target["id"]) for target in (within, bulk_within, deleter))
 
-        assert single.status_code == status.HTTP_204_NO_CONTENT, single.text
-        assert bulk.status_code == status.HTTP_200_OK, bulk.text
-        assert bulk.json()["count"] == 1
-        assert own.status_code == status.HTTP_204_NO_CONTENT, own.text
+        single = run_as_key(deleter["api_key"], "delete_api_key", key_id=within["id"])
+        bulk = run_as_key(deleter["api_key"], "bulk_delete_api_keys", bulk_api_keys=_selection([bulk_within["id"]]))
+        own = run_as_key(deleter["api_key"], "delete_api_key", key_id=deleter["id"])
+
+        assert [single, bulk, own] == [OPERATION_DONE] * 3
         assert not _exists(session, within["id"])
         assert not _exists(session, bulk_within["id"])
         assert not _exists(session, deleter["id"])
@@ -103,21 +124,24 @@ def test_a_key_may_still_delete_a_sibling_within_its_own_permissions_and_itself(
         _drop(owner["username"])
 
 
-def test_a_custom_key_may_bulk_delete_itself():
+def test_a_custom_key_bulk_deletes_itself_only_through_the_operation():
     owner = _create_owner()
     try:
         session = _session(owner)
         deleter = _create_key(session, KEY_DELETER)
 
         response = _bulk_delete({"X-Api-Key": deleter["api_key"]}, [deleter["id"]])
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.text
+        assert _exists(session, deleter["id"])
 
-        assert response.status_code == status.HTTP_200_OK, response.text
+        operation = run_as_key(deleter["api_key"], "bulk_delete_api_keys", bulk_api_keys=_selection([deleter["id"]]))
+        assert operation == OPERATION_DONE
         assert not _exists(session, deleter["id"])
     finally:
         _drop(owner["username"])
 
 
-def test_inheriting_owner_keys_like_the_bots_still_delete_any_sibling():
+def test_inheriting_owner_keys_like_the_bots_delete_siblings_only_through_the_operation():
     owner = _create_owner()
     try:
         session = _session(owner)
@@ -125,15 +149,21 @@ def test_inheriting_owner_keys_like_the_bots_still_delete_any_sibling():
         broad = _create_key(session, BROAD)
         other_bot = _create_key(session, None)
         bulk_targets = [_create_key(session, BROAD), _create_key(session, None)]
+        bulk_ids = [key["id"] for key in bulk_targets]
 
-        single = client.delete(f"/api/api_key/{broad['id']}", headers={"X-Api-Key": bot_keys[0]["api_key"]})
-        inheriting = client.delete(f"/api/api_key/{other_bot['id']}", headers={"X-Api-Key": bot_keys[1]["api_key"]})
-        bulk = _bulk_delete({"X-Api-Key": bot_keys[2]["api_key"]}, [key["id"] for key in bulk_targets])
+        refused = [
+            client.delete(f"/api/api_key/{broad['id']}", headers={"X-Api-Key": bot_keys[0]["api_key"]}).status_code,
+            client.delete(f"/api/api_key/{other_bot['id']}", headers={"X-Api-Key": bot_keys[1]["api_key"]}).status_code,
+            _bulk_delete({"X-Api-Key": bot_keys[2]["api_key"]}, bulk_ids).status_code,
+        ]
+        assert refused == [status.HTTP_401_UNAUTHORIZED] * 3
+        assert all(_exists(session, target["id"]) for target in (broad, other_bot, *bulk_targets))
 
-        assert single.status_code == status.HTTP_204_NO_CONTENT, single.text
-        assert inheriting.status_code == status.HTTP_204_NO_CONTENT, inheriting.text
-        assert bulk.status_code == status.HTTP_200_OK, bulk.text
-        assert bulk.json()["count"] == 2
+        single = run_as_key(bot_keys[0]["api_key"], "delete_api_key", key_id=broad["id"])
+        inheriting = run_as_key(bot_keys[1]["api_key"], "delete_api_key", key_id=other_bot["id"])
+        bulk = run_as_key(bot_keys[2]["api_key"], "bulk_delete_api_keys", bulk_api_keys=_selection(bulk_ids))
+
+        assert [single, inheriting, bulk] == [OPERATION_DONE] * 3
         for bot_key in bot_keys:
             assert client.get("/api/admin", headers={"X-Api-Key": bot_key["api_key"]}).status_code == status.HTTP_200_OK
     finally:
@@ -158,7 +188,7 @@ def test_concurrent_sibling_deletes_by_a_narrow_key_all_fail_while_the_session_s
         calls = [("DELETE", url, {"headers": narrow_headers})] * 3 + [bulk_call] * 2
         narrow_codes = [response.status_code for response in send_concurrently(calls)]
 
-        assert narrow_codes == [status.HTTP_403_FORBIDDEN] * 5
+        assert narrow_codes == [status.HTTP_401_UNAUTHORIZED] * 5
         assert _exists(session, broad["id"])
         assert _exists(session, bulk_broad["id"])
 
@@ -166,7 +196,7 @@ def test_concurrent_sibling_deletes_by_a_narrow_key_all_fail_while_the_session_s
         session_code, *late_codes = [response.status_code for response in send_concurrently(calls)]
 
         assert session_code == status.HTTP_204_NO_CONTENT
-        assert all(code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND) for code in late_codes)
+        assert late_codes == [status.HTTP_401_UNAUTHORIZED] * 2
         assert not _exists(session, broad["id"])
     finally:
         _drop(owner["username"])

@@ -6,6 +6,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from app import notification
 from app.db import AsyncSession, get_db
+from app.fork.auth.session import require_session_permission
 from app.models.admin import (
     AdminCreate,
     AdminDetails,
@@ -39,6 +40,7 @@ from .dependencies import get_admin_list_query, get_admin_simple_list_query, get
 
 router = APIRouter(tags=["Admin"], prefix="/api/admin", responses={401: responses._401, 403: responses._403})
 admin_operator = AdminOperation(operator_type=OperatorType.API)
+create_admin_session = require_session_permission("admins", "create")
 
 
 @router.post("/token", response_model=Token)
@@ -88,7 +90,7 @@ async def admin_mini_app_token(
 async def create_admin(
     new_admin: AdminCreate,
     db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("admins", "create")),
+    admin: AdminDetails = Depends(create_admin_session),
 ):
     """Create a new admin."""
     return await admin_operator.create_admin(db, new_admin=new_admin, admin=admin)
