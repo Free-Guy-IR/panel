@@ -52,3 +52,21 @@ def test_an_unclosed_field_still_gets_the_brace_message(value):
         CustomVariableInput(key="PROMO", value=value)
 
     assert "needs a partner" in str(refused.value)
+
+
+@pytest.mark.parametrize("value", ["}} {USERNAME!}", "{{ {USERNAME!rr}", "{USERNAME!} }}"])
+def test_escaped_braces_next_to_a_balanced_parse_error_do_not_get_the_brace_message(value):
+    with pytest.raises(ValidationError) as refused:
+        CustomVariableInput(key="PROMO", value=value)
+
+    message = str(refused.value)
+    assert "needs a partner" not in message
+    assert "Invalid formatting variables" in message
+
+
+@pytest.mark.parametrize("value", ["}} {USERNAME", "{{ }"])
+def test_a_stray_brace_after_escaped_braces_still_gets_the_brace_message(value):
+    with pytest.raises(ValidationError) as refused:
+        CustomVariableInput(key="PROMO", value=value)
+
+    assert "needs a partner" in str(refused.value)
