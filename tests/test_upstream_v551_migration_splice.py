@@ -18,7 +18,8 @@ from app.fork.db_rollback import current_heads, default_config, rollback
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSIONS = ROOT / "app" / "db" / "migrations" / "versions"
-HEAD = "b708c8d4fc31"
+MERGE = "b708c8d4fc31"
+HEAD = "2d198a5a8068"
 V551_MERGE = "2e045b99a67e"
 FORK_HEAD = "e79833e2a0b2"
 UPSTREAM_V551_TIP = "c8d2e4f6a1b3"
@@ -184,11 +185,12 @@ def _git_blob(path: Path) -> str:
     return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 
 
-def test_the_graph_has_one_head_that_merges_the_fork_head_with_the_upstream_v560_tip():
+def test_the_graph_has_one_head_above_the_merge_of_the_fork_head_with_the_upstream_v560_tip():
     script = ScriptDirectory.from_config(default_config())
 
     assert script.get_heads() == [HEAD]
-    assert script.get_revision(HEAD).down_revision == (V551_MERGE, UPSTREAM_TIP)
+    assert script.get_revision(HEAD).down_revision == MERGE
+    assert script.get_revision(MERGE).down_revision == (V551_MERGE, UPSTREAM_TIP)
     assert script.get_revision(V551_MERGE).down_revision == (FORK_HEAD, UPSTREAM_V551_TIP)
     assert script.get_revision("b7e2c4d91f60").down_revision == "b4c7e8f1a2d3"
     parents = [UPSTREAM_V551_TIP, *UPSTREAM_V560_CHAIN[:-1]]
@@ -207,14 +209,16 @@ def test_the_v551_merge_revision_keeps_its_released_parents_and_content():
     )
 
 
-@pytest.mark.parametrize(("merge", "parent"), [(HEAD, V551_MERGE), (V551_MERGE, FORK_HEAD)])
+@pytest.mark.parametrize(("merge", "parent"), [(MERGE, V551_MERGE), (V551_MERGE, FORK_HEAD)])
 def test_a_plain_downgrade_of_either_merge_revision_is_refused(tmp_path, merge, parent):
     with _scratch_database(tmp_path, "refuse") as url:
         config = _config(url)
         _quiet(upgrade, config, "head")
         if merge == V551_MERGE:
             _quiet(rollback, config, V551_MERGE, echo=lambda _line: None)
-            assert _versions(url) == [V551_MERGE]
+        else:
+            _quiet(downgrade, config, MERGE)
+        assert _versions(url) == [merge]
         before = _schema(url)
 
         with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
@@ -237,9 +241,9 @@ def test_a_database_stamped_at_an_earlier_tip_gets_every_missing_revision(tmp_pa
 
         assert missing
         if stamp == UPSTREAM_TIP:
-            assert {FORK_HEAD, V551_MERGE, HEAD} <= missing
+            assert {FORK_HEAD, V551_MERGE, MERGE, HEAD} <= missing
         else:
-            assert set(UPSTREAM_V560_CHAIN) | {HEAD} == missing
+            assert set(UPSTREAM_V560_CHAIN) | {MERGE, HEAD} == missing
         assert _versions(url) == [HEAD]
         assert _schema(url) == _schema(fresh)
 
@@ -451,7 +455,7 @@ def test_downgrade_to_the_fork_head_and_to_production_then_upgrade_again(tmp_pat
 
         with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
             _quiet(downgrade, config, FORK_HEAD)
-        assert _versions(url) == [HEAD]
+        assert _versions(url) == [MERGE]
 
         _quiet(rollback, config, FORK_HEAD, echo=lambda _line: None)
         assert current_heads(config) == (FORK_HEAD,)

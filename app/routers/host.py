@@ -73,7 +73,7 @@ async def modify_host(
 async def remove_host(
     host_id: int,
     db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("hosts", "update")),
+    admin: AdminDetails = Depends(require_permission("hosts", "delete")),
 ):
     """
     remove host by **id**
@@ -102,7 +102,7 @@ async def modify_hosts(
 async def bulk_delete_hosts(
     bulk_hosts: BulkHostSelection,
     db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("hosts", "update")),
+    admin: AdminDetails = Depends(require_permission("hosts", "delete")),
 ):
     """Delete selected hosts by ID."""
     return await host_operator.bulk_remove_hosts(db, bulk_hosts, admin)

@@ -13,6 +13,7 @@ from app.db.crud.host import (
     remove_hosts,
 )
 from app.db.models import ProxyHost
+from app.fork.operation.host_guards import creation_refusal, vanished_hosts_conflict
 from app.models.admin import AdminDetails
 from app.models.client_template import ClientTemplateType
 from app.models.host import (
@@ -140,6 +141,7 @@ class HostOperation(BaseOperation):
     async def modify_hosts(
         self, db: AsyncSession, modified_hosts: list[CreateHost], admin: AdminDetails
     ) -> list[BaseHost]:
+        hosts_by_id: dict[int, ProxyHost] = {}
         try:
             db_hosts = await get_hosts(db=db)
             hosts_by_id = {host.id: host for host in db_hosts}
@@ -147,6 +149,8 @@ class HostOperation(BaseOperation):
             modified_ids = set(host_ids)
             if len(host_ids) != len(modified_ids):
                 await self.raise_error("Duplicate host IDs", 400, db=db)
+            if refusal := creation_refusal(admin, modified_hosts, hosts_by_id):
+                await self.raise_error(refusal, 403, db=db)
             final_hosts = hosts_by_id | {host.id: host for host in modified_hosts if host.id in hosts_by_id}
             for host in modified_hosts:
                 await self.validate_subscription_templates(db, host)
@@ -157,8 +161,10 @@ class HostOperation(BaseOperation):
                     await self.validate_ds_host(db, host, host.id, hosts_by_id=final_hosts)
             await self.check_host_inbound_tags(list({host.inbound_tag for host in modified_hosts if host.inbound_tag}))
             await crud_modify_hosts(db, modified_hosts, db_hosts)
-        except Exception:
+        except Exception as exc:
             await db.rollback()
+            if conflict := await vanished_hosts_conflict(db, exc, modified_hosts, hosts_by_id):
+                await self.raise_error(conflict, 409)
             raise
 
         db_hosts = await get_hosts(db=db)
