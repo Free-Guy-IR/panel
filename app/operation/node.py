@@ -34,6 +34,7 @@ from app.db.crud.user import get_user_by_id, get_user_count_metric_stats
 from app.db.models import Node, NodeStatus
 from app.fork.cores.singbox_guard import singbox_index_keyed_inbounds, unsafe_singbox_node_message
 from app.fork.crud.node import CoreConfigMissing
+from app.fork.node_error_status import node_error_status
 from app.fork.operation.node_extras import (
     _BACKEND_TYPE_BY_CORE,  # noqa: F401
     _CONNECT_LOCKS,  # noqa: F401
@@ -139,7 +140,7 @@ _BRIDGE_TIMEOUT_CODE = -1
 
 def _maintenance_error_status(error: NodeAPIError) -> int:
     if error.code > 0:
-        return error.code
+        return node_error_status(error.code)
     if error.code == _BRIDGE_TIMEOUT_CODE or isinstance(error.__cause__, TimeoutError):
         return 504
     return 503
@@ -1486,7 +1487,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         try:
             stats = await node.get_system_stats()
         except NodeAPIError as e:
-            await self.raise_error(message=e.detail, code=e.code)
+            await self.raise_error(message=e.detail, code=node_error_status(e.code))
 
         if stats is None:
             await self.raise_error(message="Stats not found", code=404)
@@ -1544,7 +1545,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         try:
             latency = await node.get_outbounds_latency(name=name, timeout=timeout)
         except NodeAPIError as e:
-            await self.raise_error(message=e.detail, code=e.code)
+            await self.raise_error(message=e.detail, code=node_error_status(e.code))
 
         if latency is None:
             await self.raise_error(message="Latency not found", code=404)
@@ -1590,7 +1591,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         try:
             stats = await node.get_user_online_stats(email=f"{db_user.id}")
         except NodeAPIError as e:
-            await self.raise_error(message=e.detail, code=e.code)
+            await self.raise_error(message=e.detail, code=node_error_status(e.code))
 
         if stats is None:
             await self.raise_error(message="Stats not found", code=404)
@@ -1684,7 +1685,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             await self.raise_error(message=e.detail, code=e.code)
         except NodeAPIError as e:
             await update_node_status(db=db, db_node=db_node, status=NodeStatus.error, message=e.detail)
-            await self.raise_error(message=e.detail, code=e.code)
+            await self.raise_error(message=e.detail, code=node_error_status(e.code))
 
         return NodeResponse.model_validate(db_node)
 

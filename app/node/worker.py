@@ -12,6 +12,7 @@ from app.core.manager import core_manager
 from app.db import GetDB
 from app.db.crud.node import get_node_by_id, get_nodes
 from app.db.models import NodeStatus
+from app.fork.node_error_status import carried_http_error_status
 from app.fork.operation.node_extras import forget_connect_pushes
 from app.fork.operation.node_messages import describe_error, scrub_credentials
 from app.models.node import NodeCoreUpdate, NodeGeoFilesUpdate, NodeListQuery
@@ -121,9 +122,9 @@ class NodeWorkerService(BaseRpcService):
                 await msg.respond(json.dumps({"ok": True, "data": result}).encode())
             except Exception as exc:
                 error_msg = str(exc)
-                carried_code = getattr(exc, "code", None)
+                carried_code = carried_http_error_status(getattr(exc, "code", None))
                 # Determine error code based on error message content
-                if type(carried_code) is int and 400 <= carried_code <= 599:
+                if carried_code is not None:
                     error_code = carried_code
                 elif "NotFound" in error_msg or "not found" in error_msg.lower():
                     error_code = 404

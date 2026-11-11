@@ -20,6 +20,7 @@ from app.db.crud.admin import get_admin_by_id
 from app.db.crud.group import get_groups_by_ids
 from app.db.crud.user import get_user_by_id, get_wireguard_subscription_user
 from app.db.models import Admin as DBAdmin, ClientTemplate, CoreConfig, Group, Node, ProxyHost, User, UserTemplate
+from app.fork.node_error_status import node_error_status
 from app.fork.operation.base_extras import reject_disallowed_assigned_groups
 from app.fork.operation.group_scope import user_within_allowed_groups
 from app.models.admin import AdminDetails
@@ -114,7 +115,7 @@ class BaseOperation:
     async def handle_rpc_error(self, exc: RuntimeError):
         """Convert NATS RPC errors to appropriate HTTP responses."""
         code = getattr(exc, "code", 500)
-        await self.raise_error(message=str(exc), code=code)
+        await self.raise_error(message=str(exc), code=node_error_status(code))
 
     async def validate_dates(
         self, start: dt | None, end: dt | None, set_default_values: bool, period: Period | None = None
