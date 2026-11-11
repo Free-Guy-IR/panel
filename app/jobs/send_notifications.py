@@ -40,6 +40,8 @@ async def _send_webhook(client: aiohttp.ClientSession, webhook: WebhookInfo, pay
             logger.warning("Webhook delivery failed with HTTP %s", response.status)
     except aiohttp.ClientError, TimeoutError:
         logger.warning("Webhook delivery failed due to a connection error or timeout")
+    except Exception as err:
+        logger.warning("Webhook delivery failed: %s", type(err).__name__)
     return False
 
 

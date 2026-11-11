@@ -74,6 +74,16 @@ async def _post_notification(url: str, **kwargs) -> tuple[bool, float]:
     return False, 1
 
 
+async def _post_notification_safely(url: str, **kwargs) -> tuple[bool, float]:
+    try:
+        return await _post_notification(url, **kwargs)
+    except aiohttp.ClientError, TimeoutError:
+        raise
+    except Exception as err:
+        logger.warning("Notification delivery failed: %s", type(err).__name__)
+        return False, 1
+
+
 async def send_discord_webhook(json_data, webhook: str | None):
     """Enqueue Discord notification for processing"""
     if not webhook:
@@ -127,7 +137,7 @@ async def process_notification(delivery: NotificationDelivery):
                     await delivery.ack()
                     return
                 await delivery.prepare(notification.model_dump())
-                success, delay = await _post_notification(notification.webhook, json=notification.json_data)
+                success, delay = await _post_notification_safely(notification.webhook, json=notification.json_data)
             else:
                 if not settings.notify_telegram or not settings.telegram_api_token or not notification.chat_id:
                     await delivery.ack()
@@ -136,7 +146,7 @@ async def process_notification(delivery: NotificationDelivery):
                 if notification.topic_id:
                     payload["message_thread_id"] = notification.topic_id
                 await delivery.prepare(notification.model_dump())
-                success, delay = await _post_notification(
+                success, delay = await _post_notification_safely(
                     f"https://api.telegram.org/bot{settings.telegram_api_token}/sendMessage", data=payload
                 )
         except aiohttp.ClientError, TimeoutError:
