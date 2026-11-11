@@ -3046,6 +3046,77 @@ def test_a_security_fix_ported_by_design_needs_a_fork_commit_still_in_place(tmp_
         )
 
 
+SVC = (
+    "from lib import a, b\n\nFLAGS = 1\nLIMITS = 2\nNAMES = 3\nMODES = 4\nZONES = 5\nRATES = 6\n\n\n"
+    "def handle(user):\n    a(user)\n    return b(user)\n"
+)
+SVC_FIXED = SVC.replace("from lib import a, b\n", "from lib import a, b, check\n").replace(
+    "    a(user)\n", "    check(user)\n    a(user)\n"
+)
+SVC_LATER = SVC_FIXED.replace("from lib import a, b, check\n", "from lib import (\n    a,\n    b,\n    check,\n)\n")
+
+
+def superseded_world(tmp_path, case):
+    path = tmp_path / f"superseded-{case}"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "upstream base", {"svc.py": SVC})
+    git(path, "tag", "v1.0")
+    fix = commit(path, "fix: check the caller before handling", {"svc.py": SVC_FIXED})
+    later = commit(path, "style: wrap the lib import", {"svc.py": SVC_LATER})
+    git(path, "update-ref", "refs/remotes/upstream/dev", later)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    fork_import = "from lib import check, a, b\n" if case == "fork-form-restored" else "from lib import a, b, check\n"
+    carrier = commit(
+        path,
+        "fork: check the caller before handling",
+        {"svc.py": SVC_FIXED.replace("from lib import a, b, check\n", fork_import), "fork.py": "fork\n"},
+    )
+    if case in ("upstream-later-form", "security-dropped"):
+        git(path, "cherry-pick", "-x", later)
+    if case == "fork-form-restored":
+        commit(path, "fork: take upstream's import", {"svc.py": SVC_LATER})
+    elif case == "dropped":
+        commit(path, "fork: drop the lib import", {"svc.py": SVC_FIXED.replace("from lib import a, b, check\n", "")})
+    elif case == "fork-variant":
+        commit(
+            path,
+            "fork: import the fork helper too",
+            {"svc.py": SVC_FIXED.replace("from lib import a, b, check\n", "from lib import a, b, check, fork_extra\n")},
+        )
+    elif case == "security-dropped":
+        commit(path, "fork: handle without the check", {"svc.py": SVC_LATER.replace("    check(user)\n", "")})
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the caller itself in fork commit {carrier} security: yes\n"
+    )
+    if case not in ("upstream-later-form", "security-dropped"):
+        text += f"\n## Waived\n\n- `{later}` wraps an import, decided on its own security: no\n"
+    return path, fix, text
+
+
+@pytest.mark.parametrize(
+    ("case", "code"),
+    [
+        ("upstream-later-form", 0),
+        ("fork-form-restored", 0),
+        ("dropped", 1),
+        ("fork-variant", 1),
+        ("security-dropped", 1),
+    ],
+)
+def test_a_carrier_line_replaced_by_upstreams_own_form_still_carries_a_security_design_port(tmp_path, case, code):
+    path, fix, text = superseded_world(tmp_path, case)
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but its reason names no fork commit on main" in (
+            result.stdout
+        )
+
+
 @pytest.mark.parametrize(
     ("named_path", "undo_guard", "code"),
     [(" in guard.py:2", False, 0), ("", False, 1), (" in guard.py:2", True, 1), (" in NOTES.md", False, 1)],

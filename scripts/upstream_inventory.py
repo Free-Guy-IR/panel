@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import ast
+import difflib
 import functools
 import hashlib
 import io
@@ -1733,7 +1734,56 @@ def own_lines_in_place(lines, path, side, dropped, inserted, gone=frozenset()):
     return False
 
 
-def own_lines_missing(fork_sha, head, paths):
+def later_change_blocks(old_ref, new_ref, path):
+    blocks = []
+    for line in git("diff", "-U0", "--no-color", "--no-ext-diff", old_ref, new_ref, "--", path).splitlines():
+        match = HUNK_COUNTS_RE.match(line)
+        if match:
+            old_at, old_count, new_at, new_count = (
+                int(match.group(n)) if match.group(n) is not None else 1 for n in (1, 2, 3, 4)
+            )
+            blocks.append(
+                (frozenset(range(old_at, old_at + old_count)), frozenset(range(new_at, new_at + new_count)))
+            )
+    return blocks
+
+
+@functools.lru_cache(maxsize=256)
+def aligned_positions(lines, reference_lines):
+    matcher = difflib.SequenceMatcher(None, lines, reference_lines, autojunk=False)
+    return frozenset(i + k for i, _, size in matcher.get_matching_blocks() for k in range(size))
+
+
+def own_hunk_in_upstream_form(fork_sha, head, path, hunk, reference, here, dropped, inserted, gone):
+    upstream_now = normalised_file(reference, path) if reference else None
+    if upstream_now is None or here is None or hunk["post_span"] is None:
+        return False
+    start = hunk["post_span"][0]
+    span = frozenset(range(start, start + len(hunk["post"])))
+    own = {start + k for k, (text, changed) in enumerate(hunk["post"]) if changed and normalise_line(path, text)}
+    upstream_places = aligned_positions(here, upstream_now)
+    replacements = {}
+    covered = set()
+    for removed, added_numbers in later_change_blocks(fork_sha, head, path):
+        if not removed & own:
+            continue
+        added = sorted(normalised_positions(head, path, added_numbers))
+        if not added or not set(added) <= upstream_places:
+            return False
+        replacements[min(removed & span)] = tuple(here[i] for i in added)
+        covered |= removed
+    if not replacements:
+        return False
+    side = []
+    for k, entry in enumerate(hunk["post"]):
+        number = start + k
+        side.extend((text, True) for text in replacements.get(number, ()))
+        if number not in covered:
+            side.append(entry)
+    return own_lines_in_place(here, path, side, dropped, inserted, gone)
+
+
+def own_lines_missing(fork_sha, head, paths, reference=None):
     expected = 0
     missing = []
     for hunk in commit_hunks(fork_sha):
@@ -1751,14 +1801,17 @@ def own_lines_missing(fork_sha, head, paths):
         here = normalised_file(head, path)
         if check_post:
             dropped, inserted, gone = later_line_changes(fork_sha, head, path, hunk["post_span"])
-            if not own_lines_in_place(here, path, hunk["post"], dropped, inserted, gone):
+            if not own_lines_in_place(here, path, hunk["post"], dropped, inserted, gone) and not (
+                reference
+                and own_hunk_in_upstream_form(fork_sha, head, path, hunk, reference, here, dropped, inserted, gone)
+            ):
                 missing.append((path, post[1][0]))
         elif block_in_place(here, pre):
             missing.append((path, f"-{pre[1][0]}"))
     return expected, missing
 
 
-def design_fork_commit(reason, head, upstream_sha, in_range):
+def design_fork_commit(reason, head, upstream_sha, in_range, reference=None):
     upstream_paths = set(commit_paths(upstream_sha))
     for fork_sha in named_commits(reason, head, upstream_sha):
         if fork_sha in in_range:
@@ -1768,7 +1821,7 @@ def design_fork_commit(reason, head, upstream_sha, in_range):
         if not brought and not picks_upstream(fork_sha, upstream_sha):
             continue
         named = {path for path in touched if re.search(rf"(?<![\w./-]){re.escape(path)}(?![\w/-])", reason)}
-        expected, missing = own_lines_missing(fork_sha, head, named | brought if named else touched)
+        expected, missing = own_lines_missing(fork_sha, head, named | brought if named else touched, reference)
         if expected and not missing:
             return fork_sha
     return None
@@ -3887,7 +3940,8 @@ def parity_gate(
             if strict_security_design:
                 problems = security_design_problems(entry["reason"], head, sha, entry.get("exception_covers", {}))
             else:
-                carried = design_fork_commit(entry["reason"], head, sha, in_range)
+                tips = [tip_by_name[name] for name in sorted(containing.get(sha, [])) if name in tip_by_name]
+                carried = design_fork_commit(entry["reason"], head, sha, in_range, pick_reference(sha, upstream, tips))
                 problems = [] if carried or superseding_pick(entry["reason"], head, sha) else None
             if problems is None:
                 del coverage[sha]
