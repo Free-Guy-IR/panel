@@ -5,6 +5,7 @@ import { AdminDetails, getGetGeneralSettingsQueryKey, getGetSettingsQueryKey, us
 import { useQueryClient } from '@tanstack/react-query'
 import { Bell, Database, Fingerprint, ListTodo, LucideIcon, Palette, Send, Settings as SettingsIcon, Webhook } from 'lucide-react'
 import { forkSettingsTabs, forkSettingsTabsFor } from '@/fork/pages/tabs'
+import { settingsTabVisibleTo } from '@/fork/settings/credential-tabs'
 import { createContext, useCallback, useContext, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation, useNavigate } from 'react-router'
@@ -57,10 +58,12 @@ export default function Settings() {
   const canUpdateSettings = hasPermission(admin, 'settings', 'update')
   const canReadSettings = hasPermission(admin, 'settings', 'read') && canUpdateSettings
   const canReadGeneral = hasPermission(admin, 'settings', 'read_general') && canUpdateSettings
-  const allowedForkTabIds = new Set(forkSettingsTabsFor(isOwner(admin as unknown as AdminDetails | null)).map(tab => tab.id))
+  const isPanelOwner = isOwner(admin as unknown as AdminDetails | null)
+  const allowedForkTabIds = new Set(forkSettingsTabsFor(isPanelOwner).map(tab => tab.id))
   const forkTabIds = new Set(forkSettingsTabs.map(tab => tab.id))
   const tabs = allTabs.filter(tab => {
     if (forkTabIds.has(tab.id) && !allowedForkTabIds.has(tab.id)) return false
+    if (!settingsTabVisibleTo(tab.id, isPanelOwner)) return false
     if (tab.id === 'theme') return true
     if (tab.id === 'general') return canReadGeneral
     return canReadSettings

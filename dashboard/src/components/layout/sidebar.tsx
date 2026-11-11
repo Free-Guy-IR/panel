@@ -11,6 +11,8 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { REPO_URL } from '@/constants/Project'
 import { forkMainNavItemsFor } from '@/fork/pages'
+import { settingsUrlVisibleTo } from '@/fork/settings/credential-tabs'
+import type { AdminDetails } from '@/service/api'
 import { useAdmin } from '@/hooks/use-admin'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { useSystemVersion } from '@/hooks/use-system-version'
@@ -369,7 +371,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   url: '/settings/cleanup',
                   icon: Database,
                 },
-              ]
+              ].filter(item => settingsUrlVisibleTo(item.url, isOwner(admin as unknown as AdminDetails | null)))
             : []),
           {
             title: 'theme.title',
