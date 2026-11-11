@@ -1321,7 +1321,85 @@ def block_in_place(lines, side):
     return False
 
 
-def missing_pick_lines(upstream_sha, reference, head, paths=None):
+def changed_runs(path, side):
+    runs = []
+    current = []
+    for text, changed in side:
+        text = normalise_line(path, text)
+        if not text:
+            continue
+        if changed:
+            current.append(text)
+        elif current:
+            runs.append(tuple(current))
+            current = []
+    if current:
+        runs.append(tuple(current))
+    return runs
+
+
+@functools.lru_cache(maxsize=1024)
+def renamed_sources(carrier):
+    if not commit_exists(f"{carrier}^"):
+        return frozenset()
+    fields = git("diff", "--name-status", "-z", "-M", f"{carrier}^", carrier).split("\0")
+    sources = set()
+    index = 0
+    while index < len(fields) and fields[index]:
+        status = fields[index]
+        if status.startswith(("R", "C")):
+            if status.startswith("R"):
+                sources.add(fields[index + 1])
+            index += 3
+        else:
+            index += 2
+    return frozenset(sources)
+
+
+def carrier_runs(carrier, path, side, removal):
+    ref = f"{carrier}^" if removal else carrier
+    if removal and (not commit_exists(ref) or path in renamed_sources(carrier)):
+        return []
+    lines = normalised_file(ref, path)
+    if lines is None:
+        return []
+    removed, added = fork_line_changes(carrier, path)
+    changes = removed if removal else added
+    return [
+        run
+        for run in changed_runs(path, side)
+        if any(i + offset in changes for i in block_positions(lines, ((), run, ())) for offset in range(len(run)))
+    ]
+
+
+def carrier_deleted(carrier, path):
+    return (
+        commit_exists(f"{carrier}^")
+        and path not in renamed_sources(carrier)
+        and normalised_file(f"{carrier}^", path) is not None
+        and normalised_file(carrier, path) is None
+    )
+
+
+def pick_changes_hunk(hunk, carriers, reference, head):
+    old, new = hunk["old"], hunk["new"]
+    for carrier in carriers:
+        if old is not None and carrier_runs(carrier, old, hunk["pre"], True):
+            return True
+        if new is None:
+            if old is not None and carrier_deleted(carrier, old):
+                return True
+            continue
+        for run in carrier_runs(carrier, new, hunk["post"], False):
+            block = ((), run, ())
+            if block_in_place(normalised_file(head, new), block) or not block_in_place(
+                normalised_file(reference, new), block
+            ):
+                return True
+    return False
+
+
+def missing_pick_lines(upstream_sha, reference, head, paths=None, carriers=None):
     expected = 0
     missing = []
     for hunk in commit_hunks(upstream_sha):
@@ -1331,16 +1409,28 @@ def missing_pick_lines(upstream_sha, reference, head, paths=None):
         post = hunk_side(path, hunk["post"])
         pre = hunk_side(path, hunk["pre"])
         upstream_now = normalised_file(reference, path)
+        here = normalised_file(head, path)
         check_post = hunk["new"] is not None and post is not None and block_in_place(upstream_now, post)
         check_pre = pre is not None and pre != post and not block_in_place(upstream_now, pre)
-        if not (check_post or check_pre):
+        lost = (post is not None or pre is not None) and upstream_now is not None and here is None
+        if not (check_post or check_pre or lost):
             continue
         expected += 1
-        here = normalised_file(head, path)
-        if check_post and not block_in_place(here, post):
+        if lost:
+            missing.append((path, "the file is not on the head"))
+        elif check_post and not block_in_place(here, post):
             missing.append((path, post[1][0]))
-        elif check_pre and block_in_place(here, pre):
+        elif check_pre and any(
+            block_in_place(normalised_file(head, side), pre) for side in dict.fromkeys((hunk["old"], hunk["new"])) if side
+        ):
             missing.append((path, f"-{pre[1][0]}"))
+        elif (
+            check_pre
+            and not check_post
+            and carriers is not None
+            and not pick_changes_hunk(hunk, carriers, reference, head)
+        ):
+            missing.append((path, f"removed by no carrier: -{pre[1][0]}"))
     return expected, missing
 
 
@@ -1384,7 +1474,7 @@ def ineffective_picks(head, candidates, upstream, tips_for):
                 f"every fork commit carrying its trailer is reverted ({', '.join(c[:12] for c in fork_commits)})"
             )
             continue
-        expected, missing = missing_pick_lines(sha, pick_reference(sha, upstream, tips_for(sha)), head)
+        expected, missing = missing_pick_lines(sha, pick_reference(sha, upstream, tips_for(sha)), head, carriers=live)
         if missing:
             path, text = missing[0]
             findings[sha] = (

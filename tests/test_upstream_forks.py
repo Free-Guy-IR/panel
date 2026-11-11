@@ -1023,3 +1023,95 @@ def test_a_fork_commit_cited_in_the_sync_ledger_must_be_in_fork_history(world, c
     assert f"cites fork commit {sha}, which is not in the history of refs/remotes/fork/main" in result.stdout, (
         result.stdout
     )
+
+
+CONFIG_GO = (
+    "package config\n\n"
+    "func Load() (*Config, error) {\n"
+    "\tcfg := &Config{}\n"
+    "\tif cfg.LogBufferSize <= 0 {\n"
+    "\t\tcfg.LogBufferSize = 1\n"
+    "\t}\n\n"
+    '\tcfg.ApiKey, err = GetEnvAsUUID("API_KEY")\n'
+    "\tif err != nil {\n"
+    '\t\tlog.Printf("[Error] Failed to load API Key, error: %v", err)\n'
+    "\t}\n\n"
+    '\tnodeHostStr := GetEnv("NODE_HOST", "0.0.0.0")\n'
+    '\tif nodeHostStr == "localhost" {\n'
+    '\t\tnodeHostStr = "127.0.0.1"\n'
+    "\t}\n"
+    '\tif strings.TrimSpace(nodeHostStr) == "" {\n'
+    '\t\tnodeHostStr = "0.0.0.0"\n'
+    "\t}\n"
+    "\tcfg.NodeHost = nodeHostStr\n\n"
+    "\treturn cfg, nil\n"
+    "}\n"
+)
+UPSTREAM_KEY_CHECK = (
+    "\t// The API key is the only authentication of the node.\n"
+    "\tvar apiKeyErr error\n"
+    '\tcfg.ApiKey, apiKeyErr = GetEnvAsUUID("API_KEY")\n'
+    "\tif apiKeyErr == nil && cfg.ApiKey == uuid.Nil {\n"
+    '\t\tapiKeyErr = errors.New("must not be the all-zero UUID")\n'
+)
+OLD_KEY_LOAD = (
+    '\tcfg.ApiKey, err = GetEnvAsUUID("API_KEY")\n'
+    "\tif err != nil {\n"
+    '\t\tlog.Printf("[Error] Failed to load API Key, error: %v", err)\n'
+)
+NODE_HOST_BLOCK = CONFIG_GO[CONFIG_GO.index("\tnodeHostStr") : CONFIG_GO.index("\n\treturn")]
+NODE_HOST_LINE = '\tcfg.NodeHost = parseNodeHost(GetEnv("NODE_HOST", "0.0.0.0"))\n'
+CONFIG_GO_FIXED = CONFIG_GO.replace(OLD_KEY_LOAD, UPSTREAM_KEY_CHECK).replace("return cfg, nil", "return cfg, apiKeyErr")
+CONFIG_GO_LATER = CONFIG_GO_FIXED.replace(NODE_HOST_BLOCK, NODE_HOST_LINE)
+CONFIG_GO_FORK = CONFIG_GO.replace(
+    OLD_KEY_LOAD + "\t}\n",
+    '\tkey, err := GetEnvAsUUID("API_KEY")\n'
+    "\tif err != nil || key == uuid.Nil {\n"
+    '\t\treturn nil, fmt.Errorf("invalid API_KEY: %v", err)\n'
+    "\t}\n"
+    "\tcfg.ApiKey = key\n",
+).replace(NODE_HOST_BLOCK, NODE_HOST_LINE)
+CONFIG_GO_PORTED = CONFIG_GO_LATER.replace(UPSTREAM_KEY_CHECK.split("\n", 1)[0] + "\n", "")
+
+
+def api_key_world(tmp_path):
+    upstream = new_repo(tmp_path / "upstream")
+    base = commit(upstream, "base", {"config/config.go": CONFIG_GO})
+    fix = commit(upstream, "fix(config): refuse to start without a valid API_KEY", {"config/config.go": CONFIG_GO_FIXED})
+    later = commit(upstream, "refactor(config): parse NODE_HOST in one place", {"config/config.go": CONFIG_GO_LATER})
+    fork = new_repo(tmp_path / "fork")
+    commit(fork, "fork root", {"config/config.go": CONFIG_GO_FORK})
+    panel = new_repo(tmp_path / "panel")
+    (panel / "upstream-forks").mkdir()
+    world = {"tmp": tmp_path, "upstream": upstream, "fork": fork, "panel": panel, "base": base, "fix": fix}
+    config = shared_map(world)
+    (panel / "upstream-forks" / "kit.md").write_text(
+        f"## Waived\n\n- `{later}` moves NODE_HOST parsing into one helper, decided on its own security: no\n"
+    )
+    return world, config
+
+
+@pytest.mark.parametrize(("carrier", "code"), [("empty", 1), ("adapted", 0)])
+def test_a_trailer_counts_only_when_its_carrier_brings_a_change_whose_context_upstream_moved(tmp_path, carrier, code):
+    world, config = api_key_world(tmp_path)
+    fix = world["fix"]
+    assert "return cfg, nil" in CONFIG_GO_FORK and OLD_KEY_LOAD not in CONFIG_GO_FORK
+    if carrier == "empty":
+        git(world["fork"], "commit", "-q", "--allow-empty", "-m", f"record the port\n\n(cherry picked from commit {fix})")
+    else:
+        note = "Adapted: upstream's comment line is left out under the fork's no-comments rule."
+        commit(
+            world["fork"],
+            f"fix(config): take upstream's API_KEY check\n\n{note}\n\n(cherry picked from commit {fix})",
+            {"config/config.go": CONFIG_GO_PORTED},
+        )
+    result = run(config, "--today", "2026-10-27")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert fix[:12] in result.stdout.split("Unported upstream commits", 1)[1]
+        assert (
+            f"{fix[:12]}: 2 of 2 upstream hunk(s) it changes are not reflected in refs/remotes/fork/main, for example "
+            "in config/config.go: 'removed by no carrier: -cfg.ApiKey, err = GetEnvAsUUID(\"API_KEY\")'"
+        ) in result.stdout
+    else:
+        assert re.search(r"^  ported via cherry-pick -x trailer\s+1$", result.stdout, re.MULTILINE), result.stdout

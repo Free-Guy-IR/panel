@@ -786,6 +786,176 @@ def test_a_pick_that_keeps_the_lines_upstream_removed_is_not_a_port(tmp_path):
     assert ported.returncode == 0, ported.stdout + ported.stderr
 
 
+def trailer_line(kind, sha):
+    return f"(cherry picked from commit {sha})" if kind == "cherry-pick" else f"Upstream: {sha}"
+
+
+@pytest.mark.parametrize("trailer", ["cherry-pick", "upstream-line"])
+@pytest.mark.parametrize("removed", ["lines", "file"])
+def test_an_empty_pick_of_a_removal_the_fork_never_had_is_not_a_port(tmp_path, removed, trailer):
+    path = standalone_repo(tmp_path, f"never-had-{removed}-{trailer}")
+    if removed == "lines":
+        removal = commit(path, "drop the legacy path", {"r.py": lines("r", 6)})
+    else:
+        git(path, "rm", "-q", "s.py")
+        git(path, "commit", "-q", "-m", "drop the legacy module")
+        removal = git(path, "rev-parse", "HEAD")
+    git(path, "update-ref", "refs/remotes/upstream/dev", removal)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    if removed == "lines":
+        commit(path, "fork root", {"r.py": lines("r", 6, extra=["fork tail"])})
+    else:
+        git(path, "rm", "-q", "-f", "s.py")
+        git(path, "commit", "-q", "-m", "fork root")
+    git(path, "commit", "-q", "--allow-empty", "-m", f"record the port\n\n{trailer_line(trailer, removal)}")
+    result = standalone_gate(path, "## Waived\n")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert removal[:12] in unported_block(result.stdout)
+    first = "r.py: 'removed by no carrier: -r7'" if removed == "lines" else "s.py: 'removed by no carrier: -s1'"
+    assert (
+        f"{removal[:12]}: 1 of 1 upstream hunk(s) it changes are not reflected in main, for example in {first}"
+        in result.stdout
+    )
+
+
+def moved_context_repo(tmp_path, name, fork_text, fixed="R5-checked"):
+    path = standalone_repo(tmp_path, name)
+    fix = commit(path, "fix: refuse an empty value", {"r.py": lines("r", overrides={5: fixed})})
+    later = commit(
+        path,
+        "refactor: rename the neighbours of the check",
+        {"r.py": lines("r", overrides={4: "R4-later", 5: fixed, 6: "R6-later"})},
+    )
+    git(path, "update-ref", "refs/remotes/upstream/dev", later)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    commit(path, "fork root", {"r.py": fork_text})
+    return path, fix, later
+
+
+def later_waived(later):
+    return f"## Waived\n\n- `{later}` reworks the neighbours of the check, decided on its own security: no\n"
+
+
+def test_an_empty_pick_is_not_a_port_once_upstream_moved_the_context_of_its_hunk(tmp_path):
+    path, fix, later = moved_context_repo(tmp_path, "moved-empty", lines("r", overrides={5: "R5-fork"}))
+    git(path, "commit", "-q", "--allow-empty", "-m", f"record the port\n\n(cherry picked from commit {fix})")
+    result = standalone_gate(path, later_waived(later))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert fix[:12] in unported_block(result.stdout)
+    assert (
+        f"{fix[:12]}: 1 of 1 upstream hunk(s) it changes are not reflected in main, for example in r.py: "
+        "'removed by no carrier: -r5'" in result.stdout
+    )
+
+
+def test_a_real_pick_still_counts_once_upstream_moved_the_context_of_its_hunk(tmp_path):
+    path, fix, later = moved_context_repo(tmp_path, "moved-real", lines("r"))
+    git(path, "cherry-pick", "-x", fix)
+    result = standalone_gate(path, later_waived(later))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 1
+
+
+def test_a_pick_carried_by_two_fork_commits_still_counts(tmp_path):
+    path = standalone_repo(tmp_path, "split")
+    fix = commit(
+        path,
+        "fix: refuse an empty value",
+        {"r.py": lines("r", overrides={5: "R5-checked"}), "s.py": lines("s", extra=["s-check-test"])},
+    )
+    later = commit(
+        path,
+        "refactor: rename the neighbours of the check",
+        {"r.py": lines("r", overrides={4: "R4-later", 5: "R5-checked", 6: "R6-later"})},
+    )
+    git(path, "update-ref", "refs/remotes/upstream/dev", later)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    commit(path, f"test: the check\n\n(cherry picked from commit {fix})", {"s.py": lines("s", extra=["s-check-test"])})
+    commit(path, f"fix: the check\n\n(cherry picked from commit {fix})", {"r.py": lines("r", overrides={5: "R5-checked"})})
+    result = standalone_gate(path, later_waived(later))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 1
+
+
+def test_an_adapted_pick_that_replaces_the_forks_own_form_still_counts(tmp_path):
+    fixed = "# an empty value is refused before the rest runs\nR5-checked"
+    path, fix, later = moved_context_repo(tmp_path, "adapted", lines("r", overrides={5: "R5-fork"}), fixed)
+    note = "Adapted: upstream's comment line is left out under the fork's no-comments rule."
+    commit(
+        path,
+        f"fix: take upstream's check\n\n{note}\n\n(cherry picked from commit {fix})",
+        {"r.py": lines("r", overrides={5: "R5-checked"})},
+    )
+    result = standalone_gate(path, later_waived(later))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 1
+
+
+def test_a_pick_of_a_file_deletion_counts_when_its_carrier_deletes_the_forks_own_copy(tmp_path):
+    path = standalone_repo(tmp_path, "deleted-own-copy")
+    git(path, "rm", "-q", "s.py")
+    git(path, "commit", "-q", "-m", "drop the legacy module")
+    removal = git(path, "rev-parse", "HEAD")
+    git(path, "update-ref", "refs/remotes/upstream/dev", removal)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    commit(path, "fork root", {"s.py": lines("s", overrides={3: "S3-fork"})})
+    git(path, "rm", "-q", "s.py")
+    git(path, "commit", "-q", "-m", f"drop the legacy module\n\n(cherry picked from commit {removal})")
+    result = standalone_gate(path, "## Waived\n")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 1
+
+
+def lost_file_repo(tmp_path, layout):
+    path = standalone_repo(tmp_path, f"lost-{layout}")
+    target = "t.py" if layout == "upstream-renamed" else "s.py"
+    if layout == "upstream-renamed":
+        git(path, "mv", "s.py", "t.py")
+    fix = commit(
+        path,
+        "fix: tidy both modules",
+        {"r.py": lines("r", overrides={2: "R2-tidy"}), target: lines("s", overrides={5: "S5-tidy"})},
+    )
+    later = commit(
+        path,
+        "refactor: rename the neighbours of the tidy line",
+        {target: lines("s", overrides={4: "S4-later", 5: "S5-tidy", 6: "S6-later"})},
+    )
+    git(path, "update-ref", "refs/remotes/upstream/dev", later)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    carried = {"r.py": lines("r", overrides={2: "R2-tidy"})}
+    if layout == "fork-deleted":
+        git(path, "rm", "-q", "s.py")
+        git(path, "commit", "-q", "-m", "fork drops the module")
+    elif layout == "fork-renamed":
+        git(path, "mv", "s.py", "s_fork.py")
+        git(path, "commit", "-q", "-m", "fork moves the module")
+        carried["s_fork.py"] = lines("s", overrides={5: "S5-tidy"})
+    commit(path, f"fix: tidy both modules\n\n(cherry picked from commit {fix})", carried)
+    return path, fix, later, target
+
+
+@pytest.mark.parametrize("layout", ["fork-deleted", "fork-renamed", "upstream-renamed"])
+def test_a_hunk_in_a_file_the_fork_does_not_have_is_unreflected_until_the_ledger_maps_it(tmp_path, layout):
+    path, fix, later, target = lost_file_repo(tmp_path, layout)
+    if layout == "upstream-renamed":
+        assert (path / "s.py").read_text() == lines("s")
+    result = standalone_gate(path, later_waived(later))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert fix[:12] in unported_block(result.stdout)
+    assert (
+        f"{fix[:12]}: 1 of 2 upstream hunk(s) it changes are not reflected in main, for example in {target}: "
+        "'the file is not on the head'" in result.stdout
+    )
+    mapped = later_waived(later) + f"\n## Ported by design\n\n- `{fix}` the fork carries {target} its own way\n"
+    covered = standalone_gate(path, mapped)
+    assert covered.returncode == 0, covered.stdout + covered.stderr
+    assert f"{fix[:12]}: 1 of 2 upstream hunk(s)" in covered.stdout
+    assert "covered by its ledger entry" in covered.stdout
+
+
 def test_an_orphan_upstream_branch_is_tracked_when_the_base_is_upstream(tmp_path):
     path = standalone_repo(tmp_path, "orphan")
     fix = commit(path, "upstream fix", {"r.py": lines("r", overrides={1: "R1"})})
