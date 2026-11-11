@@ -208,6 +208,7 @@ def compile_elapsed_seconds_postgresql(element, compiler, **kw):
     return f"EXTRACT(EPOCH FROM ({compiler.process(date1, **kw)} - {compiler.process(date2, **kw)}))"
 
 
+@compiles(ElapsedSeconds, "mariadb")
 @compiles(ElapsedSeconds, "mysql")
 def compile_elapsed_seconds_mysql(element, compiler, **kw):
     """Compile an exact timestamp difference for MySQL."""

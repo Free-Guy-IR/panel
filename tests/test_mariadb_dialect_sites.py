@@ -11,7 +11,7 @@ from sqlalchemy.dialects.mysql.mariadb import MariaDBDialect
 from sqlalchemy.schema import CreateTable
 from sqlalchemy.sql import Delete, Select
 
-from app.db.compiles_types import DateDiff, WebAuthnBinary, WebAuthnChallenge, WebAuthnCredentialId
+from app.db.compiles_types import DateDiff, ElapsedSeconds, WebAuthnBinary, WebAuthnChallenge, WebAuthnCredentialId
 from app.db.crud import general, host, hwid, wireguard
 from app.db.models import UserHWID
 from app.jobs import cleanup_subscription_updates
@@ -201,3 +201,9 @@ def test_no_live_code_compares_a_raw_dialect_name_to_mysql():
             if RAW_MYSQL_NAME_COMPARE.search(line):
                 offenders.append(f"{path.relative_to(APP.parent)}:{lineno}: {line.strip()}")
     assert offenders == []
+
+
+@pytest.mark.parametrize("dialect", [mysql.dialect(), MariaDBDialect()], ids=["mysql", "mariadb"])
+def test_autodelete_elapsed_seconds_compiles_to_timestampdiff(dialect):
+    compiled = str(ElapsedSeconds(column("now_at"), column("last_status_change")).compile(dialect=dialect))
+    assert compiled == "TIMESTAMPDIFF(SECOND, last_status_change, now_at)"
