@@ -18,7 +18,7 @@ from app.models.node import NodeListQuery, NodeNotification
 from app.models.settings import NodeHealthSettings
 from app.nats import is_multi_worker, needs_shared_bridge_memory
 from app.nats.leader import is_job_leader, needs_job_leader, set_on_leadership_lost
-from app.node import node_manager
+from app.node import UserSyncPreemptedError, node_manager
 from app.node.heartbeat import node_heartbeat
 from app.node.nats_memory import ensure_bridge_memory, get_bridge_memory, shutdown_bridge_memory
 from app.operation import OperatorType
@@ -47,6 +47,9 @@ async def _resync_users(db_node: Node) -> bool:
     try:
         async with GetDB() as db:
             return await NodeOperation._resync_node_users(db, db_node)
+    except UserSyncPreemptedError as exc:
+        logger.info(f"[{db_node.name}] User list push after attaching was preempted: {exc}")
+        return False
     except Exception as exc:
         logger.error(f"[{db_node.name}] Could not push the current user list after attaching: {exc}")
         return False

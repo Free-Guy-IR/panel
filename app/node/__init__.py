@@ -29,6 +29,8 @@ class UserSyncPreemptedError(RuntimeError):
 
 
 class NodeManager:
+    _removal_sync_wait_seconds: float = 5.0
+
     def __init__(self):
         self._nodes: dict[int, PasarGuardNode] = {}
         self._reported_unhealthy: set[int] = set()
@@ -37,6 +39,7 @@ class NodeManager:
         self._keep_alives: dict[int, int] = {}
         self._user_sync_locks: dict[int, asyncio.Lock] = {}
         self._user_sync_tasks: dict[int, set[asyncio.Task]] = {}
+        self._removing: dict[int, int] = {}
         self._lock = RWLock(fast=True)
         self.logger = get_logger("node-manager")
 
@@ -93,13 +96,13 @@ class NodeManager:
         except Exception:
             pass
 
-    async def _cancel_user_syncs(self, node_id: int) -> None:
+    async def _cancel_user_syncs(self, node_id: int, timeout: float | None = None) -> None:
         current = asyncio.current_task()
         tasks = [task for task in self._user_sync_tasks.get(node_id, ()) if task is not current and not task.done()]
         for task in tasks:
             task.cancel()
         if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.wait(tasks, timeout=timeout)
 
     def _track_user_sync(self, node_id: int, task: asyncio.Task | None = None) -> asyncio.Task | None:
         if task is None:
@@ -171,19 +174,49 @@ class NodeManager:
         return new_node
 
     async def remove_node(self, id: int, *, remote_stop: bool = True) -> None:
-        await self._cancel_user_syncs(id)
+        self._removing[id] = self._removing.get(id, 0) + 1
+        try:
+            old_node = await self._remove_node_entry(id)
+        finally:
+            remaining = self._removing.get(id, 1) - 1
+            if remaining > 0:
+                self._removing[id] = remaining
+            else:
+                self._removing.pop(id, None)
+
+        # Do cleanup without holding the lock to avoid slow delete operations.
+        asyncio.create_task(self._shutdown_node(old_node, remote_stop=remote_stop))
+
+    async def _remove_node_entry(self, id: int) -> PasarGuardNode | None:
+        deadline = asyncio.get_running_loop().time() + self._removal_sync_wait_seconds
+        await self._cancel_user_syncs(id, timeout=self._removal_sync_wait_seconds)
 
         # Keep the per-node lock identity stable for the lifetime of the manager so a
         # waiter cannot overlap a later operation through a newly-created lock.
         lock = self._user_sync_locks.setdefault(id, asyncio.Lock())
-        async with lock, self._lock.writer_lock:
-            old_node: PasarGuardNode | None = self._nodes.pop(id, None)
-            self._node_signatures.pop(id, None)
-            self._keep_alives.pop(id, None)
-            self._user_sync_tasks.pop(id, None)
+        acquired = False
+        try:
+            async with asyncio.timeout_at(deadline):
+                await lock.acquire()
+                acquired = True
+        except TimeoutError:
+            self.logger.warning(
+                "a cancelled user sync to node %s still holds its lock; removing the node without waiting for it", id
+            )
+        try:
+            async with self._lock.writer_lock:
+                old_node: PasarGuardNode | None = self._nodes.pop(id, None)
+                self._node_signatures.pop(id, None)
+                self._keep_alives.pop(id, None)
+                self._user_sync_tasks.pop(id, None)
+        finally:
+            if acquired:
+                lock.release()
+        return old_node
 
-        # Do cleanup without holding the lock to avoid slow delete operations.
-        asyncio.create_task(self._shutdown_node(old_node, remote_stop=remote_stop))
+    def _refuse_while_removing(self, node_id: int) -> None:
+        if self._removing.get(node_id):
+            raise UserSyncPreemptedError(f"user sync to node {node_id} was refused because the node is being removed")
 
     async def get_node(self, id: int) -> PasarGuardNode | None:
         async with self._lock.reader_lock:
@@ -344,6 +377,7 @@ class NodeManager:
         Holds the per-node lock for all batches, so a metadata-only edit waits for the
         whole set; a connection change or removal preempts it like ``sync_full``.
         """
+        self._refuse_while_removing(node_id)
         return await self._run_preemptible_sync(
             node_id, self._sync_users_batched(node_id, node, users, batch_size=batch_size)
         )
@@ -397,6 +431,7 @@ class NodeManager:
         the caller gets ``UserSyncPreemptedError`` instead. Cancelling the caller still
         cancels the sync.
         """
+        self._refuse_while_removing(node_id)
         return await self._run_preemptible_sync(node_id, self._sync_full(node_id, users, flush_pending=flush_pending))
 
     async def _sync_full(
