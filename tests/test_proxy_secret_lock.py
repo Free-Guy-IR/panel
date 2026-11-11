@@ -376,7 +376,8 @@ async def test_a_writer_chosen_as_deadlock_victim_answers_503_and_leaves_nothing
 
     async with sessions() as holder:
         await acquire_named_lock(holder, PROXY_SECRETS_LOCK)
-        await holder.execute(update(User).where(User.id.in_(ballast_ids)).values(note="ballast"))
+        for ballast_id in ballast_ids:
+            await holder.execute(update(User).where(User.id == ballast_id).values(note="ballast"))
         waiting = asyncio.create_task(victim())
         await _signalled(victim_holds_the_row, waiting)
         await asyncio.sleep(DEADLOCK_SETUP_SECONDS)
