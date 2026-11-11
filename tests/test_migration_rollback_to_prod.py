@@ -27,7 +27,7 @@ OFFICIAL_GRAPH_SIZE = 180
 OFFICIAL_GRAPH_FINGERPRINT = "9f251514d0c297e705615cce4fa14bb5ccb8466e889d6b9eac07062b27b44023"
 PASSKEY_TABLES = {"admin_passkeys", "passkey_challenges"}
 RELEASE_ONLY_TABLES = {"pending_user_resyncs", "node_stat_acks", "proxy_secret_claims", "pending_node_removals"}
-RELEASE_HEAD = "b708c8d4fc31"
+RELEASE_HEAD = "2d198a5a8068"
 FORK_RELEASE_HEAD = "e79833e2a0b2"
 GUARDED_MERGE = "fd33c6013baa"
 UPSTREAM_MERGE = "b708c8d4fc31"
@@ -283,7 +283,7 @@ def test_the_dry_run_changes_nothing(tmp_path, capsys):
     assert _versions(sync_url) == heads_before
     printed = capsys.readouterr().out
     assert (
-        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 1a2b3c4d5e6f, 2e045b99a67e, 6698b9a695e3, "
+        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 1a2b3c4d5e6f, 2d198a5a8068, 2e045b99a67e, 6698b9a695e3, "
         "6d8eb8fba21b, 8158387867c9, 86f7c2a14d3e, 9a5c2e7f1b4d, a4d8c7e91b32, a8c2d491e705, b176d23e434c, "
         "b4c7e8f1a2d3, b708c8d4fc31, b7e2c4d91f60, b849540d85bb, bfd88026565b, c8d2e4f6a1b3, d73f8a2c4e91, e5a7c3f9b214, "
         "e79833e2a0b2, e9a7edd9de06, f0420da90ff1, f7c63e209a37, fd192e9628a5, fd33c6013baa\n"
@@ -427,7 +427,7 @@ def test_the_official_dry_run_lists_every_revision_the_rollback_removes(tmp_path
 
     assert _versions(sync_url) == heads_before
     assert (
-        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 1a2b3c4d5e6f, 2e045b99a67e, 6698b9a695e3, "
+        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 1a2b3c4d5e6f, 2d198a5a8068, 2e045b99a67e, 6698b9a695e3, "
         "6d8eb8fba21b, 8158387867c9, 86f7c2a14d3e, 9a5c2e7f1b4d, a4d8c7e91b32, a8c2d491e705, b176d23e434c, "
         "b4c7e8f1a2d3, b708c8d4fc31, b7e2c4d91f60, b849540d85bb, bfd88026565b, c8d2e4f6a1b3, d73f8a2c4e91, e5a7c3f9b214, "
         "e5a9c3f1b7d2, e79833e2a0b2, e9a7edd9de06, f0420da90ff1, f7c63e209a37, fd192e9628a5, fd33c6013baa\n"
