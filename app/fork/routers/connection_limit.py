@@ -2,7 +2,8 @@ import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import notification
@@ -10,6 +11,8 @@ from app.db import get_db
 from app.db.crud.settings import get_settings
 from app.db.models import ConnectionRestriction, User, UserConnectionLimit, UserConnectionState
 from app.fork.crud.group_scope import user_in_allowed_groups
+from app.fork.crud.user_locks import refresh_user_state_for_update
+from app.fork.proxy_secrets.locks import is_lock_unavailable
 from app.jobs.dependencies import SYSTEM_ADMIN
 from app.models.admin import AdminDetails
 from app.models.connection_limit import (
@@ -28,12 +31,21 @@ from app.operation import OperatorType
 from app.operation.permissions import get_allowed_group_ids, get_scope_admin_id
 from app.operation.user import UserOperation
 from app.routers.authentication import require_permission
-from app.utils.connection_enforcement import active_restriction, release
+from app.utils.connection_enforcement import forget_inactive_restrictions, lock_active_restriction, release
 from app.utils.connection_limiter import DEFAULT_CDN_RANGES, lookup_providers
 from app.utils.logger import get_logger
 
 router = APIRouter(tags=["Connection Limit"], prefix="/api/connection-limit")
 logger = get_logger("connection-limit-api")
+RELEASE_DECISION_KEYS = ("status", "last_status_change")
+RELEASE_LOCK_UNAVAILABLE_DETAIL = (
+    "another request held this user or its restriction and the release could not lock them in time; "
+    "nothing was changed, retry shortly"
+)
+FORGET_LOCK_UNAVAILABLE_DETAIL = (
+    "another request held some of this user's past restrictions and they could not be cleared in time; "
+    "the release itself is kept, retry shortly"
+)
 user_operator = UserOperation(operator_type=OperatorType.SYSTEM)
 
 
@@ -338,14 +350,26 @@ async def release_user(
     The one that matters for the last step, which has no time on it and would
     otherwise stay until someone did this.
     """
-    user = (await db.execute(_visible_users(select(User).where(User.id == user_id), admin, "update"))).scalar()
-    if user is None:
-        raise HTTPException(status_code=404, detail="user not found")
-
-    restriction = await active_restriction(db, user_id)
-    if restriction is not None:
-        release(restriction, user)
+    try:
+        locked = (
+            await db.execute(
+                _visible_users(select(User.id).where(User.id == user_id), admin, "update").with_for_update()
+            )
+        ).scalar()
+        if locked is None:
+            raise HTTPException(status_code=404, detail="user not found")
+        user = (
+            await db.execute(select(User).where(User.id == user_id).execution_options(populate_existing=True))
+        ).scalar_one()
+        await refresh_user_state_for_update(db, user, RELEASE_DECISION_KEYS)
+        restriction = await lock_active_restriction(db, user_id)
+        if restriction is not None:
+            release(restriction, user)
         await db.commit()
+    except DBAPIError as exc:
+        await _answer_503_if_lock_unavailable(db, exc, RELEASE_LOCK_UNAVAILABLE_DETAIL)
+
+    if restriction is not None:
         try:
             updated = await user_operator.update_user(user)
             asyncio.create_task(notification.user_status_change(updated, SYSTEM_ADMIN))
@@ -353,9 +377,15 @@ async def release_user(
             logger.exception("released user %s but could not reach the nodes", user_id)
 
     if forget:
-        await db.execute(
-            delete(ConnectionRestriction).where(
-                ConnectionRestriction.user_id == user_id, ConnectionRestriction.active.is_(False)
-            )
-        )
-        await db.commit()
+        try:
+            await forget_inactive_restrictions(db, user_id)
+            await db.commit()
+        except DBAPIError as exc:
+            await _answer_503_if_lock_unavailable(db, exc, FORGET_LOCK_UNAVAILABLE_DETAIL)
+
+
+async def _answer_503_if_lock_unavailable(db: AsyncSession, exc: DBAPIError, detail: str) -> None:
+    await db.rollback()
+    if not is_lock_unavailable(exc):
+        raise exc
+    raise HTTPException(status_code=503, detail=detail) from exc
