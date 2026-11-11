@@ -74,7 +74,7 @@ jobs:
           retention-days: 30
 
       - name: Ledger gate
-        if: ${{ !cancelled() && steps.fetch.outcome == 'success' && github.event_name == 'pull_request' }}
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
         run: |
           python scripts/upstream_inventory.py \
             --base "refs/upstream-tags/$BASELINE" --head HEAD --upstream-head "$SYNC_POINT" \
