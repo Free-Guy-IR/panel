@@ -185,7 +185,6 @@ class NodeWorkerService(BaseRpcService):
     async def _connect_nodes_bulk(self, data: dict):
         node_ids = data.get("node_ids")
         core_id = data.get("core_id")
-        force_start = bool(data.get("force_start"))
         # Refresh from KV before bulk reconnect to avoid stale core cache races.
         await core_manager._reload_from_cache()
         async with GetDB() as db:
@@ -203,7 +202,7 @@ class NodeWorkerService(BaseRpcService):
             await self._node_operator.connect_nodes_bulk(
                 db,
                 nodes,
-                force_start=force_start,
+                force_start=bool(data.get("force_start")),
                 # A missing key comes from an API process that predates stop_first.
                 stop_first=bool(data.get("stop_first", True)),
             )
