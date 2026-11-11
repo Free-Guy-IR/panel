@@ -21,7 +21,7 @@ from app.node.user import core_users
 
 
 # On the test's loop, so the teardown can still close the connections it opened.
-@pytest_asyncio.fixture(loop_scope="function")
+@pytest_asyncio.fixture
 async def session_factory():
     if os.getenv("TEST_FROM", "local").lower() == "local":
         engine = create_async_engine("sqlite+aiosqlite://", poolclass=StaticPool)
