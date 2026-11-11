@@ -14,6 +14,7 @@ PINNED = {
     "openvpn": 8,
     "tuic": 10,
     "l2tp": 11,
+    "masque": 12,
 }
 
 
@@ -33,3 +34,9 @@ def test_reserved_names_are_not_reused():
 def test_from_value_refuses_a_reserved_name():
     for name in RESERVED_NAMES:
         assert ProxyProtocol.from_value(name) is None
+
+
+def test_masque_is_its_own_member_and_not_a_hysteria2_alias():
+    assert ProxyProtocol.from_value("masque") is ProxyProtocol.masque
+    assert ProxyProtocol.masque is not ProxyProtocol.hysteria2
+    assert ProxyProtocol.masque not in frozenset({ProxyProtocol.hysteria2})
