@@ -644,6 +644,29 @@ class FinalMask(FinalMaskBaseModel):
         return self
 
 
+def _keep_raw_fragment_length_fields(source: dict[str, Any], result: dict[str, Any]) -> None:
+    source_layers = source.get("tcp") if isinstance(source, dict) else None
+    result_layers = result.get("tcp")
+    if not isinstance(source_layers, list) or not isinstance(result_layers, list):
+        return
+
+    for source_layer, result_layer in zip(source_layers, result_layers):
+        if not isinstance(source_layer, dict) or not isinstance(result_layer, dict):
+            continue
+        if result_layer.get("type") != FinalMaskTcpType.fragment.value:
+            continue
+        source_settings = source_layer.get("settings")
+        result_settings = result_layer.get("settings")
+        if not isinstance(source_settings, dict) or not isinstance(result_settings, dict):
+            continue
+        for key in ("length", "delay", "lengths", "delays"):
+            result_settings.pop(key, None)
+            value = source_settings.get(key)
+            if value in (None, "", [], {}):
+                continue
+            result_settings[key] = deepcopy(value)
+
+
 def dump_final_mask_for_xray(final_mask: FinalMask | dict[str, Any]) -> dict[str, Any]:
     """Serialize FinalMask with fragment keys understood by stable and newer Xray cores."""
     try:
@@ -652,6 +675,8 @@ def dump_final_mask_for_xray(final_mask: FinalMask | dict[str, Any]) -> dict[str
         result = deepcopy(final_mask)
     else:
         result = validated.model_dump(exclude_none=True, by_alias=True, mode="json")
+        if not isinstance(final_mask, FinalMask):
+            _keep_raw_fragment_length_fields(final_mask, result)
 
     tcp_layers = result.get("tcp")
     if not isinstance(tcp_layers, list):
