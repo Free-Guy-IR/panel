@@ -10,6 +10,7 @@ import aiohttp
 from pydantic import ValidationError
 
 from app import on_startup
+from app.fork.notification_rate_limit import dropped_after_rate_limit_lifetime, held_by_rate_limit
 from app.models.settings import NotificationSettings
 from app.notification.nats_queue import NotificationDelivery
 from app.notification.queue_manager import (
@@ -204,6 +205,9 @@ async def process_notification(delivery: NotificationDelivery):
                 # A message that just took its slot, or whose slot a later 429 moved back, goes
                 # behind the messages ahead of it in the queue even when its time has come.
                 if slot != notification.slot or notification.send_at < send_at:
+                    if await dropped_after_rate_limit_lifetime(delivery, notification, now):
+                        return
+                    notification = held_by_rate_limit(notification, now)
                     scheduled = notification.model_copy(update={"slot": slot, "send_at": send_at})
                     try:
                         await delivery.retry(scheduled.model_dump(), delay=send_at - now)
@@ -231,6 +235,9 @@ async def process_notification(delivery: NotificationDelivery):
                     limit = _rate_limits[destination] = _RateLimit(first_slot=now, next_slot=now)
                 slot = _take_slot(limit, notification, now)
                 limit.offset = max(limit.offset, now + error.retry_after - slot)
+                if await dropped_after_rate_limit_lifetime(delivery, notification, now):
+                    return
+                notification = held_by_rate_limit(notification, now)
                 retry = notification.model_copy(update={"slot": slot, "send_at": slot + limit.offset})
                 await delivery.retry(retry.model_dump(), delay=retry.send_at - now)
                 return
