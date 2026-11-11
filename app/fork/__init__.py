@@ -1,3 +1,4 @@
+from app.fork.naive_utc_timestamps import install_naive_utc_timestamps
 from app.fork.registry import (
     extra_core_classes,
     extra_core_types,
@@ -8,6 +9,8 @@ from app.fork.registry import (
     register_router,
     register_subscription_format,
 )
+
+install_naive_utc_timestamps()
 
 __all__ = [
     "extra_core_classes",
