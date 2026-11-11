@@ -5,7 +5,9 @@ from sqlalchemy import select
 
 from app.db.models import Admin
 from app.models.admin import hash_password
+from app.models.api_key import APIKeyUpdate
 from tests.api import TestSession, client
+from tests.api.api_key_actor import OPERATION_DONE, run_as_key
 from tests.api.concurrent_requests import send_concurrently
 from tests.api.helpers import auth_headers, strong_password, unique_name
 
@@ -57,6 +59,10 @@ def _create_key(session: dict[str, str], permissions: dict | None, **extra) -> d
     return created.json()
 
 
+def _update(**fields) -> APIKeyUpdate:
+    return APIKeyUpdate.model_validate(fields)
+
+
 def test_a_narrow_key_cannot_re_enable_a_broader_sibling_key():
     owner = _create_owner()
     try:
@@ -69,8 +75,10 @@ def test_a_narrow_key_cannot_re_enable_a_broader_sibling_key():
         response = client.patch(
             f"/api/api_key/{broad['id']}", headers={"X-Api-Key": narrow["api_key"]}, json={"status": "active"}
         )
+        operation = run_as_key(narrow["api_key"], "modify_api_key", key_id=broad["id"], model=_update(status="active"))
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.text
+        assert operation == status.HTTP_403_FORBIDDEN
         assert client.get(f"/api/api_key/{broad['id']}", headers=session).json()["status"] == "disabled"
     finally:
         _drop(owner["username"])
@@ -89,33 +97,41 @@ def test_a_narrow_key_cannot_extend_a_broader_sibling_key():
             headers={"X-Api-Key": narrow["api_key"]},
             json={"expire_date": "2099-01-01T00:00:00Z"},
         )
+        operation = run_as_key(
+            narrow["api_key"], "modify_api_key", key_id=broad["id"], model=_update(expire_date="2099-01-01T00:00:00Z")
+        )
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.text
+        assert operation == status.HTTP_403_FORBIDDEN
         after = client.get(f"/api/api_key/{broad['id']}", headers=session).json()
         assert after["expire_date"] == before["expire_date"]
     finally:
         _drop(owner["username"])
 
 
-def test_a_key_may_still_update_a_sibling_within_its_own_permissions():
+def test_a_key_updates_a_sibling_within_its_permissions_only_through_the_operation():
     owner = _create_owner()
     try:
         session = _session(owner)
         editor = _create_key(session, KEY_EDITOR)
         sibling = _create_key(session, {"api_keys": {"read": True}})
+        refused_name = unique_name("refused")
         new_name = unique_name("within")
 
         response = client.patch(
-            f"/api/api_key/{sibling['id']}", headers={"X-Api-Key": editor["api_key"]}, json={"name": new_name}
+            f"/api/api_key/{sibling['id']}", headers={"X-Api-Key": editor["api_key"]}, json={"name": refused_name}
         )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.text
+        assert client.get(f"/api/api_key/{sibling['id']}", headers=session).json()["name"] == sibling["name"]
 
-        assert response.status_code == status.HTTP_200_OK, response.text
-        assert response.json()["name"] == new_name
+        operation = run_as_key(editor["api_key"], "modify_api_key", key_id=sibling["id"], model=_update(name=new_name))
+        assert operation == OPERATION_DONE
+        assert client.get(f"/api/api_key/{sibling['id']}", headers=session).json()["name"] == new_name
     finally:
         _drop(owner["username"])
 
 
-def test_a_key_may_still_rename_itself():
+def test_a_key_renames_itself_only_through_the_operation():
     owner = _create_owner()
     try:
         session = _session(owner)
@@ -125,13 +141,16 @@ def test_a_key_may_still_rename_itself():
         response = client.patch(
             f"/api/api_key/{editor['id']}", headers={"X-Api-Key": editor["api_key"]}, json={"name": new_name}
         )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.text
 
-        assert response.status_code == status.HTTP_200_OK, response.text
+        operation = run_as_key(editor["api_key"], "modify_api_key", key_id=editor["id"], model=_update(name=new_name))
+        assert operation == OPERATION_DONE
+        assert client.get(f"/api/api_key/{editor['id']}", headers=session).json()["name"] == new_name
     finally:
         _drop(owner["username"])
 
 
-def test_an_inheriting_owner_key_like_the_bots_may_still_update_a_sibling():
+def test_an_inheriting_owner_key_like_the_bots_updates_a_sibling_only_through_the_operation():
     owner = _create_owner()
     try:
         session = _session(owner)
@@ -142,8 +161,10 @@ def test_an_inheriting_owner_key_like_the_bots_may_still_update_a_sibling():
         response = client.patch(
             f"/api/api_key/{broad['id']}", headers={"X-Api-Key": bot_key["api_key"]}, json={"name": new_name}
         )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED, response.text
 
-        assert response.status_code == status.HTTP_200_OK, response.text
+        operation = run_as_key(bot_key["api_key"], "modify_api_key", key_id=broad["id"], model=_update(name=new_name))
+        assert operation == OPERATION_DONE
     finally:
         _drop(owner["username"])
 
@@ -165,8 +186,8 @@ def test_concurrent_sibling_updates_by_a_narrow_key_all_fail_while_the_session_s
         calls.append(("PATCH", url, {"headers": session, "json": {"name": session_name}}))
         *narrow_codes, session_code = [response.status_code for response in send_concurrently(calls)]
 
-        assert narrow_codes == [status.HTTP_403_FORBIDDEN] * 4
+        assert narrow_codes == [status.HTTP_401_UNAUTHORIZED] * 4
         assert session_code == status.HTTP_200_OK
-        assert client.get(f"/api/api_key/{broad['id']}", headers=session).json()["name"] not in narrow_names
+        assert client.get(f"/api/api_key/{broad['id']}", headers=session).json()["name"] == session_name
     finally:
         _drop(owner["username"])
