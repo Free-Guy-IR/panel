@@ -242,6 +242,7 @@ async def test_every_settings_cache_entry_expires(monkeypatch: pytest.MonkeyPatc
         subscription={},
         hwid={},
         general={},
+        cleanup={},
     )
 
     async def stored_settings():
@@ -257,6 +258,7 @@ async def test_every_settings_cache_entry_expires(monkeypatch: pytest.MonkeyPatc
         settings_module.subscription_settings,
         settings_module.hwid_settings,
         settings_module.general_settings,
+        settings_module.cleanup_settings,
     ]
     await settings_module.refresh_caches()
     try:
@@ -282,6 +284,7 @@ def _plain_settings_models(monkeypatch: pytest.MonkeyPatch) -> None:
         "Subscription",
         "HWIDSettings",
         "General",
+        "CleanupSettings",
     )
     monkeypatch.setattr(settings_module, "settings", SimpleNamespace(**dict.fromkeys(names, _PlainModel)))
 

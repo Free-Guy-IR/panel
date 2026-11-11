@@ -62,14 +62,9 @@ async def general_settings() -> settings.General:
     return settings.General.model_validate((await stored_settings()).general)
 
 
-@cached()
+@cached(ttl=SETTINGS_CACHE_TTL_S)
 async def cleanup_settings() -> settings.CleanupSettings:
-    """Return the validated cleanup settings from persistent storage."""
-    async with GetDB() as db:
-        db_settings = await get_settings(db)
-
-    validated_settings = settings.CleanupSettings.model_validate(db_settings.cleanup or {})
-    return validated_settings
+    return settings.CleanupSettings.model_validate((await stored_settings()).cleanup or {})
 
 
 async def refresh_caches() -> None:
