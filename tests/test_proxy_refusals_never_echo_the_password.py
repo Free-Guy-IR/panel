@@ -123,8 +123,17 @@ async def test_a_node_error_behind_a_refusing_proxy_never_carries_the_proxy_pass
 
 @pytest.mark.parametrize("status", [b"407 Proxy Authentication Required", b"502 Bad Gateway"], ids=["407", "502"])
 async def test_a_notification_behind_a_refusing_http_proxy_logs_no_password(monkeypatch, caplog, status):
+    queue = InMemoryNotificationQueue()
+    monkeypatch.setattr(queue_manager, "queue_instance", queue)
     async with _proxy("http", _http_answer(status)) as proxy:
-        stored = NotificationSettings.model_validate({"max_retries": 2, "proxy_url": proxy})
+        stored = NotificationSettings.model_validate(
+            {
+                "notify_discord": True,
+                "discord_webhook_url": "https://discord.com/api/webhooks/1/probe",
+                "max_retries": 2,
+                "proxy_url": proxy,
+            }
+        )
 
         async def settings():
             return stored
@@ -134,14 +143,15 @@ async def test_a_notification_behind_a_refusing_http_proxy_logs_no_password(monk
         caplog.set_level(logging.DEBUG)
         await notification_client.define_client()
         try:
-            delivered = await notification_client._send_discord_webhook_direct(
-                {"content": "probe"}, "https://hooks.example.test/x", 2
-            )
+            await queue_manager.enqueue_discord({"content": "probe"}, "https://hooks.example.test/x")
+            await notification_client.process_notification(await queue.dequeue(timeout=0))
         finally:
             await notification_client.client.close()
 
-    assert delivered is False
-    assert caplog.records
+    assert any(
+        record.getMessage() == "Notification delivery failed due to a connection error or timeout"
+        for record in caplog.records
+    )
     assert SECRET not in caplog.text
 
 

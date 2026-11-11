@@ -1,61 +1,60 @@
+import contextlib
 import hashlib
 import hmac
 import json
-from unittest.mock import AsyncMock
 
 import pytest
+from aiohttp import web
 from fastapi import status
 
-from app.jobs.send_notifications import send_to_all_webhooks
-from app.models.settings import Telegram
+from app.jobs.send_notifications import _send_webhook
+from app.models.settings import Telegram, WebhookInfo
 from app.notification.webhook import Notification, UserDataResetByNext, UserDataUsageReset
+from app.utils.http_client import create_outbound_http_session
 from tests.api import client
 
 
-class _FakeResponse:
-    status = 200
+@contextlib.asynccontextmanager
+async def _receiver():
+    received: list[tuple[dict[str, str], bytes]] = []
 
-    async def text(self):
-        return ""
+    async def hook(request):
+        received.append(({key.lower(): value for key, value in request.headers.items()}, await request.read()))
+        return web.Response(status=200)
 
-
-def _fake_client():
-    client = AsyncMock()
-    client.post = AsyncMock(return_value=_FakeResponse())
-    return client
-
-
-class _Webhook:
-    def __init__(self, url: str, secret: str | None):
-        self.url = url
-        self.secret = secret
+    application = web.Application()
+    application.router.add_post("/hook", hook)
+    runner = web.AppRunner(application, access_log=None)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    try:
+        yield f"http://127.0.0.1:{site._server.sockets[0].getsockname()[1]}/hook", received
+    finally:
+        await runner.cleanup()
 
 
 @pytest.mark.asyncio
 async def test_webhook_payload_is_signed_with_hmac():
-    client = _fake_client()
-    webhook = _Webhook("https://example.com/hook", "topsecret")
     payload = [{"action": "user_created", "username": "alice"}]
+    async with _receiver() as (url, received), create_outbound_http_session() as session:
+        assert await _send_webhook(session, WebhookInfo(url=url, secret="topsecret"), payload) is True
 
-    assert await send_to_all_webhooks(client, payload, [webhook]) is True
-
-    _, kwargs = client.post.call_args
-    expected = hmac.new(b"topsecret", kwargs["data"], hashlib.sha256).hexdigest()
-    assert kwargs["headers"]["x-webhook-signature"] == f"sha256={expected}"
-    assert kwargs["headers"]["x-webhook-secret"] == "topsecret"
-    assert json.loads(kwargs["data"].decode("utf-8")) == payload
+    headers, body = received[0]
+    expected = hmac.new(b"topsecret", body, hashlib.sha256).hexdigest()
+    assert headers["x-webhook-signature"] == f"sha256={expected}"
+    assert headers["x-webhook-secret"] == "topsecret"
+    assert json.loads(body.decode("utf-8")) == payload
 
 
 @pytest.mark.asyncio
 async def test_webhook_without_secret_sends_no_signature_headers():
-    client = _fake_client()
-    webhook = _Webhook("https://example.com/hook", None)
+    async with _receiver() as (url, received), create_outbound_http_session() as session:
+        assert await _send_webhook(session, WebhookInfo(url=url, secret=""), [{"action": "user_created"}]) is True
 
-    assert await send_to_all_webhooks(client, [{"action": "user_created"}], [webhook]) is True
-
-    _, kwargs = client.post.call_args
-    assert "x-webhook-secret" not in kwargs["headers"]
-    assert "x-webhook-signature" not in kwargs["headers"]
+    headers, _ = received[0]
+    assert "x-webhook-secret" not in headers
+    assert "x-webhook-signature" not in headers
 
 
 def _enable_telegram(monkeypatch: pytest.MonkeyPatch, secret: str):

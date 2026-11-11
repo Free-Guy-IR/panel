@@ -45,7 +45,8 @@ async def _let_pending_tasks_run() -> None:
 
 
 async def _send() -> bool:
-    return await notification_client._send_discord_webhook_direct({"content": "probe"}, HOOK, 2)
+    delivered, _ = await notification_client._post_notification_safely(HOOK, json={"content": "probe"})
+    return delivered
 
 
 async def test_the_latest_of_two_overlapping_proxy_changes_stays_installed(monkeypatch):
