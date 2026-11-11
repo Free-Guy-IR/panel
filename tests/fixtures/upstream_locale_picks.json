@@ -10675,6 +10675,631 @@
           "removed": []
         }
       }
+    },
+    {
+      "upstream": "019e70d695b11acfeee24abaa3dd496e62ce78a9",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "cutoff"
+              ],
+              "Whole days older than {{days}} days are merged."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "dailyStep",
+                "description"
+              ],
+              "Rows older than this are merged into one row per day."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "dailyStep",
+                "title"
+              ],
+              "Daily"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "description"
+              ],
+              "Merge older traffic rows into coarser time buckets so the usage tables stop growing at 10-minute detail."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "disabledHint"
+              ],
+              "This step is off."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "firstRun"
+              ],
+              "Turning this on for the first time: if the panel already has a lot of usage history, merging the older data can take from a few hours to several days. It works only a couple of minutes each hour, so the panel stays fast, and older charts keep their current detail until it reaches them."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "halfDayStep",
+                "description"
+              ],
+              "Rows older than this are merged into one row per 12 hours."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "halfDayStep",
+                "title"
+              ],
+              "12-hour"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "hourlyStep",
+                "description"
+              ],
+              "Rows older than this are merged into one row per hour."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "hourlyStep",
+                "title"
+              ],
+              "Hourly"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "note"
+              ],
+              "Totals stay exact: only the time detail is reduced, and charts of old data show coarser steps. Buckets are cut in UTC. The merge runs hourly after the retention cleanup, for at most a couple of minutes each time."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "off"
+              ],
+              "Off"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "orderValidation"
+              ],
+              "Days must increase from hourly to 12-hour to daily."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "save"
+              ],
+              "Save detail settings"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "title"
+              ],
+              "Usage history detail"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "validation"
+              ],
+              "Enabled steps need a whole number from 1 to 36,500."
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "cutoff"
+              ],
+              "روزهای کامل قدیمی‌تر از {{days}} روز ادغام می‌شوند."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "dailyStep",
+                "description"
+              ],
+              "ردیف‌های قدیمی‌تر از این مقدار در یک ردیف برای هر روز ادغام می‌شوند."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "dailyStep",
+                "title"
+              ],
+              "روزانه"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "description"
+              ],
+              "ردیف‌های قدیمی ترافیک در بازه‌های زمانی بزرگ‌تر ادغام می‌شوند تا جدول‌های مصرف با جزئیات ۱۰ دقیقه‌ای بزرگ نشوند."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "disabledHint"
+              ],
+              "این مرحله خاموش است."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "firstRun"
+              ],
+              "روشن کردن برای اولین بار: اگر پنل از قبل سابقه مصرف زیادی دارد، ادغام داده‌های قدیمی ممکن است از چند ساعت تا چند روز طول بکشد. این کار هر ساعت فقط چند دقیقه انجام می‌شود تا پنل سریع بماند، و نمودارهای قدیمی تا زمان رسیدن به آن‌ها جزئیات فعلی خود را حفظ می‌کنند."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "halfDayStep",
+                "description"
+              ],
+              "ردیف‌های قدیمی‌تر از این مقدار در یک ردیف برای هر ۱۲ ساعت ادغام می‌شوند."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "halfDayStep",
+                "title"
+              ],
+              "۱۲ ساعته"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "hourlyStep",
+                "description"
+              ],
+              "ردیف‌های قدیمی‌تر از این مقدار در یک ردیف برای هر ساعت ادغام می‌شوند."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "hourlyStep",
+                "title"
+              ],
+              "ساعتی"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "note"
+              ],
+              "مجموع‌ها دقیق می‌مانند: فقط جزئیات زمانی کم می‌شود و نمودارهای داده‌های قدیمی بازه‌های درشت‌تری نشان می‌دهند. بازه‌ها بر اساس UTC بریده می‌شوند. ادغام هر ساعت بعد از پاکسازی نگهداری و هر بار حداکثر چند دقیقه اجرا می‌شود."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "off"
+              ],
+              "خاموش"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "orderValidation"
+              ],
+              "تعداد روزها باید از ساعتی به ۱۲ ساعته و سپس روزانه بیشتر شود."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "save"
+              ],
+              "ذخیره تنظیمات جزئیات"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "title"
+              ],
+              "جزئیات تاریخچه مصرف"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "validation"
+              ],
+              "مراحل فعال به یک عدد صحیح بین ۱ تا ۳۶٬۵۰۰ نیاز دارند."
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "cutoff"
+              ],
+              "Полные дни старше {{days}} дн. объединяются."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "dailyStep",
+                "description"
+              ],
+              "Записи старше этого срока объединяются в одну запись за день."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "dailyStep",
+                "title"
+              ],
+              "По дням"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "description"
+              ],
+              "Старые записи трафика объединяются в более крупные интервалы, чтобы таблицы не росли с 10-минутной детализацией."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "disabledHint"
+              ],
+              "Этот шаг отключен."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "firstRun"
+              ],
+              "Первое включение: если в панели уже много истории трафика, объединение старых данных может занять от нескольких часов до нескольких дней. Работа идёт лишь пару минут каждый час, поэтому панель остаётся быстрой, а старые графики сохраняют текущую детализацию, пока обработка до них не дойдёт."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "halfDayStep",
+                "description"
+              ],
+              "Записи старше этого срока объединяются в одну запись за 12 часов."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "halfDayStep",
+                "title"
+              ],
+              "По 12 часов"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "hourlyStep",
+                "description"
+              ],
+              "Записи старше этого срока объединяются в одну запись за час."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "hourlyStep",
+                "title"
+              ],
+              "По часам"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "note"
+              ],
+              "Итоги остаются точными: уменьшается только детализация по времени, и графики старых данных показывают более крупные шаги. Интервалы режутся по UTC. Объединение запускается каждый час после очистки по сроку хранения и работает не дольше пары минут."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "off"
+              ],
+              "Выключено"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "orderValidation"
+              ],
+              "Число дней должно расти: по часам, затем по 12 часов, затем по дням."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "save"
+              ],
+              "Сохранить детализацию"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "title"
+              ],
+              "Детализация истории трафика"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "validation"
+              ],
+              "Для включенных шагов нужно целое число от 1 до 36 500."
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "cutoff"
+              ],
+              "早于 {{days}} 天的完整日期会被合并。"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "dailyStep",
+                "description"
+              ],
+              "早于此天数的记录合并为每天一条。"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "dailyStep",
+                "title"
+              ],
+              "按天"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "description"
+              ],
+              "将较早的流量记录合并到更粗的时间区间，使用量表不再以 10 分钟精度持续增长。"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "disabledHint"
+              ],
+              "此步骤已关闭。"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "firstRun"
+              ],
+              "首次开启：如果面板已有大量流量历史，合并旧数据可能需要数小时到数天。它每小时只运行几分钟，因此面板保持流畅；在处理到之前，旧图表保持当前精度。"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "halfDayStep",
+                "description"
+              ],
+              "早于此天数的记录合并为每 12 小时一条。"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "halfDayStep",
+                "title"
+              ],
+              "按 12 小时"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "hourlyStep",
+                "description"
+              ],
+              "早于此天数的记录合并为每小时一条。"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "hourlyStep",
+                "title"
+              ],
+              "按小时"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "note"
+              ],
+              "总量保持精确：只降低时间精度，旧数据的图表显示更粗的时间步长。时间段按 UTC 划分。合并在每小时的保留清理之后运行，每次最多几分钟。"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "off"
+              ],
+              "关闭"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "orderValidation"
+              ],
+              "天数必须按小时、12 小时、天的顺序递增。"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "save"
+              ],
+              "保存精度设置"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "title"
+              ],
+              "用量历史精度"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "rollup",
+                "validation"
+              ],
+              "已启用的步骤需要 1 到 36,500 之间的整数。"
+            ]
+          ],
+          "removed": []
+        }
+      }
     }
   ]
 }
