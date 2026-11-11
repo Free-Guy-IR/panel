@@ -3,60 +3,118 @@ import contextlib
 import json
 import logging
 import time
-from collections import deque
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
+from aiohttp import web
 
 from app.fork import notification_spool
 from app.jobs import process_notification_queues, send_notifications as send_module
-from app.notification import client as client_module, queue_manager
-from app.notification.nats_queue import InMemoryNotificationQueue, NatsNotificationQueue
+from app.models.settings import NotificationSettings, Webhook
+from app.notification import client as client_module, nats_queue, queue_manager
+from app.notification.nats_queue import InMemoryNotificationQueue
+from tests.test_notification_delivery import make_nats_queue
 
 
-class _Msg:
-    def __init__(self, consumer, item: dict):
-        self.consumer = consumer
-        self.data = json.dumps(item).encode()
-        self.acks = 0
-        self.naks = 0
-        self.terms = 0
-
-    async def ack(self):
-        self.acks += 1
-
-    async def nak(self):
-        self.naks += 1
-        self.consumer.pending.append(self)
-
-    async def term(self):
-        self.terms += 1
-
-    async def in_progress(self):
-        return None
-
-
-class _Consumer:
+class _Receiver:
     def __init__(self):
-        self.pending: deque[_Msg] = deque()
+        self.delivered: list[str] = []
+        self.webhook_events: list[str] = []
+        self.stalled: list[str] = []
+        self.stall_first: set[str] = set()
+        self.release = asyncio.Event()
 
-    async def fetch(self, batch, timeout):
-        if not self.pending:
-            await asyncio.sleep(timeout)
-            raise TimeoutError
-        return [self.pending.popleft()]
+    async def notify(self, request):
+        content = (await request.json())["content"]
+        if content in self.stall_first:
+            self.stall_first.discard(content)
+            self.stalled.append(content)
+            await self.release.wait()
+            return web.Response(status=503)
+        self.delivered.append(content)
+        return web.Response(status=204)
+
+    async def hook(self, request):
+        self.webhook_events.extend(item["event"] for item in await request.json())
+        return web.Response(status=204)
 
 
-class _Session:
-    async def __aenter__(self):
-        return self
+@contextlib.asynccontextmanager
+async def _local_receiver():
+    receiver = _Receiver()
+    application = web.Application()
+    application.router.add_post("/notify", receiver.notify)
+    application.router.add_post("/hook", receiver.hook)
+    runner = web.AppRunner(application)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    receiver.base = f"http://127.0.0.1:{site._server.sockets[0].getsockname()[1]}"
+    try:
+        yield receiver
+    finally:
+        receiver.release.set()
+        await runner.cleanup()
 
-    async def __aexit__(self, *exc):
-        return False
+
+async def _use_notification_receiver(monkeypatch: pytest.MonkeyPatch, receiver: _Receiver) -> None:
+    stored = NotificationSettings.model_validate(
+        {"notify_discord": True, "discord_webhook_url": "https://discord.com/api/webhooks/1/probe", "max_retries": 3}
+    )
+
+    async def settings():
+        return stored
+
+    monkeypatch.setattr(client_module, "notification_settings", settings)
+    monkeypatch.setattr(client_module, "client", None)
+    await client_module.define_client()
+
+
+def _use_webhook_receiver(monkeypatch: pytest.MonkeyPatch, receiver: _Receiver) -> None:
+    stored = Webhook(enable=True, webhooks=[{"url": f"{receiver.base}/hook", "secret": "s"}], timeout=1, recurrent=3)
+
+    async def settings():
+        return stored
+
+    monkeypatch.setattr(send_module, "webhook_settings", settings)
+
+
+async def _discord(receiver: _Receiver, content: str) -> None:
+    await queue_manager.enqueue_discord({"content": content}, f"{receiver.base}/notify")
 
 
 def _telegram(message: str) -> dict:
     return queue_manager.TelegramNotification(message=message, chat_id=1).model_dump()
+
+
+def _shifted_clock() -> SimpleNamespace:
+    state = SimpleNamespace(offset=0.0)
+    state.monotonic = lambda: time.monotonic() + state.offset
+    return state
+
+
+async def _wait_for(condition, timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    while not condition():
+        if time.monotonic() > deadline:
+            raise TimeoutError
+        await asyncio.sleep(0.01)
+
+
+@pytest.fixture
+def shifted_clock(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    state = _shifted_clock()
+
+    class ShiftedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.now(tz) + timedelta(seconds=state.offset)
+
+    monkeypatch.setattr(nats_queue, "time", SimpleNamespace(monotonic=state.monotonic))
+    monkeypatch.setattr(send_module, "dt", ShiftedDatetime)
+    monkeypatch.setattr(client_module, "time", SimpleNamespace(time=lambda: time.time() + state.offset))
+    return state
 
 
 @pytest.fixture
@@ -75,18 +133,20 @@ def _fresh_queues(monkeypatch: pytest.MonkeyPatch) -> tuple[InMemoryNotification
 
 
 @pytest.mark.asyncio
-async def test_in_memory_release_puts_items_back_at_the_front_and_drain_returns_the_whole_backlog_in_order():
+async def test_in_memory_deliveries_handed_back_are_drained_with_the_backlog_in_due_order():
     queue = InMemoryNotificationQueue()
     for index in range(4):
         await queue.enqueue({"n": index})
     first = await queue.dequeue(timeout=0.1)
     second = await queue.dequeue(timeout=0.1)
 
-    await queue.release(first, second)
+    await first.release(delay=0)
+    await second.release(delay=0)
 
-    assert await queue.dequeue(timeout=0.1) == {"n": 0}
-    await queue.release({"n": 0})
-    assert queue.drain_nowait() == [{"n": 0}, {"n": 1}, {"n": 2}, {"n": 3}]
+    again = await queue.dequeue(timeout=0.1)
+    assert again.data == {"n": 2}
+    await again.release(delay=0)
+    assert [item["n"] for item in queue.drain_nowait()] == [3, 0, 1, 2]
     assert queue.drain_nowait() == []
 
 
@@ -94,122 +154,80 @@ async def test_in_memory_release_puts_items_back_at_the_front_and_drain_returns_
 async def test_nats_redelivers_a_cancelled_in_flight_item_exactly_once_and_never_spills_it(
     monkeypatch: pytest.MonkeyPatch, spool_path
 ):
-    consumer = _Consumer()
-    queue = NatsNotificationQueue()
-    queue._consumer = consumer
-    item = _telegram("in flight")
-    msg = _Msg(consumer, item)
-    consumer.pending.append(msg)
-    delivered = []
-    stuck = asyncio.Event()
-
-    async def process(value):
-        if not delivered and not stuck.is_set():
-            stuck.set()
-            await asyncio.Event().wait()
-        delivered.append(value["message"])
-
-    monkeypatch.setattr(client_module, "process_notification", process)
+    clock = _shifted_clock()
+    queue = make_nats_queue(clock)
     monkeypatch.setattr(queue_manager, "queue_instance", queue)
-    monkeypatch.setattr(queue_manager, "webhook_queue_instance", NatsNotificationQueue())
+    monkeypatch.setattr(queue_manager, "webhook_queue_instance", make_nats_queue(clock))
+    async with _local_receiver() as receiver:
+        await _use_notification_receiver(monkeypatch, receiver)
+        receiver.stall_first.add("in flight")
+        await _discord(receiver, "in flight")
 
-    in_flight = await queue.dequeue(timeout=0.1)
-    task = asyncio.create_task(client_module.process_queued_notification(queue, in_flight))
-    await asyncio.wait_for(stuck.wait(), timeout=1.0)
-    task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await task
+        in_flight = await queue.dequeue(timeout=0.1)
+        task = asyncio.create_task(client_module.process_notification(in_flight))
+        await _wait_for(lambda: receiver.stalled)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
-    assert (msg.acks, msg.naks) == (0, 1)
-    assert queue.drain_nowait() == []
-    await notification_spool.persist_notification_backlog()
-    assert not spool_path.exists()
+        message = queue._consumer.messages[0]
+        assert (message.acked, message.naks) == (False, [1])
+        assert queue.drain_nowait() == []
+        await notification_spool.persist_notification_backlog()
+        assert not spool_path.exists()
 
-    redelivered = await queue.dequeue(timeout=0.1)
-    await client_module.process_queued_notification(queue, redelivered)
+        clock.offset += 2
+        redelivered = await queue.dequeue(timeout=0.1)
+        await client_module.process_notification(redelivered)
+        await client_module.client.close()
 
-    assert delivered == ["in flight"]
-    assert (msg.acks, msg.naks) == (1, 1)
+    assert receiver.delivered == ["in flight"]
+    assert queue._consumer.messages[1].acked
     assert await queue.dequeue(timeout=0.05) is None
-
-
-def _webhook_settings() -> SimpleNamespace:
-    return SimpleNamespace(
-        enable=True,
-        proxy_url=None,
-        recurrent=3,
-        timeout=0.3,
-        webhooks=[SimpleNamespace(url="https://hooks.invalid/x", secret=None)],
-    )
-
-
-def _patch_webhook_sending(monkeypatch: pytest.MonkeyPatch, sent: list, *, block: asyncio.Event | None = None):
-    async def settings():
-        return _webhook_settings()
-
-    async def send_to_all(client, payloads, webhooks):
-        if block is not None:
-            await block.wait()
-        sent.extend(payload["event"] for payload in payloads)
-        return True
-
-    monkeypatch.setattr(send_module, "webhook_settings", settings)
-    monkeypatch.setattr(send_module, "send_to_all_webhooks", send_to_all)
-    monkeypatch.setattr(send_module, "create_outbound_http_session", lambda proxy=None: _Session())
 
 
 @pytest.mark.asyncio
 async def test_backlog_retries_and_an_in_flight_item_survive_a_restart_and_are_each_delivered_once(
-    monkeypatch: pytest.MonkeyPatch, spool_path
+    monkeypatch: pytest.MonkeyPatch, spool_path, shifted_clock
 ):
-    queue, _ = _fresh_queues(monkeypatch)
-    delivered: list[str] = []
-    sent: list[str] = []
-    in_flight_started = asyncio.Event()
-    blocked_once: set[str] = set()
-
-    async def process(value):
-        message = value["message"]
-        if message == "in flight" and message not in blocked_once:
-            blocked_once.add(message)
-            in_flight_started.set()
-            await asyncio.Event().wait()
-        delivered.append(message)
-
-    monkeypatch.setattr(client_module, "process_notification", process)
-    _patch_webhook_sending(monkeypatch, sent)
-
-    await queue.enqueue(_telegram("in flight"))
-    await client_module.start_notification_dispatcher()
-    await asyncio.wait_for(in_flight_started.wait(), timeout=2.0)
-    for index in range(3):
-        await queue.enqueue(_telegram(f"backlog {index}"))
-    await queue_manager.enqueue_webhook({"event": "retry"}, send_at=time.time() + 0.3, tries=1)
-    await send_module.send_notifications()
-    assert sent == []
-
-    await notification_spool.persist_notification_backlog()
-
-    assert delivered == []
-    saved = json.loads(spool_path.read_text())["notifications"]
-    assert [entry["item"].get("message") or entry["item"]["payload"]["event"] for entry in saved] == [
-        "in flight",
-        "backlog 0",
-        "backlog 1",
-        "backlog 2",
-        "retry",
-    ]
-
     _fresh_queues(monkeypatch)
-    await notification_spool.restore_notification_backlog()
-    assert not spool_path.exists()
+    async with _local_receiver() as receiver:
+        await _use_notification_receiver(monkeypatch, receiver)
+        _use_webhook_receiver(monkeypatch, receiver)
+        receiver.stall_first.add("in flight")
+        try:
+            await _discord(receiver, "in flight")
+            await client_module.start_notification_dispatcher()
+            await _wait_for(lambda: receiver.stalled)
+            for index in range(3):
+                await _discord(receiver, f"backlog {index}")
+            await queue_manager.enqueue_webhook({"event": "retry"}, send_at=time.time() + 30, tries=1)
+            await send_module.send_notifications()
+            assert receiver.webhook_events == []
 
-    await process_notification_queues.process_all_notification_queues()
-    await asyncio.sleep(0.35)
-    await send_module.send_notifications()
+            await notification_spool.persist_notification_backlog()
 
-    assert delivered == ["in flight", "backlog 0", "backlog 1", "backlog 2"]
-    assert sent == ["retry"]
+            assert receiver.delivered == []
+            saved = json.loads(spool_path.read_text())["notifications"]
+            assert [
+                entry["item"].get("json_data", {}).get("content") or entry["item"]["payload"]["event"]
+                for entry in saved
+            ] == ["backlog 0", "backlog 1", "backlog 2", "in flight", "retry"]
+
+            _fresh_queues(monkeypatch)
+            await notification_spool.restore_notification_backlog()
+            assert not spool_path.exists()
+
+            await process_notification_queues.process_all_notification_queues()
+            shifted_clock.offset += 31
+            await send_module.send_notifications()
+        finally:
+            await client_module.stop_notification_dispatcher()
+            if client_module.client is not None:
+                await client_module.client.close()
+
+    assert receiver.delivered == ["backlog 0", "backlog 1", "backlog 2", "in flight"]
+    assert receiver.webhook_events == ["retry"]
 
     second_queue, second_webhooks = _fresh_queues(monkeypatch)
     await notification_spool.restore_notification_backlog()
@@ -270,25 +288,44 @@ async def test_unreadable_entries_are_kept_aside_loudly_while_the_readable_ones_
 
 
 @pytest.mark.asyncio
-async def test_a_webhook_batch_cancelled_mid_send_hands_every_item_back_once_in_order(
+async def test_a_webhook_batch_cancelled_mid_send_hands_every_item_back_exactly_once(
     monkeypatch: pytest.MonkeyPatch,
 ):
     _, webhooks = _fresh_queues(monkeypatch)
-    sent: list[str] = []
-    block = asyncio.Event()
-    _patch_webhook_sending(monkeypatch, sent, block=block)
-    for name in ("a", "b", "c"):
-        await queue_manager.enqueue_webhook({"event": name}, send_at=time.time() - 1)
+    stall = asyncio.Event()
+    seen: list[list[str]] = []
 
-    task = asyncio.create_task(send_module.send_notifications())
-    for _ in range(100):
-        if webhooks.q.empty() and not webhooks._returned:
-            break
-        await asyncio.sleep(0.01)
-    await asyncio.sleep(1.1)
-    task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await task
+    async def stalling_hook(request):
+        seen.append([item["event"] for item in await request.json()])
+        await stall.wait()
+        return web.Response(status=204)
 
-    assert sent == []
-    assert [item["payload"]["event"] for item in webhooks.drain_nowait()] == ["a", "b", "c"]
+    application = web.Application()
+    application.router.add_post("/hook", stalling_hook)
+    runner = web.AppRunner(application)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    url = f"http://127.0.0.1:{site._server.sockets[0].getsockname()[1]}/hook"
+    stored = Webhook(enable=True, webhooks=[{"url": url, "secret": "s"}], timeout=1, recurrent=3)
+
+    async def settings():
+        return stored
+
+    monkeypatch.setattr(send_module, "webhook_settings", settings)
+    try:
+        for name in ("a", "b", "c"):
+            await queue_manager.enqueue_webhook({"event": name}, send_at=time.time() - 1)
+
+        task = asyncio.create_task(send_module.send_notifications())
+        await _wait_for(lambda: seen)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+    finally:
+        stall.set()
+        await runner.cleanup()
+
+    assert seen == [["a", "b", "c"]]
+    assert sorted(item["payload"]["event"] for item in webhooks.drain_nowait()) == ["a", "b", "c"]
+    assert webhooks.drain_nowait() == []

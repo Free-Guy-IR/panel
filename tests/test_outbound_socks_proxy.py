@@ -190,7 +190,7 @@ async def test_a_notification_through_a_socks_proxy_is_delivered(monkeypatch):
         monkeypatch.setattr(notification_client, "client", None)
         await notification_client.define_client()
         try:
-            delivered = await notification_client._send_discord_webhook_direct({"content": "probe"}, url, 2)
+            delivered, _ = await notification_client._post_notification_safely(url, json={"content": "probe"})
         finally:
             await notification_client.client.close()
 
