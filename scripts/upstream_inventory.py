@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import ast
+import bisect
 import difflib
 import functools
 import hashlib
@@ -1743,36 +1744,52 @@ def later_change_blocks(old_ref, new_ref, path):
                 int(match.group(n)) if match.group(n) is not None else 1 for n in (1, 2, 3, 4)
             )
             blocks.append(
-                (frozenset(range(old_at, old_at + old_count)), frozenset(range(new_at, new_at + new_count)))
+                (
+                    frozenset(range(old_at, old_at + old_count)),
+                    frozenset(range(new_at, new_at + new_count)),
+                    new_at if new_count == 0 else new_at - 1,
+                )
             )
     return blocks
 
 
 @functools.lru_cache(maxsize=256)
-def aligned_positions(lines, reference_lines):
+def aligned_lines(lines, reference_lines):
     matcher = difflib.SequenceMatcher(None, lines, reference_lines, autojunk=False)
-    return frozenset(i + k for i, _, size in matcher.get_matching_blocks() for k in range(size))
+    return {i + k: j + k for i, j, size in matcher.get_matching_blocks() for k in range(size)}
+
+
+def upstream_drops_too(pairs, kept, anchor, reference_size):
+    previous = bisect.bisect_right(kept, anchor) - 1
+    following = previous + 1
+    before = -1 if previous < 0 else pairs.get(previous)
+    after = reference_size if following >= len(kept) else pairs.get(following)
+    return before is not None and after is not None and after == before + 1
 
 
 def own_hunk_in_upstream_form(fork_sha, head, path, hunk, reference, here, dropped, inserted, gone):
     upstream_now = normalised_file(reference, path) if reference else None
-    if upstream_now is None or here is None or hunk["post_span"] is None:
+    content = head_blob(head, path)
+    if upstream_now is None or here is None or content is None or hunk["post_span"] is None:
         return False
     start = hunk["post_span"][0]
     span = frozenset(range(start, start + len(hunk["post"])))
     own = {start + k for k, (text, changed) in enumerate(hunk["post"]) if changed and normalise_line(path, text)}
-    upstream_places = aligned_positions(here, upstream_now)
+    pairs = aligned_lines(here, upstream_now)
+    kept = kept_line_numbers(path, content)
     replacements = {}
     covered = set()
-    for removed, added_numbers in later_change_blocks(fork_sha, head, path):
+    for removed, added_numbers, anchor in later_change_blocks(fork_sha, head, path):
         if not removed & own:
             continue
         added = sorted(normalised_positions(head, path, added_numbers))
-        if not added or not set(added) <= upstream_places:
+        if added and not all(i in pairs for i in added):
+            return False
+        if not added and not upstream_drops_too(pairs, kept, anchor, len(upstream_now)):
             return False
         replacements[min(removed & span)] = tuple(here[i] for i in added)
         covered |= removed
-    if not replacements:
+    if not covered:
         return False
     side = []
     for k, entry in enumerate(hunk["post"]):
@@ -1780,6 +1797,8 @@ def own_hunk_in_upstream_form(fork_sha, head, path, hunk, reference, here, dropp
         side.extend((text, True) for text in replacements.get(number, ()))
         if number not in covered:
             side.append(entry)
+    if not any(changed for text, changed in side if normalise_line(path, text)):
+        return True
     return own_lines_in_place(here, path, side, dropped, inserted, gone)
 
 
