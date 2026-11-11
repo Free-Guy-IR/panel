@@ -361,6 +361,7 @@ async def test_apply_template_reset_locks_wireguard_pools_before_user_rows(sessi
         return "https://sub.example/sub/token"
 
     monkeypatch.setattr(user_operation, "reset_user_data_usage", reset_then_let_another_writer_in)
+    monkeypatch.setattr(user_operation, "general_settings", AsyncMock(return_value=General()))
     monkeypatch.setattr(user_operation, "hwid_settings", AsyncMock(return_value=HWIDSettings()))
     monkeypatch.setattr(user_operation, "sync_users", no_op)
     monkeypatch.setattr(
@@ -380,8 +381,8 @@ async def test_apply_template_reset_locks_wireguard_pools_before_user_rows(sessi
 
     applied = await asyncio.wait_for(asyncio.gather(apply_template(), return_exceptions=True), 30)
     modified = await asyncio.wait_for(asyncio.gather(*writers, return_exceptions=True), 30)
-    assert writer_waited == [True]
     assert [result for result in applied + modified if isinstance(result, BaseException)] == []
+    assert writer_waited == [True]
     assert await _lifetime(session_factory, user_id) == (0, 3_000)
 
 
