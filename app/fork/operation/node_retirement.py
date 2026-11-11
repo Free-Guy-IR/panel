@@ -8,6 +8,7 @@ from enum import StrEnum
 from types import SimpleNamespace
 
 from PasarGuardNodeBridge import Health, PasarGuardNode
+from PasarGuardNodeBridge.aiohttp_compat import LazyClientSession
 from PasarGuardNodeBridge.storage import InMemoryNodeLifecycleCoordinator, InMemoryUserSyncStore, LifecycleStatus
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,6 +92,27 @@ def _isolated_bridge_for(node) -> PasarGuardNode:
     return node_package.create_node(**kwargs)
 
 
+async def _release(bridge: PasarGuardNode) -> None:
+    try:
+        for client in (getattr(bridge, "_client", None), getattr(bridge, "_json_client", None)):
+            if isinstance(client, LazyClientSession):
+                await client.close()
+        close_channels = getattr(bridge, "_close_chan", None)
+        if close_channels is not None:
+            close_channels()
+    except Exception as exc:
+        logger.warning(f'Could not close a connection to node "{bridge.name}": {describe_error(exc)}')
+
+
+@contextlib.asynccontextmanager
+async def _built(build: Callable[[], PasarGuardNode]):
+    bridge = build()
+    try:
+        yield bridge
+    finally:
+        await _release(bridge)
+
+
 def rpc_timeout(node) -> int:
     return max(int(getattr(node, "internal_timeout", None) or 15), 1)
 
@@ -101,7 +123,8 @@ async def stop_and_verify(
     reclaimed: Callable[[], Awaitable[bool]] | None = None,
 ) -> tuple[Retirement, str]:
     try:
-        probe = await build().info(timeout=timeout)
+        async with _built(build) as prober:
+            probe = await prober.info(timeout=timeout)
     except Exception as exc:
         return Retirement.unreachable, describe_error(exc)
     if probe is None:
@@ -111,13 +134,14 @@ async def stop_and_verify(
         if reclaimed is not None and await reclaimed():
             return Retirement.absent, "the server is a node again"
         try:
-            stopper = build()
-            await stopper.set_health(Health.BROKEN)
-            await stopper.stop(timeout=timeout)
+            async with _built(build) as stopper:
+                await stopper.set_health(Health.BROKEN)
+                await stopper.stop(timeout=timeout)
         except Exception as exc:
             detail = f"Stop was not sent: {describe_error(exc)}"
         try:
-            info = await build().info(timeout=timeout)
+            async with _built(build) as checker:
+                info = await checker.info(timeout=timeout)
         except Exception as exc:
             return Retirement.unreachable, describe_error(exc)
         if info is None:
@@ -130,10 +154,10 @@ async def stop_and_verify(
 
 async def _restore_running_lifecycle(db_node) -> None:
     try:
-        probe = _bridge_for(db_node)
-        state = await probe.get_lifecycle_state()
-        if state is not None and state.observed is not LifecycleStatus.HEALTHY:
-            await probe.update_observed_lifecycle(LifecycleStatus.HEALTHY, expected_epoch=state.epoch)
+        async with _built(lambda: _bridge_for(db_node)) as probe:
+            state = await probe.get_lifecycle_state()
+            if state is not None and state.observed is not LifecycleStatus.HEALTHY:
+                await probe.update_observed_lifecycle(LifecycleStatus.HEALTHY, expected_epoch=state.epoch)
     except Exception as exc:
         logger.warning(f'Could not record that the core of "{db_node.name}" is still running: {describe_error(exc)}')
 
