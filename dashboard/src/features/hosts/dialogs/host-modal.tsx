@@ -23,9 +23,6 @@ import { AlertTriangle, Cable, ChevronsLeftRightEllipsis, Copy, Pencil, GlobeLoc
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import { hostFormDefaultValues, type HostFormValues } from '@/features/hosts/forms/host-form'
-import { LoaderButton } from '@/components/ui/loader-button'
-import { XrayStreamFinalmaskFields } from '@/features/core-editor/components/shared/xray-stream-finalmask-editor'
 import {
   applyHostProtocolPayload,
   hasHostProtocolExtraSection,
@@ -34,6 +31,9 @@ import {
   useHostProtocolFormEffects,
   type HostProtocolMode,
 } from '@/fork/hosts'
+import { hostFormDefaultValues, type HostFormValues } from '@/features/hosts/forms/host-form'
+import { LoaderButton } from '@/components/ui/loader-button'
+import { XrayStreamFinalmaskFields } from '@/features/core-editor/components/shared/xray-stream-finalmask-editor'
 import { FormRealityFingerprintWarning as RealityFingerprintWarning } from '@/components/common/reality-fingerprint-warning'
 
 // Predefined sessionIDTable aliases recognized by Xray 26.6.22+.
