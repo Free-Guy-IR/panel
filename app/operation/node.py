@@ -117,6 +117,7 @@ from config import nats_settings, runtime_settings
 MAX_MESSAGE_LENGTH = 128
 # Cap parallel start/attach so ~100 nodes don't stampede NATS lifecycle KV.
 CONNECT_CONCURRENCY = 10
+REALTIME_STATS_WAIT_SECONDS = 5
 ATTACH_SYNC_ATTEMPTS = 3
 ATTACH_SYNC_BACKOFF = 1.0
 FENCE_WAIT_SECONDS = 60.0
@@ -1530,11 +1531,15 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         nodes = await node_manager.get_healthy_nodes()
         stats_tasks = {id: asyncio.create_task(self._get_node_stats_safe(id)) for id, _ in nodes}
 
-        await asyncio.gather(*stats_tasks.values(), return_exceptions=True)
+        if stats_tasks:
+            await asyncio.wait(stats_tasks.values(), timeout=REALTIME_STATS_WAIT_SECONDS)
 
         results = {}
         for node_id, task in stats_tasks.items():
-            if task.exception():
+            if not task.done():
+                task.cancel()
+                results[node_id] = None
+            elif task.exception():
                 results[node_id] = None
             else:
                 results[node_id] = task.result()
