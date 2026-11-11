@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.models.stats import Period
+from app.models.stats import USAGE_RECORD_GRANULARITY, Period
 from app.models.user import UsersUsageBreakdownQuery
 from app.operation import OperatorType
 from app.operation.user import UserOperation
@@ -38,7 +38,7 @@ async def test_breakdown_parameters_cannot_skip_the_date_window_validation(extra
     ):
         await operator.get_users_usage(AsyncMock(), SimpleNamespace(), query)
 
-    validate.assert_awaited_once_with(START, END, True, period=Period.hour)
+    validate.assert_awaited_once_with(START, END, True, period=Period.hour, granularity=USAGE_RECORD_GRANULARITY)
     aggregate.assert_not_called()
 
 
