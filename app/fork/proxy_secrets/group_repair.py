@@ -50,10 +50,6 @@ _dirty_user_ids: set[int] = set()
 PushUsers = Callable[[list[User]], Awaitable[None]]
 
 
-class GroupChangeLost(RuntimeError):
-    pass
-
-
 async def allocate_and_grant(db: AsyncSession, users: Sequence[User]) -> None:
     await acquire_proxy_secrets_lock(db)
     await sync_users_allocations(db, list(users))
@@ -176,12 +172,12 @@ async def _bounded_lock_wait(db: AsyncSession) -> AsyncIterator[None]:
         raise failure
 
 
-async def _attempt_twice(
-    db: AsyncSession, users: Sequence[User], user_ids: Sequence[int]
-) -> tuple[BaseException | None, bool]:
+async def _attempt_twice(db: AsyncSession, users: Sequence[User], user_ids: Sequence[int]) -> None:
     failure, retryable = await _attempt(db, users)
-    if failure is None or not retryable:
-        return failure, retryable
+    if failure is None:
+        return
+    if not retryable:
+        raise failure
     logger.warning(
         f"WireGuard allocation and entitled secrets for users {list(user_ids)[:20]} could not take the proxy "
         f"secrets lock ({describe_failure(failure)}); retrying once in {IN_REQUEST_RETRY_PAUSE_SECONDS:g}s"
@@ -189,25 +185,20 @@ async def _attempt_twice(
     await asyncio.sleep(IN_REQUEST_RETRY_PAUSE_SECONDS)
     await acquire_proxy_secrets_lock(db)
     await get_users_by_ids(db, list(user_ids), load_admin_role=True)
-    return await _attempt(db, users)
+    failure, _ = await _attempt(db, users)
+    if failure is not None:
+        raise failure
 
 
 async def allocate_and_grant_with_one_retry(db: AsyncSession, users: Sequence[User], user_ids: Sequence[int]) -> None:
     await db.commit()
     async with _bounded_lock_wait(db):
-        failure, _ = await _attempt_twice(db, users, user_ids)
-        if failure is not None:
-            raise failure
+        await _attempt_twice(db, users, user_ids)
 
 
 async def allocate_and_grant_in_the_change(db: AsyncSession, users: Sequence[User], user_ids: Sequence[int]) -> None:
     async with _bounded_lock_wait(db):
-        failure, transaction_kept = await _attempt_twice(db, users, user_ids)
-        if failure is None:
-            return
-        if not transaction_kept:
-            raise GroupChangeLost(describe_failure(failure)) from failure
-        raise failure
+        await _attempt_twice(db, users, user_ids)
 
 
 async def lock_allocation_rows(db: AsyncSession, user_ids: Iterable[int]) -> None:
