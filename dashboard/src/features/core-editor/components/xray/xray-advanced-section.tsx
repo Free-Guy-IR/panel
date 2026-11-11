@@ -82,8 +82,6 @@ export function XrayAdvancedSection() {
   const sbBaseline = useCoreEditorStore(s => s.sbBaseline)
   const ovDraft = useCoreEditorStore(s => s.ovDraft)
   const ovBaseline = useCoreEditorStore(s => s.ovBaseline)
-  const mtDraft = useCoreEditorStore(s => s.mtDraft)
-  const mtBaseline = useCoreEditorStore(s => s.mtBaseline)
   const l2tpDraft = useCoreEditorStore(s => s.l2tpDraft)
   const l2tpBaseline = useCoreEditorStore(s => s.l2tpBaseline)
   const [showDiff, setShowDiff] = useState(false)
@@ -188,7 +186,7 @@ export function XrayAdvancedSection() {
     } catch {
       return {} as JsonValue
     }
-  }, [kind, wgBaseline, sbBaseline, ovBaseline, mtBaseline, l2tpBaseline, xrayBaseline, effectiveTab])
+  }, [kind, wgBaseline, sbBaseline, ovBaseline, l2tpBaseline, xrayBaseline, effectiveTab])
 
   const afterJson = useMemo<JsonValue>(() => {
     try {
@@ -204,7 +202,7 @@ export function XrayAdvancedSection() {
     } catch {
       return {} as JsonValue
     }
-  }, [kind, wgDraft, sbDraft, ovDraft, mtDraft, l2tpDraft, xrayProfile, effectiveTab])
+  }, [kind, wgDraft, sbDraft, ovDraft, l2tpDraft, xrayProfile, effectiveTab])
 
   const editorValue = effectiveTab === 'all' ? monacoJson : tabDraft
   const editorOnChange = effectiveTab === 'all' ? handleAllJsonChange : handleTabJsonChange
