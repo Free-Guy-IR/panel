@@ -3117,6 +3117,55 @@ def test_a_carrier_line_replaced_by_upstreams_own_form_still_carries_a_security_
         )
 
 
+SVC_SKIPPING = SVC.replace("    a(user)\n", "    check(user)\n    skip_legacy(user)\n    a(user)\n")
+SVC_UNSKIPPED = SVC_SKIPPING.replace("    skip_legacy(user)\n", "")
+
+
+def dropped_line_world(tmp_path, case):
+    path = tmp_path / f"dropped-line-{case}"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "upstream base", {"svc.py": SVC})
+    git(path, "tag", "v1.0")
+    fix = commit(path, "fix: check the caller and skip legacy callers", {"svc.py": SVC_SKIPPING})
+    tip = fix
+    if case == "upstream-drops-it-too":
+        tip = commit(path, "fix: legacy callers are gone", {"svc.py": SVC_UNSKIPPED})
+    git(path, "update-ref", "refs/remotes/upstream/dev", tip)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    carrier = commit(
+        path, "fork: check the caller and skip legacy callers", {"svc.py": SVC_SKIPPING, "fork.py": "fork\n"}
+    )
+    if case == "upstream-drops-it-too":
+        git(path, "cherry-pick", "-x", tip)
+    elif case == "fork-only-drop":
+        commit(path, "fork: stop skipping legacy callers", {"svc.py": SVC_UNSKIPPED})
+    else:
+        moved = SVC_UNSKIPPED + "\n\ndef legacy(user):\n    skip_legacy(user)\n"
+        commit(path, "fork: skip legacy callers in their own function", {"svc.py": moved})
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the caller itself in fork commit {carrier} security: yes\n"
+    )
+    return path, fix, text
+
+
+@pytest.mark.parametrize(
+    ("case", "code"),
+    [("upstream-drops-it-too", 0), ("fork-only-drop", 1), ("moved-where-upstream-keeps-it", 1)],
+)
+def test_a_carrier_line_dropped_as_upstream_dropped_it_still_carries_a_security_design_port(tmp_path, case, code):
+    path, fix, text = dropped_line_world(tmp_path, case)
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but its reason names no fork commit on main" in (
+            result.stdout
+        )
+
+
 @pytest.mark.parametrize(
     ("named_path", "undo_guard", "code"),
     [(" in guard.py:2", False, 0), ("", False, 1), (" in guard.py:2", True, 1), (" in NOTES.md", False, 1)],
