@@ -20,6 +20,7 @@ from app.utils.http_client import INVALID_PROXY_MESSAGE, InvalidProxyURL, create
 from app.utils.logger import get_logger
 
 client: aiohttp.ClientSession | None = None
+_client_generation = 0
 
 
 async def define_client():
@@ -27,16 +28,21 @@ async def define_client():
     Re-create the global aiohttp.ClientSession.
     Call this function after changing the proxy setting.
     """
-    global client
-    if client and not client.closed:
-        asyncio.create_task(client.close())
+    global client, _client_generation
+    _client_generation += 1
+    generation = _client_generation
     settings = await notification_settings()
+    if generation != _client_generation:
+        return
     proxy_url = settings.proxy_url
+    replaced = client
     try:
         client = create_outbound_http_session(proxy=proxy_url if proxy_url else None)
     except InvalidProxyURL:
         client = None
         logger.error(INVALID_PROXY_MESSAGE)
+    if replaced and not replaced.closed:
+        asyncio.create_task(replaced.close())
 
 
 on_startup(define_client)
