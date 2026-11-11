@@ -101,7 +101,7 @@ def test_user_usage_bucket_limit(access_token):
             assert response.status_code == status.HTTP_200_OK, response.text
 
         sub_usage = f"{user['subscription_url']}/usage"
-        _assert_rejected(client.get(sub_usage, params=TOO_LONG))
+        assert client.get(sub_usage, params=TOO_LONG).status_code == status.HTTP_400_BAD_REQUEST
         response = client.get(sub_usage, params=NORMAL)
         assert response.status_code == status.HTTP_200_OK, response.text
     finally:
