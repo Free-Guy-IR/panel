@@ -1,8 +1,10 @@
 from collections.abc import Iterable
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import DBAPIError
 
 from app.db import AsyncSession
+from app.db.crud.wireguard import ensure_wireguard_subnet_pools
 from app.db.models import CoreConfig, Node, node_additional_cores_association
 from app.fork.cores.singbox_guard import (
     domain_rule_line_break_message,
@@ -11,9 +13,38 @@ from app.fork.cores.singbox_guard import (
     unsafe_singbox_core_nodes_message,
 )
 from app.fork.crud.core import get_node_versions_by_core
-from app.fork.proxy_secrets.locks import read_committed_rows
+from app.fork.proxy_secrets.errors import describe_failure
+from app.fork.proxy_secrets.locks import (
+    NamedLockMissing,
+    acquire_proxy_secrets_lock,
+    is_lock_unavailable,
+    read_committed_rows,
+)
 from app.models.core import CoreType
 from app.utils.l2tp import ensure_l2tp_core_material
+from app.utils.logger import get_logger
+
+logger = get_logger("core-operation")
+
+
+async def lock_proxy_secrets_for_a_pool_change(db: AsyncSession) -> None:
+    await db.commit()
+    await acquire_proxy_secrets_lock(db)
+
+
+async def ensure_wireguard_pools_unless_the_lock_is_busy(db: AsyncSession) -> None:
+    try:
+        await lock_proxy_secrets_for_a_pool_change(db)
+        await ensure_wireguard_subnet_pools(db)
+        await db.commit()
+    except (DBAPIError, NamedLockMissing) as exc:
+        if not is_lock_unavailable(exc):
+            raise
+        await db.rollback()
+        logger.warning(
+            "the new core is saved, but its WireGuard pool rows were not created because the proxy secrets lock "
+            f"was busy ({describe_failure(exc)}); the first allocation in each new subnet creates its row"
+        )
 
 
 def apply_l2tp_core_config(core) -> None:

@@ -1,6 +1,8 @@
 import asyncio
 from typing import NamedTuple
 
+from sqlalchemy.exc import DBAPIError
+
 from app import notification
 from app.core.hosts import host_manager
 from app.core.live_update import node_facing, only_live_parts_changed
@@ -19,7 +21,6 @@ from app.db.crud.core import (
 from app.db.crud.host import get_hosts
 from app.db.crud.user import get_users_by_ids
 from app.db.crud.wireguard import (
-    ensure_wireguard_subnet_pools,
     get_wg_cores,
     reconcile_wireguard_subnets,
     wg_core_interfaces,
@@ -28,10 +29,13 @@ from app.db.crud.wireguard import (
 from app.fork.operation.core_extras import (
     apply_l2tp_core_config,
     cores_in_use_message,
+    ensure_wireguard_pools_unless_the_lock_is_busy,
     guard_singbox_domain_rules,
     guard_singbox_user_accounting,
+    lock_proxy_secrets_for_a_pool_change,
 )
 from app.fork.operation.entitled_secrets import grant_entitled_secrets_for_core
+from app.fork.proxy_secrets.locks import LOCK_UNAVAILABLE_DETAIL, NamedLockMissing, is_lock_unavailable
 from app.models.admin import AdminDetails
 from app.models.core import (
     BulkCoreSelection,
@@ -111,8 +115,7 @@ class CoreOperation(BaseOperation):
 
     async def _ensure_wireguard_pools(self, db: AsyncSession) -> None:
         """Create pool rows for WG namespaces without scanning users (O(subnets))."""
-        await ensure_wireguard_subnet_pools(db)
-        await db.commit()
+        await ensure_wireguard_pools_unless_the_lock_is_busy(db)
 
     async def _reconcile_wireguard(self, db: AsyncSession) -> None:
         """Fix pool rows and user peer IPs after a WG core change, then resync changed users."""
@@ -121,6 +124,14 @@ class CoreOperation(BaseOperation):
         if changed_ids:
             users = await get_users_by_ids(db, changed_ids, load_admin_role=True)
             await sync_users(users)
+
+    async def _lock_wireguard_pools(self, db: AsyncSession) -> None:
+        try:
+            await lock_proxy_secrets_for_a_pool_change(db)
+        except (DBAPIError, NamedLockMissing) as exc:
+            if not is_lock_unavailable(exc):
+                raise
+            await self.raise_error(message=LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
 
     async def scan_reality_target(self, request: RealityScanRequest) -> RealityScanResult:
         try:
@@ -196,10 +207,15 @@ class CoreOperation(BaseOperation):
         except Exception as e:
             await self.raise_error(message=e, code=400, db=db)
         await self._validate_wireguard_subnet(db, modified_core, exclude_core_id=db_core.id)
+        reconciles = was_wg or bool(wg_core_interfaces(modified_core))
+        if reconciles:
+            await self._lock_wireguard_pools(db)
         try:
-            db_core = await modify_core_config(db, db_core, modified_core)
+            db_core = await modify_core_config(db, db_core, modified_core, commit=not reconciles)
         except Exception as e:
             await self.raise_error(message=e, code=400, db=db)
+        if reconciles:
+            await self._reconcile_wireguard(db)
 
         await core_manager.update_core(db_core, validated_core)
 
@@ -208,8 +224,6 @@ class CoreOperation(BaseOperation):
         core = CoreResponse.model_validate(db_core)
         asyncio.create_task(notification.modify_core(core, admin.username))
 
-        if was_wg or wg_core_interfaces(modified_core):
-            await self._reconcile_wireguard(db)
         await self._refresh_hosts_from_db(db)
         await grant_entitled_secrets_for_core(self, db, db_core)
 
@@ -221,6 +235,8 @@ class CoreOperation(BaseOperation):
 
         db_core = await self.get_validated_core_config(db, core_id)
         was_wg = bool(wg_core_interfaces(db_core))
+        if was_wg:
+            await self._lock_wireguard_pools(db)
 
         in_use = await cores_in_use_message(db, [db_core])
         if in_use:
@@ -228,15 +244,15 @@ class CoreOperation(BaseOperation):
 
         affected_node_ids = await get_node_ids_by_core(db, core_id)
 
-        await remove_core_config(db, db_core)
+        await remove_core_config(db, db_core, commit=not was_wg)
+        if was_wg:
+            await self._reconcile_wireguard(db)
         await core_manager.remove_core(db_core.id)
 
         asyncio.create_task(notification.remove_core(db_core.id, admin.username))
 
         logger.info(f'core config "{db_core.name}" deleted by admin "{admin.username}"')
 
-        if was_wg:
-            await self._reconcile_wireguard(db)
         await self._refresh_hosts_from_db(db)
 
         return affected_node_ids
@@ -257,16 +273,21 @@ class CoreOperation(BaseOperation):
             if db_core.id == 1:
                 await self.raise_error(message="Cannot delete default core config", code=403)
 
+        any_wg = any(wg_core_interfaces(c) for c in db_cores_list)
+        if any_wg:
+            await self._lock_wireguard_pools(db)
+
         in_use = await cores_in_use_message(db, db_cores_list)
         if in_use:
             await self.raise_error(message=in_use, code=409, db=db)
 
         core_ids = [c.id for c in db_cores_list]
         core_names = [c.name for c in db_cores_list]
-        any_wg = any(wg_core_interfaces(c) for c in db_cores_list)
 
         # Batch delete using CRUD function
-        await remove_cores(db, core_ids)
+        await remove_cores(db, core_ids, commit=not any_wg)
+        if any_wg:
+            await self._reconcile_wireguard(db)
 
         # Remove from core manager and notify
         for core_id, core_name in zip(core_ids, core_names):
@@ -274,8 +295,6 @@ class CoreOperation(BaseOperation):
             asyncio.create_task(notification.remove_core(core_id, admin.username))
             logger.info(f'core config "{core_name}" deleted by admin "{admin.username}"')
 
-        if any_wg:
-            await self._reconcile_wireguard(db)
         await self._refresh_hosts_from_db(db)
 
         return RemoveCoresResponse(cores=core_names, count=len(db_cores_list))

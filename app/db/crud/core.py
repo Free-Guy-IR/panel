@@ -65,7 +65,7 @@ async def create_core_config(db: AsyncSession, core_config: CoreCreate) -> CoreC
 
 
 async def modify_core_config(
-    db: AsyncSession, db_core_config: CoreConfig, modified_core_config: CoreCreate
+    db: AsyncSession, db_core_config: CoreConfig, modified_core_config: CoreCreate, *, commit: bool = True
 ) -> CoreConfig:
     """
     Modifies an existing core configuration with new information.
@@ -83,12 +83,15 @@ async def modify_core_config(
     for key, value in core_data.items():
         setattr(db_core_config, key, value)
 
-    await db.commit()
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
     await db.refresh(db_core_config)
     return db_core_config
 
 
-async def remove_core_config(db: AsyncSession, db_core_config: CoreConfig) -> None:
+async def remove_core_config(db: AsyncSession, db_core_config: CoreConfig, *, commit: bool = True) -> None:
     """
     Removes a core configuration from the database.
 
@@ -103,7 +106,10 @@ async def remove_core_config(db: AsyncSession, db_core_config: CoreConfig) -> No
         )
     )
     await db.delete(db_core_config)
-    await db.commit()
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
 
 
 async def get_core_configs(db: AsyncSession, query: CoreListQuery) -> tuple[list[CoreConfig], int]:
@@ -217,7 +223,7 @@ async def reorder_core_configs(db: AsyncSession, ordered_ids: list[int]) -> bool
     return True
 
 
-async def remove_cores(db: AsyncSession, core_ids: list[int]) -> None:
+async def remove_cores(db: AsyncSession, core_ids: list[int], *, commit: bool = True) -> None:
     """
     Removes multiple cores from the database by ID.
 
@@ -235,4 +241,5 @@ async def remove_cores(db: AsyncSession, core_ids: list[int]) -> None:
         )
     )
     await db.execute(delete(CoreConfig).where(CoreConfig.id.in_(core_ids)))
-    await db.commit()
+    if commit:
+        await db.commit()
