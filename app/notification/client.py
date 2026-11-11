@@ -10,7 +10,11 @@ import aiohttp
 from pydantic import ValidationError
 
 from app import on_startup
-from app.fork.notification_rate_limit import dropped_after_rate_limit_lifetime, held_by_rate_limit
+from app.fork.notification_rate_limit import (
+    kept_by_rate_limit,
+    refused_over_destination_share,
+    released_by_rate_limit,
+)
 from app.models.settings import NotificationSettings
 from app.notification.nats_queue import NotificationDelivery
 from app.notification.queue_manager import (
@@ -200,14 +204,18 @@ async def process_notification(delivery: NotificationDelivery):
             now = time.time()
             limit = _rate_limit(destination, now)
             if limit is not None:
+                if await refused_over_destination_share(delivery, notification, destination, limit, now):
+                    return
                 slot = _take_slot(limit, notification, now)
                 send_at = slot + limit.offset
                 # A message that just took its slot, or whose slot a later 429 moved back, goes
                 # behind the messages ahead of it in the queue even when its time has come.
                 if slot != notification.slot or notification.send_at < send_at:
-                    if await dropped_after_rate_limit_lifetime(delivery, notification, now):
+                    notification = await kept_by_rate_limit(
+                        delivery, notification, destination, limit, slot, send_at, now
+                    )
+                    if notification is None:
                         return
-                    notification = held_by_rate_limit(notification, now)
                     scheduled = notification.model_copy(update={"slot": slot, "send_at": send_at})
                     try:
                         await delivery.retry(scheduled.model_dump(), delay=send_at - now)
@@ -235,9 +243,11 @@ async def process_notification(delivery: NotificationDelivery):
                     limit = _rate_limits[destination] = _RateLimit(first_slot=now, next_slot=now)
                 slot = _take_slot(limit, notification, now)
                 limit.offset = max(limit.offset, now + error.retry_after - slot)
-                if await dropped_after_rate_limit_lifetime(delivery, notification, now):
+                notification = await kept_by_rate_limit(
+                    delivery, notification, destination, limit, slot, slot + limit.offset, now
+                )
+                if notification is None:
                     return
-                notification = held_by_rate_limit(notification, now)
                 retry = notification.model_copy(update={"slot": slot, "send_at": slot + limit.offset})
                 await delivery.retry(retry.model_dump(), delay=retry.send_at - now)
                 return
@@ -249,6 +259,7 @@ async def process_notification(delivery: NotificationDelivery):
                 if not success:
                     logger.warning("Notification exhausted its delivery attempts")
                 await delivery.ack()
+                released_by_rate_limit(destination, notification.slot)
             else:
                 retry = notification.model_copy(
                     update={"tries": notification.tries + 1, "send_at": time.time() + delay}

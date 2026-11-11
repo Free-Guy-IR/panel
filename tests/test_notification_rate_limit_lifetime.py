@@ -137,6 +137,7 @@ async def test_a_destination_that_answers_again_gets_the_message_even_past_a_day
 async def test_messages_held_behind_a_rate_limited_one_leave_with_it_and_free_the_queue(
     backend, shifted_clock, monkeypatch, caplog
 ):
+    monkeypatch.setattr("app.fork.notification_rate_limit.rate_limit_share_settings.destination_share", 1.0)
     queue = _use_queue(backend, shifted_clock, monkeypatch, size=2)
     destinations = _Destinations()
     destinations.limited.add("limited")

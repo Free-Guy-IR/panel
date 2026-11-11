@@ -251,6 +251,7 @@ class NatsNotificationQueue(NotificationQueue):
             config.max_bytes = max(QUEUE_MAX_BYTES, info.state.bytes)
         config.discard = DiscardPolicy.NEW
         await self._js.update_stream(config)
+        self.maxsize = config.max_msgs
 
         if create_consumer:
             await self._initialize_retry_state(config)
