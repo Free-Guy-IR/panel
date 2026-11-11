@@ -24,6 +24,10 @@ import { LoaderButton } from '@/components/ui/loader-button'
 import type { NodeFormValues } from '@/features/nodes/forms/node-form'
 import type { CoreSimple } from '@/service/api'
 
+// A node without a core runs the default core (id 1, which cannot be deleted).
+// Editing must show and send that core, not the first one in the admin's order.
+const DEFAULT_CORE_CONFIG_ID = 1
+
 const MULTI_INSTANCE_CORE_TYPES = ['wg', 'singbox', 'openvpn', 'l2tp']
 
 interface NodeModalProps {
@@ -122,7 +126,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
         keep_alive: node.keep_alive,
         keep_alive_unit: 'seconds',
         api_key: (node.api_key as string) || '',
-        core_config_id: node.core_config_id ?? cores?.[0]?.id,
+        core_config_id: node.core_config_id ?? DEFAULT_CORE_CONFIG_ID,
         additional_core_config_ids: node.additional_core_config_ids ?? [],
         data_limit: dataLimitGB,
         data_limit_reset_strategy: node.data_limit_reset_strategy ?? DataLimitResetStrategy.no_reset,
@@ -179,7 +183,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
           keep_alive: nodeData.keep_alive,
           keep_alive_unit: 'seconds',
           api_key: (nodeData.api_key as string) || '',
-          core_config_id: nodeData.core_config_id ?? cores?.[0]?.id,
+          core_config_id: nodeData.core_config_id ?? DEFAULT_CORE_CONFIG_ID,
           additional_core_config_ids: nodeData.additional_core_config_ids ?? [],
           data_limit: dataLimitGB,
           data_limit_reset_strategy: nodeData.data_limit_reset_strategy ?? DataLimitResetStrategy.no_reset,
@@ -210,7 +214,7 @@ export default function NodeModal({ isDialogOpen, onOpenChange, form, editingNod
               keep_alive: nodeData.keep_alive,
               keep_alive_unit: 'seconds',
               api_key: (nodeData.api_key as string) || '',
-              core_config_id: nodeData.core_config_id ?? cores?.[0]?.id,
+              core_config_id: nodeData.core_config_id ?? DEFAULT_CORE_CONFIG_ID,
               additional_core_config_ids: nodeData.additional_core_config_ids ?? [],
               data_limit: dataLimitGB,
               data_limit_reset_strategy: nodeData.data_limit_reset_strategy ?? DataLimitResetStrategy.no_reset,
