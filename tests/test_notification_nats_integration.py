@@ -155,3 +155,26 @@ async def test_a_dispatcher_restart_keeps_a_rate_limited_destination_at_its_shar
 
     assert stored_after_each_start == [SHARE, SHARE, SHARE]
     assert _share_drops(caplog) == 5 + 25 + 25
+
+
+async def test_a_destination_that_never_stops_answering_429_leaves_room_for_the_others(nats_url, monkeypatch, caplog):
+    caplog.set_level(logging.WARNING)
+    async with _receivers(monkeypatch) as (url, seen), _dispatcher(nats_url, monkeypatch) as queue:
+        held, drops = await _held(queue), _share_drops(caplog)
+        for number in range(STREAM_LIMIT - 1):
+            await queue_manager.enqueue_discord({"content": f"limited {number}"}, url("111"))
+        await _settle(queue, caplog, held, drops, STREAM_LIMIT - 1)
+        for number in range(20):
+            await queue_manager.enqueue_discord({"content": f"healthy {number}"}, url("333"))
+        async with asyncio.timeout(20):
+            while len(seen["333"]) < 20:
+                await asyncio.sleep(0.05)
+        stored = await _stored(queue)
+
+    assert stored == SHARE
+    assert seen["333"] == [f"healthy {number}" for number in range(20)]
+    assert seen["111"] == ["limited 0"]
+    assert [
+        record.getMessage() for record in caplog.records if record.getMessage().startswith("Notification queue is full")
+    ] == []
+    assert _share_drops(caplog) == STREAM_LIMIT - 1 - SHARE
