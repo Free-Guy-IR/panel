@@ -278,12 +278,21 @@ class AdminOperation(BaseOperation):
         await self._disable_all_active_users_for_admin(db, db_admin, admin)
 
     @staticmethod
-    async def _visible_users_of(db: AsyncSession, db_admin: Admin, caller: AdminDetails) -> list:
+    async def _visible_users_of(
+        db: AsyncSession, db_admin: Admin, caller: AdminDetails, *, for_node_sync: bool = False
+    ) -> list:
         query = visible_users_query(caller)
         if query is None:
             return []
         await db.commit()
-        return await get_users(db, query=query, admin=db_admin, load_admin_role=True)
+        return await get_users(
+            db,
+            query=query,
+            admin=db_admin,
+            load_admin_role=True,
+            load_usage_logs=not for_node_sync,
+            load_group_inbounds=for_node_sync,
+        )
 
     @staticmethod
     async def _users_changed_but_no_longer_visible(db: AsyncSession, locked: list[int], visible: list) -> list:
@@ -292,14 +301,20 @@ class AdminOperation(BaseOperation):
         found: list = []
         for start in range(0, len(missing), USER_LOCK_BATCH_SIZE):
             found.extend(
-                await get_users_by_ids(db, missing[start : start + USER_LOCK_BATCH_SIZE], load_admin_role=True)
+                await get_users_by_ids(
+                    db,
+                    missing[start : start + USER_LOCK_BATCH_SIZE],
+                    load_admin_role=True,
+                    load_group_inbounds=True,
+                    load_usage_logs=False,
+                )
             )
         return found
 
     async def _push_admin_wide_change(
         self, db: AsyncSession, db_admin: Admin, admin: AdminDetails, locked: list[int]
     ) -> None:
-        visible = await self._visible_users_of(db, db_admin, admin)
+        visible = await self._visible_users_of(db, db_admin, admin, for_node_sync=True)
         await sync_users([*visible, *await self._users_changed_but_no_longer_visible(db, locked, visible)])
 
     async def _disable_all_active_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails):
