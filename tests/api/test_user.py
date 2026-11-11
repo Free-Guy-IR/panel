@@ -2448,6 +2448,25 @@ def test_next_plan_with_active_template_clears_on_hold_fields(access_token):
         cleanup_groups(access_token, core, groups)
 
 
+def test_revoke_user_subscription(access_token):
+    """Test revoke user subscription info."""
+    core, groups = setup_groups(access_token, 1)
+    user = create_user(
+        access_token,
+        group_ids=[groups[0]["id"]],
+        payload={"username": unique_name("test_user_revoke")},
+    )
+    try:
+        response = client.post(
+            f"/api/user/{user['username']}/revoke_sub",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+    finally:
+        delete_user(access_token, user["username"])
+        cleanup_groups(access_token, core, groups)
+
+
 def test_bot_extend_get_then_put_keeps_on_hold_and_next_plan_then_activation_starts_the_plan(access_token):
     core, groups = setup_groups(access_token, 1)
     next_plan = {"data_limit": 5 * 1024**3, "expire": 86400 * 30, "add_remaining_traffic": False}
@@ -2504,25 +2523,6 @@ def test_bot_extend_get_then_put_keeps_on_hold_and_next_plan_then_activation_sta
         if expire.tzinfo is None:
             expire = expire.replace(tzinfo=UTC)
         assert timedelta(days=30, minutes=-2) < expire - before < timedelta(days=30, minutes=2)
-    finally:
-        delete_user(access_token, user["username"])
-        cleanup_groups(access_token, core, groups)
-
-
-def test_revoke_user_subscription(access_token):
-    """Test revoke user subscription info."""
-    core, groups = setup_groups(access_token, 1)
-    user = create_user(
-        access_token,
-        group_ids=[groups[0]["id"]],
-        payload={"username": unique_name("test_user_revoke")},
-    )
-    try:
-        response = client.post(
-            f"/api/user/{user['username']}/revoke_sub",
-            headers={"Authorization": f"Bearer {access_token}"},
-        )
-        assert response.status_code == status.HTTP_200_OK
     finally:
         delete_user(access_token, user["username"])
         cleanup_groups(access_token, core, groups)
