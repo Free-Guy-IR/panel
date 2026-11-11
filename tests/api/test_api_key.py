@@ -6,7 +6,9 @@ from sqlalchemy import select
 
 from app.db.models import Admin, APIKey
 from app.models.admin import hash_password
+from app.models.api_key import APIKeyCreate, APIKeyUpdate
 from tests.api import TestSession, client
+from tests.api.api_key_actor import OPERATION_DONE, call_as_key, run_as_key
 from tests.api.helpers import auth_headers, create_admin, delete_admin, strong_password, unique_name
 
 
@@ -322,6 +324,21 @@ def _create_key(headers: dict[str, str], *, permissions: dict | None = None) -> 
     return response.json()
 
 
+def _new_key(permissions: dict | None = None) -> APIKeyCreate:
+    payload = {"name": unique_name("api_key"), "inherit_permissions": permissions is None}
+    if permissions is not None:
+        payload["permissions"] = permissions
+    return APIKeyCreate.model_validate(payload)
+
+
+def _key_management_codes(headers: dict[str, str], key_id: int) -> list[int]:
+    return [
+        client.post("/api/api_key", headers=headers, json={"name": unique_name("refused")}).status_code,
+        client.patch(f"/api/api_key/{key_id}", headers=headers, json={"note": "refused"}).status_code,
+        client.post(f"/api/api_key/{key_id}/revoke", headers=headers).status_code,
+    ]
+
+
 def test_custom_key_cannot_mint_or_become_inheriting_key():
     owner = _create_owner_admin()
     try:
@@ -337,20 +354,39 @@ def test_custom_key_cannot_mint_or_become_inheriting_key():
             headers=restricted_headers,
             json={"name": unique_name("escalated"), "inherit_permissions": True},
         )
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        escalated = APIKeyCreate.model_validate({"name": unique_name("escalated"), "inherit_permissions": True})
+        assert run_as_key(restricted["api_key"], "create_api_key", model=escalated) == status.HTTP_403_FORBIDDEN
 
         response = client.patch(
             f"/api/api_key/{restricted['id']}", headers=restricted_headers, json={"inherit_permissions": True}
         )
-        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        inherit = APIKeyUpdate.model_validate({"inherit_permissions": True})
+        assert (
+            run_as_key(restricted["api_key"], "modify_api_key", key_id=restricted["id"], model=inherit)
+            == status.HTTP_403_FORBIDDEN
+        )
 
         # A narrower custom key it minted itself cannot be switched to inheriting either.
-        minted = _create_key(restricted_headers, permissions={"users": {"read": {"scope": 2}}})
-        response = client.patch(
-            f"/api/api_key/{minted['id']}", headers=restricted_headers, json={"inherit_permissions": True}
+        narrower = APIKeyCreate.model_validate(
+            {
+                "name": unique_name("api_key"),
+                "inherit_permissions": False,
+                "permissions": {"users": {"read": {"scope": 2}}},
+            }
         )
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert client.get("/api/admin-roles", headers=_key_headers(minted["api_key"])).status_code == 403
+        code, minted = call_as_key(restricted["api_key"], "create_api_key", model=narrower)
+        assert code == OPERATION_DONE
+        response = client.patch(
+            f"/api/api_key/{minted.id}", headers=restricted_headers, json={"inherit_permissions": True}
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert (
+            run_as_key(restricted["api_key"], "modify_api_key", key_id=minted.id, model=inherit)
+            == status.HTTP_403_FORBIDDEN
+        )
+        assert client.get("/api/admin-roles", headers=_key_headers(minted.api_key)).status_code == 403
     finally:
         _delete_admin_row(owner["username"])
 
@@ -366,8 +402,9 @@ def test_custom_key_cannot_rotate_broader_key():
 
         for target in (inheriting, broader):
             response = client.post(f"/api/api_key/{target['id']}/revoke", headers=restricted_headers)
-            assert response.status_code == status.HTTP_403_FORBIDDEN
+            assert response.status_code == status.HTTP_401_UNAUTHORIZED
             assert "api_key" not in response.json()
+            assert run_as_key(restricted["api_key"], "revoke_api_key", key_id=target["id"]) == status.HTTP_403_FORBIDDEN
         # the rejected rotations left both keys working
         assert client.get("/api/admin-roles", headers=_key_headers(inheriting["api_key"])).status_code == 200
         assert client.get("/api/admins", headers=_key_headers(broader["api_key"])).status_code == 200
@@ -407,26 +444,34 @@ def test_session_and_keys_still_manage_keys_within_their_permissions(access_toke
         # sessions and inheriting keys keep minting, editing and rotating inheriting keys
         inheriting = _create_key(session_headers)
         inheriting_headers = _key_headers(inheriting["api_key"])
-        second = _create_key(inheriting_headers)
-        response = client.patch(f"/api/api_key/{second['id']}", headers=inheriting_headers, json={"note": "edited"})
-        assert response.status_code == status.HTTP_200_OK
-        response = client.post(f"/api/api_key/{second['id']}/revoke", headers=inheriting_headers)
-        assert response.status_code == status.HTTP_200_OK
-        assert client.get("/api/api_keys", headers=_key_headers(response.json()["api_key"])).status_code == 200
+        assert _key_management_codes(inheriting_headers, inheriting["id"]) == [status.HTTP_401_UNAUTHORIZED] * 3
+        code, second = call_as_key(inheriting["api_key"], "create_api_key", model=_new_key())
+        assert code == OPERATION_DONE
+        edited = APIKeyUpdate.model_validate({"note": "edited"})
+        assert run_as_key(inheriting["api_key"], "modify_api_key", key_id=second.id, model=edited) == OPERATION_DONE
+        code, rotated = call_as_key(inheriting["api_key"], "revoke_api_key", key_id=second.id)
+        assert code == OPERATION_DONE
+        assert client.get("/api/api_keys", headers=_key_headers(rotated.api_key)).status_code == 200
 
         # custom keys keep minting, editing and rotating custom keys within their own permissions
-        custom = _create_key(inheriting_headers, permissions=narrow)
-        custom_headers = _key_headers(custom["api_key"])
-        sibling = _create_key(custom_headers, permissions=narrow)
-        response = client.patch(f"/api/api_key/{sibling['id']}", headers=custom_headers, json={"note": "edited"})
+        code, custom = call_as_key(inheriting["api_key"], "create_api_key", model=_new_key(narrow))
+        assert code == OPERATION_DONE
+        custom_headers = _key_headers(custom.api_key)
+        assert _key_management_codes(custom_headers, custom.id) == [status.HTTP_401_UNAUTHORIZED] * 3
+        code, sibling = call_as_key(custom.api_key, "create_api_key", model=_new_key(narrow))
+        assert code == OPERATION_DONE
+        assert run_as_key(custom.api_key, "modify_api_key", key_id=sibling.id, model=edited) == OPERATION_DONE
+        assert run_as_key(custom.api_key, "revoke_api_key", key_id=sibling.id) == OPERATION_DONE
+        own_note = APIKeyUpdate.model_validate({"note": "self"})
+        assert run_as_key(custom.api_key, "modify_api_key", key_id=custom.id, model=own_note) == OPERATION_DONE
+        code, rotated = call_as_key(custom.api_key, "revoke_api_key", key_id=custom.id)
+        assert code == OPERATION_DONE
+        assert client.get("/api/api_keys", headers=_key_headers(rotated.api_key)).status_code == 200
+
+        response = client.patch(f"/api/api_key/{sibling.id}", headers=session_headers, json={"note": "session"})
         assert response.status_code == status.HTTP_200_OK
-        response = client.post(f"/api/api_key/{sibling['id']}/revoke", headers=custom_headers)
+        response = client.post(f"/api/api_key/{sibling.id}/revoke", headers=session_headers)
         assert response.status_code == status.HTTP_200_OK
-        response = client.patch(f"/api/api_key/{custom['id']}", headers=custom_headers, json={"note": "self"})
-        assert response.status_code == status.HTTP_200_OK
-        response = client.post(f"/api/api_key/{custom['id']}/revoke", headers=custom_headers)
-        assert response.status_code == status.HTTP_200_OK
-        assert client.get("/api/api_keys", headers=_key_headers(response.json()["api_key"])).status_code == 200
     finally:
         if kind == "owner":
             _delete_admin_row(admin["username"])

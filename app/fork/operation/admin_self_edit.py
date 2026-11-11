@@ -4,7 +4,9 @@ from app.db.models import Admin, AdminStatus
 from app.models.admin import AdminDetails, AdminModify
 from app.models.admin_role import RoleLimits
 
-API_KEY_IDENTITY_CHANGE_DENIED = "You're not allowed to change your own password or Telegram ID with an API key."
+API_KEY_IDENTITY_CHANGE_DENIED = (
+    "A password or Telegram ID can be changed only from an admin session, not with an API key."
+)
 
 
 def _set_limits(limits: RoleLimits | None) -> dict:
@@ -24,12 +26,7 @@ def _changes_login_identity(db_admin: Admin, modified_admin: AdminModify) -> boo
 
 
 def self_edit_refusal(db_admin: Admin, modified_admin: AdminModify, current_admin: AdminDetails) -> str | None:
-    if (
-        current_admin.api_key_id is not None
-        and current_admin.id is not None
-        and db_admin.id == current_admin.id
-        and _changes_login_identity(db_admin, modified_admin)
-    ):
+    if current_admin.api_key_id is not None and _changes_login_identity(db_admin, modified_admin):
         return API_KEY_IDENTITY_CHANGE_DENIED
     if current_admin.is_owner or current_admin.id is None or db_admin.id != current_admin.id:
         return None

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, status
 from starlette.responses import Response
 
 from app.db import AsyncSession, get_db
+from app.fork.auth.session import require_session_permission
 from app.models.admin import AdminDetails
 from app.models.api_key import (
     APIKeyCreate,
@@ -27,6 +28,9 @@ router = APIRouter(
 )
 
 api_key_operator = APIKeyOperation(operator_type=OperatorType.API)
+create_key_session = require_session_permission("api_keys", "create")
+update_key_session = require_session_permission("api_keys", "update")
+delete_key_session = require_session_permission("api_keys", "delete")
 
 
 @router.post(
@@ -38,7 +42,7 @@ api_key_operator = APIKeyOperation(operator_type=OperatorType.API)
 async def create_api_key(
     model: APIKeyCreate,
     db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("api_keys", "create")),
+    admin: AdminDetails = Depends(create_key_session),
 ):
     return await api_key_operator.create_api_key(db, admin=admin, model=model)
 
@@ -60,7 +64,7 @@ async def list_api_keys(
 async def bulk_delete_api_keys(
     bulk_api_keys: BulkAPIKeySelection,
     db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("api_keys", "delete")),
+    admin: AdminDetails = Depends(delete_key_session),
 ):
     return await api_key_operator.bulk_delete_api_keys(db, admin=admin, bulk_api_keys=bulk_api_keys)
 
@@ -70,7 +74,7 @@ async def modify_api_key(
     key_id: int,
     model: APIKeyUpdate,
     db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("api_keys", "update")),
+    admin: AdminDetails = Depends(update_key_session),
 ):
     return await api_key_operator.modify_api_key(db, admin=admin, key_id=key_id, model=model)
 
@@ -88,7 +92,7 @@ async def get_api_key(
 async def revoke_api_key(
     key_id: int,
     db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("api_keys", "delete")),
+    admin: AdminDetails = Depends(delete_key_session),
 ):
     return await api_key_operator.revoke_api_key(db, admin=admin, key_id=key_id)
 
@@ -97,7 +101,7 @@ async def revoke_api_key(
 async def remove_api_key(
     key_id: int,
     db: AsyncSession = Depends(get_db),
-    admin: AdminDetails = Depends(require_permission("api_keys", "delete")),
+    admin: AdminDetails = Depends(delete_key_session),
 ):
     await api_key_operator.delete_api_key(db, admin=admin, key_id=key_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
