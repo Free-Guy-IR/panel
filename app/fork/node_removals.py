@@ -27,17 +27,25 @@ async def _enqueue_on_every_node(users: list[ProtoUser]) -> None:
 async def drain_node_removals() -> int:
     drained = 0
     after_user_id = 0
+    refusals: list[str] = []
     while True:
         async with GetDB() as db:
             removals = await due_node_removals(db, DRAIN_CHUNK, after_user_id=after_user_id)
             if not removals:
-                return drained
+                break
             after_user_id = removals[-1][0]
             back = await existing_user_ids(db, [user_id for user_id, _ in removals])
         gone = [_serialize_user_for_node(user_id, {}) for user_id, _ in removals if user_id not in back]
         if gone:
-            await _enqueue_on_every_node(gone)
+            try:
+                await _enqueue_on_every_node(gone)
+            except RuntimeError as exc:
+                refusals.append(str(exc))
+                continue
         async with GetDB() as db:
             await clear_node_removals(db, removals)
             await db.commit()
         drained += len(removals)
+    if refusals:
+        raise RuntimeError(f"{len(refusals)} chunk(s) kept for a retry: {refusals[0]}")
+    return drained
