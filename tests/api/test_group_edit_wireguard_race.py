@@ -1,4 +1,5 @@
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import httpx
@@ -101,6 +102,60 @@ def _race(monkeypatch, access_token, first, second):
         app.dependency_overrides[base.get_db] = previous_get_db
         monkeypatch.setattr(resync_markers, "mark_users", real_mark_users)
         asyncio.run(racing_engine.dispose())
+
+
+def _race_around_reconcile(monkeypatch, access_token, first, others):
+    if ":memory:" in DATABASE_URL:
+        pytest.skip("needs a database that separate connections share")
+    racing_engine = create_async_engine(
+        DATABASE_URL, poolclass=NullPool, connect_args={"timeout": 30} if IS_SQLITE else {}
+    )
+    racing_session = async_sessionmaker(racing_engine, autoflush=False, expire_on_commit=False)
+
+    async def racing_db():
+        async with racing_session() as db:
+            yield db
+
+    from app.operation import core as core_module
+
+    real_reconcile = core_module.reconcile_wireguard_subnets
+    held = {"done": False, "event": None}
+
+    async def hold_then_reconcile(db):
+        if not held["done"]:
+            held["done"] = True
+            held["event"].set()
+            await asyncio.sleep(HOLD_SECONDS)
+        return await real_reconcile(db)
+
+    monkeypatch.setattr(core_module, "reconcile_wireguard_subnets", hold_then_reconcile)
+    headers = auth_headers(access_token)
+
+    async def run():
+        held["event"] = asyncio.Event()
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as racing_client:
+            leading = asyncio.create_task(first(racing_client, headers))
+            await asyncio.wait_for(held["event"].wait(), REACH_THE_LOCK_SECONDS)
+            trailing = [asyncio.create_task(other(racing_client, headers)) for other in others]
+            return await asyncio.gather(leading, *trailing)
+
+    previous_get_db = app.dependency_overrides[base.get_db]
+    app.dependency_overrides[base.get_db] = racing_db
+    try:
+        return asyncio.run(run())
+    finally:
+        app.dependency_overrides[base.get_db] = previous_get_db
+        monkeypatch.setattr(core_module, "reconcile_wireguard_subnets", real_reconcile)
+        asyncio.run(racing_engine.dispose())
+
+
+def _peer_ips_by_user(rows, usernames):
+    return {
+        name: list(((settings or {}).get("wireguard") or {}).get("peer_ips") or [])
+        for name, settings in rows
+        if name in usernames
+    }
 
 
 def _pushed_user_ids(sync_mock):
@@ -332,3 +387,332 @@ def test_a_usage_write_on_a_member_during_a_group_edit_waits_for_it_instead_of_d
         delete_group(access_token, shared["id"])
         delete_core(access_token, wg_core["id"])
         delete_core(access_token, xray_core["id"])
+
+
+def _member_world(access_token, prefix, mask):
+    xray_core = create_core(access_token)
+    interface_name = unique_name("wg_race")
+    wg_core = _wg_core(access_token, interface_name, [f"{prefix}.1/{mask}"])
+    xray_tag = next(tag for tag in get_inbounds(access_token) if tag != interface_name)
+    shared = create_group(access_token, name=unique_name("race_shared"), inbound_tags=[xray_tag])
+    member = create_user(access_token, group_ids=[shared["id"]], payload={"username": unique_name("race_u")})
+    return SimpleNamespace(
+        xray_core=xray_core,
+        wg_core=wg_core,
+        interface_name=interface_name,
+        xray_tag=xray_tag,
+        shared=shared,
+        member=member,
+    )
+
+
+def _drop_member_world(access_token, world, usernames=()):
+    for username in [world.member["username"], *usernames]:
+        delete_user(access_token, username)
+    delete_group(access_token, world.shared["id"])
+    delete_core(access_token, world.wg_core["id"])
+    delete_core(access_token, world.xray_core["id"])
+
+
+def _give_the_group_wireguard(world):
+    async def send(racing_client, headers):
+        return await racing_client.put(
+            f"/api/group/{world.shared['id']}",
+            headers=headers,
+            json={"name": world.shared["name"], "inbound_tags": [world.xray_tag, world.interface_name]},
+        )
+
+    return send
+
+
+def test_a_member_modify_waiting_for_a_group_edit_keeps_the_address_the_edit_gave(access_token, monkeypatch):
+    prefix = "10.47.6"
+    world = _member_world(access_token, prefix, 29)
+    try:
+
+        async def modify_the_member(racing_client, headers):
+            return await racing_client.put(
+                f"/api/user/{world.member['username']}",
+                headers=headers,
+                json={"group_ids": [world.shared["id"]], "note": "edited while the group gained wireguard"},
+            )
+
+        monkeypatch.setattr("app.operation.group.sync_users", AsyncMock())
+        responses = _race(monkeypatch, access_token, _give_the_group_wireguard(world), modify_the_member)
+
+        assert [response.status_code for response in responses] == [status.HTTP_200_OK, status.HTTP_200_OK], [
+            response.text for response in responses
+        ]
+        stored = _user(access_token, world.member["username"])
+        assert stored["note"] == "edited while the group gained wireguard"
+        assert stored["proxy_settings"]["wireguard"]["peer_ips"] == [f"{prefix}.2/32"]
+        assert _usage(access_token, f"{prefix}.0/29")["used"] == 1
+    finally:
+        _drop_member_world(access_token, world)
+
+
+def test_a_user_created_into_a_group_while_it_gains_wireguard_gets_an_address(access_token, monkeypatch):
+    prefix = "10.47.7"
+    world = _member_world(access_token, prefix, 29)
+    created = unique_name("race_new")
+    try:
+
+        async def create_a_member(racing_client, headers):
+            return await racing_client.post(
+                "/api/user",
+                headers=headers,
+                json={
+                    "username": created,
+                    "proxy_settings": {},
+                    "group_ids": [world.shared["id"]],
+                    "status": "active",
+                    "data_limit": 1024 * 1024,
+                    "data_limit_reset_strategy": "no_reset",
+                },
+            )
+
+        monkeypatch.setattr("app.operation.group.sync_users", AsyncMock())
+        responses = _race(monkeypatch, access_token, _give_the_group_wireguard(world), create_a_member)
+
+        assert [response.status_code for response in responses] == [status.HTTP_200_OK, status.HTTP_201_CREATED], [
+            response.text for response in responses
+        ]
+        addresses = [
+            _user(access_token, username)["proxy_settings"]["wireguard"]["peer_ips"]
+            for username in (world.member["username"], created)
+        ]
+        assert all(len(peer_ips) == 1 for peer_ips in addresses), addresses
+        assert addresses[0] != addresses[1]
+        assert _usage(access_token, f"{prefix}.0/29")["used"] == 2
+    finally:
+        _drop_member_world(access_token, world, usernames=[created])
+
+
+@pytest.mark.parametrize("mask", ["28", "29"], ids=["resized", "same_subnet"])
+def test_a_wireguard_core_save_during_a_group_edit_lets_both_finish(access_token, monkeypatch, mask):
+    prefix = "10.47.8" if mask == "28" else "10.47.12"
+    world = _member_world(access_token, prefix, 29)
+    try:
+
+        async def save_the_core(racing_client, headers):
+            return await racing_client.put(
+                f"/api/core/{world.wg_core['id']}",
+                headers=headers,
+                params={"restart_nodes": False},
+                json={
+                    "name": world.wg_core["name"],
+                    "type": "wg",
+                    "config": {**world.wg_core["config"], "listen_port": 51821, "address": [f"{prefix}.1/{mask}"]},
+                    "exclude_inbound_tags": [],
+                    "fallbacks_inbound_tags": [],
+                },
+            )
+
+        monkeypatch.setattr("app.operation.group.sync_users", AsyncMock())
+        responses = _race(monkeypatch, access_token, _give_the_group_wireguard(world), save_the_core)
+
+        assert [response.status_code for response in responses] == [status.HTTP_200_OK, status.HTTP_200_OK], [
+            response.text for response in responses
+        ]
+        peer_ips = _user(access_token, world.member["username"])["proxy_settings"]["wireguard"]["peer_ips"]
+        assert len(peer_ips) == 1
+        assert peer_ips[0].startswith(f"{prefix}.")
+        assert _usage(access_token, f"{prefix}.0/{mask}")["used"] == 1
+    finally:
+        _drop_member_world(access_token, world)
+
+
+def _resize(world, prefix, mask):
+    async def send(racing_client, headers):
+        return await racing_client.put(
+            f"/api/core/{world.wg_core['id']}",
+            headers=headers,
+            params={"restart_nodes": False},
+            json={
+                "name": world.wg_core["name"],
+                "type": "wg",
+                "config": {**world.wg_core["config"], "address": [f"{prefix}.1/{mask}"]},
+                "exclude_inbound_tags": [],
+                "fallbacks_inbound_tags": [],
+            },
+        )
+
+    return send
+
+
+def test_a_core_resize_overlapping_a_group_edit_never_hands_out_a_held_address(access_token, monkeypatch):
+    prefix = "10.47.9"
+    world = _member_world(access_token, prefix, 29)
+    wg_group = create_group(access_token, name=unique_name("race_wg"), inbound_tags=[world.interface_name])
+    holder = create_user(access_token, group_ids=[wg_group["id"]], payload={"username": unique_name("race_h")})
+    assert holder["proxy_settings"]["wireguard"]["peer_ips"] == [f"{prefix}.2/32"]
+    snapshot_engine = create_async_engine(
+        DATABASE_URL, poolclass=NullPool, connect_args={"timeout": 30} if IS_SQLITE else {}
+    )
+    snapshot_session = async_sessionmaker(snapshot_engine, autoflush=False, expire_on_commit=False)
+    from app.operation import core as core_module
+
+    real_reconcile = core_module.reconcile_wireguard_subnets
+    committed_at_reconcile = []
+
+    async def note_then_reconcile(db):
+        async with snapshot_session() as observer:
+            rows = await observer.execute(select(User.username, User.proxy_settings))
+            committed_at_reconcile.append(rows.all())
+        return await real_reconcile(db)
+
+    try:
+        monkeypatch.setattr("app.operation.group.sync_users", AsyncMock())
+        monkeypatch.setattr(core_module, "reconcile_wireguard_subnets", note_then_reconcile)
+        responses = _race(monkeypatch, access_token, _give_the_group_wireguard(world), _resize(world, prefix, 28))
+
+        assert [response.status_code for response in responses] == [status.HTTP_200_OK, status.HTTP_200_OK], [
+            response.text for response in responses
+        ]
+        names = {holder["username"], world.member["username"]}
+        final = {name: _user(access_token, name)["proxy_settings"]["wireguard"]["peer_ips"] for name in names}
+        assert all(len(peer_ips) == 1 for peer_ips in final.values()), final
+        assert len({peer_ips[0] for peer_ips in final.values()}) == 2, final
+        assert all(peer_ips[0].startswith(f"{prefix}.") for peer_ips in final.values()), final
+        for rows in committed_at_reconcile:
+            held = [ip for peer_ips in _peer_ips_by_user(rows, names).values() for ip in peer_ips]
+            assert len(held) == len(set(held)), f"an address was held twice before the reconcile: {held}"
+        assert client.get(f"/api/core/{world.wg_core['id']}", headers=auth_headers(access_token)).json()["config"][
+            "address"
+        ] == [f"{prefix}.1/28"]
+        assert _usage(access_token, f"{prefix}.0/28")["used"] == 2
+    finally:
+        monkeypatch.setattr(core_module, "reconcile_wireguard_subnets", real_reconcile)
+        asyncio.run(snapshot_engine.dispose())
+        delete_user(access_token, holder["username"])
+        delete_group(access_token, wg_group["id"])
+        _drop_member_world(access_token, world)
+
+
+def test_a_core_resize_a_user_create_and_a_member_modify_together_end_unique_and_addressed(access_token, monkeypatch):
+    prefix = "10.47.10"
+    world = _member_world(access_token, prefix, 29)
+    wg_group = create_group(access_token, name=unique_name("race_wg"), inbound_tags=[world.interface_name])
+    holders = [
+        create_user(access_token, group_ids=[wg_group["id"]], payload={"username": unique_name("race_h")})
+        for _ in range(2)
+    ]
+    created = unique_name("race_new")
+    try:
+
+        async def create_a_member(racing_client, headers):
+            return await racing_client.post(
+                "/api/user",
+                headers=headers,
+                json={
+                    "username": created,
+                    "proxy_settings": {},
+                    "group_ids": [wg_group["id"]],
+                    "status": "active",
+                    "data_limit": 1024 * 1024,
+                    "data_limit_reset_strategy": "no_reset",
+                },
+            )
+
+        async def modify_a_member(racing_client, headers):
+            return await racing_client.put(
+                f"/api/user/{holders[0]['username']}",
+                headers=headers,
+                json={"group_ids": [wg_group["id"]], "note": "edited during the resize"},
+            )
+
+        responses = _race_around_reconcile(
+            monkeypatch, access_token, _resize(world, prefix, 28), [create_a_member, modify_a_member]
+        )
+
+        assert [response.status_code for response in responses] == [
+            status.HTTP_200_OK,
+            status.HTTP_201_CREATED,
+            status.HTTP_200_OK,
+        ], [response.text for response in responses]
+        names = [holder["username"] for holder in holders] + [created]
+        final = {name: _user(access_token, name)["proxy_settings"]["wireguard"]["peer_ips"] for name in names}
+        assert all(len(peer_ips) == 1 for peer_ips in final.values()), final
+        assert len({peer_ips[0] for peer_ips in final.values()}) == 3, final
+        assert all(peer_ips[0].startswith(f"{prefix}.") for peer_ips in final.values()), final
+        assert _usage(access_token, f"{prefix}.0/28")["used"] == 3
+    finally:
+        for name in [holder["username"] for holder in holders] + [created]:
+            response = client.get(f"/api/user/{name}", headers=auth_headers(access_token))
+            if response.status_code == status.HTTP_200_OK:
+                delete_user(access_token, name)
+        delete_group(access_token, wg_group["id"])
+        _drop_member_world(access_token, world)
+
+
+def test_a_user_create_that_loaded_its_groups_before_a_group_edit_still_gets_an_address(access_token, monkeypatch):
+    if ":memory:" in DATABASE_URL:
+        pytest.skip("needs a database that separate connections share")
+    from app.operation.user import UserOperation
+
+    prefix = "10.47.11"
+    world = _member_world(access_token, prefix, 29)
+    created = unique_name("race_new")
+    racing_engine = create_async_engine(
+        DATABASE_URL, poolclass=NullPool, connect_args={"timeout": 30} if IS_SQLITE else {}
+    )
+    racing_session = async_sessionmaker(racing_engine, autoflush=False, expire_on_commit=False)
+
+    async def racing_db():
+        async with racing_session() as db:
+            yield db
+
+    real_validate = UserOperation.validate_all_groups
+    gate = {"loaded": None, "edited": None}
+
+    async def validate_then_wait_for_the_edit(self, db, model, admin=None, **kwargs):
+        groups = await real_validate(self, db, model, admin, **kwargs)
+        if getattr(model, "username", None) == created:
+            gate["loaded"].set()
+            await asyncio.wait_for(gate["edited"].wait(), REACH_THE_LOCK_SECONDS)
+        return groups
+
+    monkeypatch.setattr(UserOperation, "validate_all_groups", validate_then_wait_for_the_edit)
+    monkeypatch.setattr("app.operation.group.sync_users", AsyncMock())
+    headers = auth_headers(access_token)
+
+    async def run():
+        gate["loaded"], gate["edited"] = asyncio.Event(), asyncio.Event()
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as racing_client:
+            creating = asyncio.create_task(
+                racing_client.post(
+                    "/api/user",
+                    headers=headers,
+                    json={
+                        "username": created,
+                        "proxy_settings": {},
+                        "group_ids": [world.shared["id"]],
+                        "status": "active",
+                        "data_limit": 1024 * 1024,
+                        "data_limit_reset_strategy": "no_reset",
+                    },
+                )
+            )
+            await asyncio.wait_for(gate["loaded"].wait(), REACH_THE_LOCK_SECONDS)
+            edited = await _give_the_group_wireguard(world)(racing_client, headers)
+            gate["edited"].set()
+            return edited, await creating
+
+    previous_get_db = app.dependency_overrides[base.get_db]
+    app.dependency_overrides[base.get_db] = racing_db
+    try:
+        edited, creation = asyncio.run(run())
+    finally:
+        app.dependency_overrides[base.get_db] = previous_get_db
+        monkeypatch.setattr(UserOperation, "validate_all_groups", real_validate)
+        asyncio.run(racing_engine.dispose())
+    try:
+        assert edited.status_code == status.HTTP_200_OK, edited.text
+        assert creation.status_code == status.HTTP_201_CREATED, creation.text
+        member_ips = _user(access_token, world.member["username"])["proxy_settings"]["wireguard"]["peer_ips"]
+        new_ips = _user(access_token, created)["proxy_settings"]["wireguard"]["peer_ips"]
+        assert member_ips == [f"{prefix}.2/32"]
+        assert new_ips == [f"{prefix}.3/32"], (member_ips, new_ips)
+    finally:
+        _drop_member_world(access_token, world, usernames=[created])
