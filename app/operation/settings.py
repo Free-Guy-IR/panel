@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.crud.settings import get_settings, modify_settings
 from app.db.models import Settings
+from app.fork.operation.custom_variables import refuse_new_unformattable_custom_variables
 from app.fork.operation.settings_extras import keep_legacy_import_urls
 from app.models.settings import General, SettingsSchema, Subscription
 from app.nats.message import MessageTopic
@@ -41,6 +42,12 @@ class SettingsOperation(BaseOperation):
                 modify.general.model_dump(exclude_unset=True, exclude={"custom_variables"})
             )
 
+        await refuse_new_unformattable_custom_variables(
+            self,
+            modify.subscription.custom_variables if modify.subscription else None,
+            (db_settings.subscription or {}).get("custom_variables"),
+            db=db,
+        )
         keep_legacy_import_urls(modify, db_settings.subscription)
         try:
             db_settings = await modify_settings(db, db_settings, modify)

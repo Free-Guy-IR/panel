@@ -620,11 +620,11 @@ class CustomVariableInput(CustomVariable):
 
 class SubscriptionInput(Subscription):
     applications: list[ApplicationInput] = Field(default_factory=list)
-    custom_variables: list[CustomVariableInput] = Field(default_factory=list, max_length=MAX_CUSTOM_VARIABLES)
+    custom_variables: list[CustomVariable] = Field(default_factory=list, max_length=MAX_CUSTOM_VARIABLES)
 
 
 class GeneralInput(General):
-    custom_variables: list[CustomVariableInput] | None = Field(default=None, max_length=MAX_CUSTOM_VARIABLES)
+    custom_variables: list[CustomVariable] | None = Field(default=None, max_length=MAX_CUSTOM_VARIABLES)
 
 
 class TelegramInput(Telegram):

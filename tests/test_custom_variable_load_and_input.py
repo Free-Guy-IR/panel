@@ -1,8 +1,8 @@
 import tracemalloc
 
 import pytest
-from pydantic import ValidationError
 
+from app.fork.operation.custom_variables import custom_variable_refusal
 from app.models.admin import AdminContactInfo, AdminCreate, AdminModify
 from app.models.settings import SettingsSchema, SettingsSchemaInput, Subscription
 
@@ -65,18 +65,29 @@ def test_loading_a_stored_custom_variable_never_formats_it():
     assert peak < 5_000_000
 
 
+def _settings_variables(section: str, value: str):
+    return getattr(SettingsSchemaInput.model_validate(_settings_input(section, value)), section).custom_variables
+
+
 @pytest.mark.parametrize("value", REFUSED_ON_SAVE)
 @pytest.mark.parametrize("section", ["subscription", "general"])
-def test_saving_settings_refuses_a_custom_variable_the_subscription_cannot_format_as_written(section, value):
-    with pytest.raises(ValidationError):
-        SettingsSchemaInput.model_validate(_settings_input(section, value))
+def test_saving_settings_refuses_a_new_custom_variable_the_subscription_cannot_format_as_written(section, value):
+    refusal = custom_variable_refusal(_settings_variables(section, value), [])
+    assert refusal.startswith('Custom variable "PROMO": Invalid formatting variables')
 
 
 @pytest.mark.parametrize("value", REFUSED_ON_SAVE)
 @pytest.mark.parametrize("model", [AdminModify, AdminCreate])
-def test_saving_an_admin_refuses_a_custom_variable_the_subscription_cannot_format_as_written(model, value):
-    with pytest.raises(ValidationError):
-        _admin_input(model, value)
+def test_saving_an_admin_refuses_a_new_custom_variable_the_subscription_cannot_format_as_written(model, value):
+    refusal = custom_variable_refusal(_admin_input(model, value).custom_variables, [])
+    assert refusal.startswith('Custom variable "PROMO": Invalid formatting variables')
+
+
+@pytest.mark.parametrize("value", STORED_BEFORE_THE_STRICT_CHECK)
+@pytest.mark.parametrize("section", ["subscription", "general"])
+def test_resending_a_stored_custom_variable_unchanged_is_never_refused(section, value):
+    assert custom_variable_refusal(_settings_variables(section, value), _variables(value)) is None
+    assert custom_variable_refusal(_admin_input(AdminModify, value).custom_variables, _variables(value)) is None
 
 
 @pytest.mark.parametrize("value", SAVED_AS_WRITTEN)
@@ -92,3 +103,4 @@ def test_ordinary_custom_variables_still_save(value):
     )
     assert _admin_input(AdminModify, value).custom_variables[0].value == value
     assert _admin_input(AdminCreate, value).custom_variables[0].value == value
+    assert custom_variable_refusal(_admin_input(AdminCreate, value).custom_variables, []) is None

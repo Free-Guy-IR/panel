@@ -32,6 +32,7 @@ from app.fork.operation.admin_scope import (
 )
 from app.fork.operation.admin_self_edit import self_edit_refusal, self_enable_refusal, self_reset_refusal
 from app.fork.operation.admin_transition import admin_transition_lock, status_blocks_user_sync
+from app.fork.operation.custom_variables import refuse_new_unformattable_custom_variables
 from app.fork.operation.row_lock_retry import ADMIN_REMOVAL_LOCK_UNAVAILABLE_DETAIL, retry_on_row_lock_conflict
 from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import (
@@ -81,6 +82,8 @@ class AdminOperation(BaseOperation):
             await self.raise_error(
                 message="Owner role cannot be assigned via this endpoint. Use the setup flow.", code=403
             )
+
+        await refuse_new_unformattable_custom_variables(self, new_admin.custom_variables, None)
 
         if new_admin.telegram_id is not None:
             existing_admins = await find_admins_by_telegram_id(db, new_admin.telegram_id, limit=1)
@@ -159,6 +162,10 @@ class AdminOperation(BaseOperation):
                 current_admin.data_limit or 0
             ):
                 await self.raise_error(message="You're not allowed to change your own data limit.", code=403)
+
+        await refuse_new_unformattable_custom_variables(
+            self, modified_admin.custom_variables, db_admin.custom_variables
+        )
 
         if modified_admin.telegram_id:
             existing_admins = await find_admins_by_telegram_id(
