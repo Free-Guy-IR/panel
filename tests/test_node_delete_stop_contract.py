@@ -32,7 +32,7 @@ from app.operation.node import NodeOperation
 from app.operation.user import UserOperation
 from config import runtime_settings
 from role import Role
-from tests.api import DATABASE_URL, IS_SQLITE, TestSession
+from tests.api import DATABASE_URL, IS_SQLITE
 from tests.api.helpers import unique_name
 from tests.test_node_connect_stale_snapshot import Harness, _ca_pem, _operation
 
@@ -557,11 +557,11 @@ async def test_a_backend_role_delete_owes_the_stop_in_the_same_transaction_and_a
         assert await stops_owed_to(row.address) == 0
 
 
-@pytest.mark.parametrize("blocked_for", [0.3, 1.5])
+@pytest.mark.parametrize("blocked_for", [0.3, 6.0])
 async def test_a_backend_role_delete_answers_only_what_its_own_transaction_committed(monkeypatch, blocked_for):
     quiet_side_effects(monkeypatch)
     async with Harness(monkeypatch) as h:
-        row, db_node = await managed_row(h, monkeypatch)
+        row, _ = await managed_row(h, monkeypatch)
         monkeypatch.setattr(node_nats_client, "publish", AsyncMock())
         operation = backend_role_operation(monkeypatch)
         blocker = Session()
