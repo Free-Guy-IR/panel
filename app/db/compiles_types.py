@@ -176,7 +176,8 @@ def compile_date_diff_postgresql(element, compiler, **kw):
     return f"EXTRACT(EPOCH FROM ({compiler.process(element.date1)} - {compiler.process(element.date2)})) / 86400"
 
 
-@compiles(DateDiff, "mysql", "mariadb")
+@compiles(DateDiff, "mariadb")
+@compiles(DateDiff, "mysql")
 def compile_date_diff_mysql(element, compiler, **kw):
     # Elapsed days like the other dialects: DATEDIFF() counts calendar dates, so 10 seconds across midnight would be
     # a whole day and a reset cycle could end minutes after it started
