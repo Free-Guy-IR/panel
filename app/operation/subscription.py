@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 from app.db import AsyncSession
 from app.db.crud.hwid import get_user_hwid_by_value, register_user_hwid
 from app.db.crud.user import get_user_usages, user_sub_update
-from app.db.models import SubscriptionAccessKind, User
+from app.db.models import User
 from app.fork.operation.subscription_extras import EXTRA_CLIENT_CONFIG, SubscriptionExtrasMixin
 from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import AdminDetails
@@ -26,7 +26,7 @@ from app.models.subscription import SubscriptionUsageQuery
 from app.models.user import SubscriptionUserResponse, UsersResponseWithInbounds
 from app.settings import hwid_settings, subscription_settings
 from app.subscription import sub_update_buffer as _sub_update_buffer  # noqa: F401  # registers per-worker flush loop
-from app.subscription.access_buffer import queue_subscription_access
+from app.subscription.access_buffer import SubscriptionAccessKind, queue_subscription_access
 from app.subscription.share import (
     _format_dynamic_value,
     apply_custom_format_variables,
