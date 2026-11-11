@@ -19,7 +19,6 @@ import {
   bulkRevokeUsersSubscription,
   useGetUsers,
   useGetGroupsSimple,
-  type GroupsSimpleResponse,
   UserResponse,
   UserStatus,
 } from '@/service/api'
@@ -226,7 +225,7 @@ const UsersTable = memo(() => {
   const [isCustomizeViewOpen, setIsCustomizeViewOpen] = useState(false)
   const needsGroups = isCustomizeViewOpen || [...view.desktop, ...view.mobileExpanded].includes('groups')
   const { data: viewGroups } = useGetGroupsSimple({ all: true }, { query: { enabled: needsGroups && hasPermission(admin, 'groups', 'read') } })
-  const groupNames = useMemo<ReadonlyMap<number, string>>(() => new Map(((viewGroups as GroupsSimpleResponse | undefined)?.groups || []).map(group => [group.id, group.name])), [viewGroups])
+  const groupNames = useMemo(() => new Map((viewGroups?.groups || []).map(group => [group.id, group.name])), [viewGroups])
   const handleViewApply = useCallback(
     (next: UserViewPreferences) => {
       setSavedView({ account: viewAccount, value: next })
