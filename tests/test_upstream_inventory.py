@@ -956,6 +956,47 @@ def test_a_hunk_in_a_file_the_fork_does_not_have_is_unreflected_until_the_ledger
     assert "covered by its ledger entry" in covered.stdout
 
 
+@pytest.mark.parametrize("carrier", ["empty", "real"])
+def test_a_pick_whose_every_hunk_upstream_reworked_counts_only_when_a_carrier_brings_one(tmp_path, carrier):
+    path = standalone_repo(tmp_path, f"reworked-{carrier}")
+    added = commit(path, "feat: add a step after r5", {"r.py": lines("r", overrides={5: "r5\nR5-added"})})
+    later = commit(
+        path,
+        "refactor: rename the neighbours of the check",
+        {"r.py": lines("r", overrides={4: "R4-later", 5: "r5\nR5-added", 6: "R6-later"})},
+    )
+    git(path, "update-ref", "refs/remotes/upstream/dev", later)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    if carrier == "empty":
+        git(path, "commit", "-q", "--allow-empty", "-m", f"record the port\n\n(cherry picked from commit {added})")
+    else:
+        git(path, "cherry-pick", "-x", added)
+    result = standalone_gate(path, later_waived(later))
+    if carrier == "real":
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert tally(result.stdout, "ported via cherry-pick -x trailer") == 1
+        return
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert added[:12] in unported_block(result.stdout)
+    assert (
+        f"{added[:12]}: none of the hunks it changes can be checked in main, and no fork commit carrying its trailer"
+        in result.stdout
+    )
+
+
+def test_an_empty_pick_of_a_comment_only_change_still_counts(tmp_path):
+    path = standalone_repo(tmp_path, "comment-only")
+    note = commit(path, "docs: explain r5", {"r.py": lines("r", overrides={5: "# r5 stays for old clients\nr5"})})
+    git(path, "update-ref", "refs/remotes/upstream/dev", note)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    git(path, "commit", "-q", "--allow-empty", "-m", f"record the port\n\n(cherry picked from commit {note})")
+    result = standalone_gate(path, "## Waived\n")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert tally(result.stdout, "ported via cherry-pick -x trailer") == 1
+
+
 def test_an_orphan_upstream_branch_is_tracked_when_the_base_is_upstream(tmp_path):
     path = standalone_repo(tmp_path, "orphan")
     fix = commit(path, "upstream fix", {"r.py": lines("r", overrides={1: "R1"})})

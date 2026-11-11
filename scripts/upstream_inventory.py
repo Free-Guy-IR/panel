@@ -1474,14 +1474,36 @@ def ineffective_picks(head, candidates, upstream, tips_for):
                 f"every fork commit carrying its trailer is reverted ({', '.join(c[:12] for c in fork_commits)})"
             )
             continue
-        expected, missing = missing_pick_lines(sha, pick_reference(sha, upstream, tips_for(sha)), head, carriers=live)
+        reference = pick_reference(sha, upstream, tips_for(sha))
+        expected, missing = missing_pick_lines(sha, reference, head, carriers=live)
         if missing:
             path, text = missing[0]
             findings[sha] = (
                 f"{len(missing)} of {expected} upstream hunk(s) it changes are not reflected in {head}, "
                 f"for example in {path}: {text[:80]!r}"
             )
+        elif not expected and not pick_carries_something(sha, live, reference, head):
+            findings[sha] = (
+                f"none of the hunks it changes can be checked in {head}, and no fork commit carrying its trailer "
+                f"({', '.join(c[:12] for c in live)}) changes any of its lines or files"
+            )
     return findings
+
+
+def pick_carries_something(upstream_sha, carriers, reference, head):
+    hunks = commit_hunks(upstream_sha)
+    code = [
+        hunk
+        for hunk in hunks
+        if hunk_side(hunk["new"] or hunk["old"], hunk["post"]) is not None
+        or hunk_side(hunk["new"] or hunk["old"], hunk["pre"]) is not None
+    ]
+    if code:
+        return any(pick_changes_hunk(hunk, carriers, reference, head) for hunk in code)
+    if hunks:
+        return True
+    paths = set(commit_paths(upstream_sha))
+    return not paths or any(paths & set(commit_paths(carrier)) for carrier in carriers)
 
 
 def patch_ids(shas):
