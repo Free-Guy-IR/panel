@@ -14,6 +14,7 @@ from app.fork.notification_rate_limit import (
     kept_by_rate_limit,
     refused_over_destination_share,
     released_by_rate_limit,
+    seed_held_from_queue,
 )
 from app.models.settings import NotificationSettings
 from app.notification.nats_queue import NotificationDelivery
@@ -269,6 +270,7 @@ async def process_notification(delivery: NotificationDelivery):
 
 async def run_notification_dispatcher():
     queue = get_queue()
+    await seed_held_from_queue(queue, time.time())
     while True:
         try:
             item = await queue.dequeue(timeout=1)
