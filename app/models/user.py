@@ -96,6 +96,9 @@ class UserWithValidator(User):
         expire = value.expire if value is not None else None
         if expire is not None and not 0 <= expire <= MAX_ON_HOLD_EXPIRE_DURATION_SECONDS:
             raise ValueError(f"next_plan expire must be between 0 and {MAX_ON_HOLD_EXPIRE_DURATION_SECONDS} seconds")
+        data_limit = value.data_limit if value is not None else None
+        if data_limit is not None and data_limit < 0:
+            raise ValueError("next_plan data_limit can be 0 or greater")
         return value
 
 

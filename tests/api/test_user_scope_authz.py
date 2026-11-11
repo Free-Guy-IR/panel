@@ -413,8 +413,9 @@ def test_a_next_plan_is_held_to_the_role_limits_on_create_and_modify(access_toke
             ).status_code
             for name, plan in rejected_plans.items()
         }
-        assert set(create_codes.values()) == {400}, create_codes
-        assert set(modify_codes.values()) == {400}, modify_codes
+        expected = {name: 422 if name == "negative data" else 400 for name in rejected_plans}
+        assert create_codes == expected, create_codes
+        assert modify_codes == expected, modify_codes
 
         activated = client.post(f"/api/user/by-id/{user_id}/active_next", headers=auth_headers(token))
         assert activated.status_code == 200, activated.text
@@ -432,6 +433,13 @@ def test_the_owner_cannot_store_a_negative_next_plan(access_token):
     group = create_group(access_token, name=unique_name("scope_np_group"))
     user = create_user(access_token, group_ids=[group["id"]], payload={"username": unique_name("scope_np_owner")})
     try:
+
+        def stored_plan():
+            response = client.get(f"/api/user/by-id/{user['id']}", headers=auth_headers(access_token))
+            assert response.status_code == 200, response.text
+            return response.json()["next_plan"]
+
+        before = stored_plan()
         codes = {
             field: client.put(
                 f"/api/user/by-id/{user['id']}",
@@ -440,13 +448,15 @@ def test_the_owner_cannot_store_a_negative_next_plan(access_token):
             ).status_code
             for field in ("data_limit", "expire")
         }
-        assert codes == {"data_limit": 400, "expire": 400}, codes
+        assert codes == {"data_limit": 422, "expire": 422}, codes
+        assert stored_plan() == before
         accepted = client.put(
             f"/api/user/by-id/{user['id']}",
             headers=auth_headers(access_token),
             json={"next_plan": {"data_limit": 100 * GB, "expire": 365 * 86400, "add_remaining_traffic": True}},
         )
         assert accepted.status_code == 200, accepted.text
+        assert stored_plan()["data_limit"] == 100 * GB
     finally:
         client.delete(f"/api/user/by-id/{user['id']}", headers=auth_headers(access_token))
         delete_group(access_token, group["id"])
