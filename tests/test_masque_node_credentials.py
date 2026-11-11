@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 from PasarGuardNodeBridge.common.service_pb2 import Masque, Proxy
 
@@ -48,3 +50,21 @@ def test_a_stored_masque_password_reaches_the_node():
 
     assert proto.proxies.HasField("masque")
     assert _masque_pass(proto.proxies) == "s3cret"
+
+
+@pytest.mark.parametrize("stored", ["", 123456, True, ["s3cret"]])
+def test_a_dropped_masque_password_is_logged_with_the_user_and_never_the_value(stored, caplog):
+    with caplog.at_level(logging.WARNING):
+        proto = _serialize_user_for_node(7, {"masque": {"password": stored}}, ["masque-in"], frozenset({ProxyProtocol.masque}))
+
+    assert not proto.proxies.HasField("masque")
+    warnings = [record.getMessage() for record in caplog.records if record.levelno == logging.WARNING]
+    assert warnings == ["Dropping an unusable stored MASQUE password for user 7"]
+
+
+def test_a_usable_or_missing_masque_password_logs_nothing(caplog):
+    with caplog.at_level(logging.WARNING):
+        _serialize_user_for_node(7, {"masque": {"password": "s3cret"}}, ["masque-in"], frozenset({ProxyProtocol.masque}))
+        _serialize_user_for_node(8, {}, ["masque-in"], frozenset({ProxyProtocol.masque}))
+
+    assert [record for record in caplog.records if record.levelno >= logging.WARNING] == []
