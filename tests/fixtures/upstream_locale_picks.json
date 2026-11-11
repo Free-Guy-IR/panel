@@ -9777,6 +9777,55 @@
           "removed": []
         }
       }
+    },
+    {
+      "upstream": "da158b5729e4747891cbb577904253f557ca4583",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "statistics.periodTooFineForRange"
+              ],
+              "Too many points for this range. Pick a shorter range."
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "statistics.periodTooFineForRange"
+              ],
+              "برای این بازه نقاط زیادی وجود دارد. بازه کوتاه‌تری انتخاب کنید."
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "statistics.periodTooFineForRange"
+              ],
+              "Слишком много точек для этого диапазона. Выберите более короткий диапазон."
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "statistics.periodTooFineForRange"
+              ],
+              "此时间范围的数据点过多，请选择更短的范围。"
+            ]
+          ],
+          "removed": []
+        }
+      }
     }
   ]
 }
