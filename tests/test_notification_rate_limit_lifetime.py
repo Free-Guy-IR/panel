@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from aiohttp import web
 
-from app.fork import notification_spool
+from app.fork import notification_rate_limit, notification_spool
 from app.models.settings import NotificationSettings
 from app.notification import client as notification_client, nats_queue, queue_manager
 from app.notification.nats_queue import QUEUE_MAX_MESSAGES, InMemoryNotificationQueue
@@ -25,6 +25,7 @@ def shifted_clock(monkeypatch):
     monkeypatch.setattr(notification_client, "time", SimpleNamespace(time=lambda: time.time() + state.offset))
     monkeypatch.setattr(nats_queue, "time", SimpleNamespace(monotonic=state.monotonic))
     monkeypatch.setattr(notification_client, "_rate_limits", {})
+    monkeypatch.setattr(notification_rate_limit, "_held", {})
     return state
 
 
