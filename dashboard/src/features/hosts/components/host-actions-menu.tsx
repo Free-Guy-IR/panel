@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
+import { useCanDeleteHosts } from '@/fork/hosts/can-delete'
 
 interface HostActionsMenuProps {
   host: BaseHost
@@ -47,6 +48,7 @@ const DeleteAlertDialog = ({ host, isOpen, onClose, onConfirm }: { host: BaseHos
 
 export default function HostActionsMenu({ host, onEdit, onDuplicate, onDataChanged, canUpdate = true, canCreate = true, className }: HostActionsMenuProps) {
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false)
+  const canDelete = useCanDeleteHosts()
   const { t } = useTranslation()
   const dir = useDirDetection()
 
@@ -121,7 +123,7 @@ export default function HostActionsMenu({ host, onEdit, onDuplicate, onDataChang
   }
 
   const handleConfirmDelete = async () => {
-    if (!canUpdate || !host.id) return
+    if (!canDelete || !host.id) return
 
     try {
       await removeHost(host.id)
@@ -150,7 +152,7 @@ export default function HostActionsMenu({ host, onEdit, onDuplicate, onDataChang
     }
   }
 
-  if (!canUpdate && !canCreate) return null
+  if (!canUpdate && !canCreate && !canDelete) return null
 
   return (
     <div className={cn(className)} onClick={e => e.stopPropagation()}>
@@ -194,8 +196,8 @@ export default function HostActionsMenu({ host, onEdit, onDuplicate, onDataChang
               {t('duplicate')}
             </DropdownMenuItem>
           )}
-          {canUpdate && <DropdownMenuSeparator />}
-          {canUpdate && (
+          {canDelete && <DropdownMenuSeparator />}
+          {canDelete && (
             <DropdownMenuItem onSelect={handleDeleteClick} className="text-destructive">
               <Trash2 className={cn('h-4 w-4', dir === 'rtl' ? 'ml-2' : 'mr-2')} />
               {t('delete')}
@@ -204,7 +206,7 @@ export default function HostActionsMenu({ host, onEdit, onDuplicate, onDataChang
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {canUpdate && <DeleteAlertDialog host={host} isOpen={isDeleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={handleConfirmDelete} />}
+      {canDelete && <DeleteAlertDialog host={host} isOpen={isDeleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={handleConfirmDelete} />}
     </div>
   )
 }

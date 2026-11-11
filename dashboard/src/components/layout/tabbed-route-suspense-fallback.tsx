@@ -30,6 +30,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router'
 import { forkBulkHeaders, forkBulkTabs, forkSettingsTabs, forkSettingsTabsFor } from '@/fork/pages/tabs'
+import { settingsTabVisibleTo } from '@/fork/settings/credential-tabs'
 
 type TabDef = { id: string; labelKey: string; icon: LucideIcon; url: string }
 
@@ -175,7 +176,7 @@ function SettingsTabbedFallback({ pathname, isSudo, isPanelOwner }: { pathname: 
   const { t } = useTranslation()
   const allowedForkTabIds = new Set(forkSettingsTabsFor(isPanelOwner).map(tab => tab.id))
   const forkTabIds = new Set(forkSettingsTabs.map(tab => tab.id))
-  const sudoTabs = SETTINGS_SUDO_TABS.filter(tab => !forkTabIds.has(tab.id) || allowedForkTabIds.has(tab.id))
+  const sudoTabs = SETTINGS_SUDO_TABS.filter(tab => !forkTabIds.has(tab.id) || allowedForkTabIds.has(tab.id)).filter(tab => settingsTabVisibleTo(tab.id, isPanelOwner))
   const tabs = isSudo ? sudoTabs : SETTINGS_NON_SUDO_TABS
   const activeId = settingsActiveTabId(pathname, tabs)
   return (

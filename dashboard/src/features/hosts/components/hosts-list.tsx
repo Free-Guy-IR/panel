@@ -8,6 +8,7 @@ import { ListGeneratorGrid } from '@/components/common/list-generator-grid'
 import { useHostsListColumns } from '@/features/hosts/components/use-hosts-list-columns'
 import { usePersistedViewMode } from '@/hooks/use-persisted-view-mode'
 import { BaseHost, CreateHost, createHost, getGetHostsQueryKey, modifyHosts, useBulkDeleteHosts, useBulkDisableHosts, useBulkEnableHosts, useGetInboundDetails } from '@/service/api'
+import { useCanDeleteHosts } from '@/fork/hosts/can-delete'
 import { queryClient } from '@/utils/query-client'
 import { closestCenter, DndContext, DragEndEvent, KeyboardSensor, PointerSensor, UniqueIdentifier, useSensor, useSensors } from '@dnd-kit/core'
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
@@ -76,6 +77,7 @@ export default function HostsList({
   const [bulkAction, setBulkAction] = useState<BulkHostActionType | null>(null)
   const { t } = useTranslation()
   const bulkDeleteHostsMutation = useBulkDeleteHosts()
+  const canDelete = useCanDeleteHosts()
   const bulkDisableHostsMutation = useBulkDisableHosts()
   const bulkEnableHostsMutation = useBulkEnableHosts()
 
@@ -454,7 +456,7 @@ export default function HostsList({
   }
 
   const handleBulkDelete = async () => {
-    if (!canUpdate || !selectedHostIds.length) return
+    if (!canDelete || !selectedHostIds.length) return
 
     try {
       const response = await bulkDeleteHostsMutation.mutateAsync({
@@ -845,17 +847,21 @@ export default function HostsList({
   const enableEligibleCount = selectedEnableEligibleIds.length
   const disableEligibleCount = selectedDisableEligibleIds.length
   const bulkActions: BulkActionItem[] = selectedCount
-    ? canUpdate
+    ? canUpdate || canDelete
       ? [
-          {
-            key: 'delete',
-            label: t('delete'),
-            icon: Trash2,
-            onClick: () => setBulkAction('delete'),
-            direct: true,
-            destructive: true,
-          },
-          ...(disableEligibleCount > 0
+          ...(canDelete
+            ? [
+                {
+                  key: 'delete',
+                  label: t('delete'),
+                  icon: Trash2,
+                  onClick: () => setBulkAction('delete'),
+                  direct: true,
+                  destructive: true,
+                } as BulkActionItem,
+              ]
+            : []),
+          ...(canUpdate && disableEligibleCount > 0
             ? [
                 {
                   key: 'disable',
@@ -865,7 +871,7 @@ export default function HostsList({
                 } as BulkActionItem,
               ]
             : []),
-          ...(enableEligibleCount > 0
+          ...(canUpdate && enableEligibleCount > 0
             ? [
                 {
                   key: 'enable',
@@ -927,7 +933,7 @@ export default function HostsList({
           onViewModeChange={setViewMode}
         />
       </div>
-      {canUpdate && <BulkActionsBar selectedCount={selectedCount} onClear={clearSelection} actions={bulkActions} />}
+      {(canUpdate || canDelete) && <BulkActionsBar selectedCount={selectedCount} onClear={clearSelection} actions={bulkActions} />}
       {(isCurrentlyLoading || filteredHosts.length > 0) && viewMode === 'grid' && (
         <DndContext sensors={isSortingDisabled ? [] : sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={sortableHosts} strategy={rectSortingStrategy}>
@@ -937,8 +943,8 @@ export default function HostsList({
               isLoading={isCurrentlyLoading}
               loadingRows={6}
               className="max-w-screen-[2000px] min-h-screen gap-4 overflow-hidden"
-              enableSelection={canUpdate}
-              injectSelectionProps={canUpdate}
+              enableSelection={canUpdate || canDelete}
+              injectSelectionProps={canUpdate || canDelete}
               selectedRowIds={selectedHostIds}
               onSelectionChange={ids => setSelectedHostIds(ids.map(id => Number(id)))}
               isRowSelectable={host => typeof host.id === 'number'}
@@ -991,7 +997,7 @@ export default function HostsList({
               isLoading={isCurrentlyLoading}
               loadingRows={6}
               className="max-w-screen-[2000px] min-h-screen gap-3 overflow-hidden"
-              enableSelection={canUpdate}
+              enableSelection={canUpdate || canDelete}
               selectedRowIds={selectedHostIds}
               onSelectionChange={ids => setSelectedHostIds(ids.map(id => Number(id)))}
               isRowSelectable={host => typeof host.id === 'number'}

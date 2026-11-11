@@ -4,6 +4,7 @@ import { ListColumn } from '@/components/common/list-generator'
 import { BaseHost } from '@/service/api'
 import { cn } from '@/lib/utils'
 import HostActionsMenu from '@/features/hosts/components/host-actions-menu'
+import { useCanDeleteHosts } from '@/fork/hosts/can-delete'
 import { Settings } from 'lucide-react'
 
 interface UseHostsListColumnsProps {
@@ -15,6 +16,7 @@ interface UseHostsListColumnsProps {
 }
 
 export const useHostsListColumns = ({ onEdit, onDuplicate, onDataChanged, canUpdate = true, canCreate = true }: UseHostsListColumnsProps) => {
+  const canDelete = useCanDeleteHosts()
   const { t } = useTranslation()
 
   return useMemo<ListColumn<BaseHost>[]>(
@@ -48,7 +50,7 @@ export const useHostsListColumns = ({ onEdit, onDuplicate, onDataChanged, canUpd
         cell: host => <span className="text-muted-foreground truncate text-xs">{host.inbound_tag ?? ''}</span>,
         hideOnMobile: true,
       },
-      ...(canUpdate || canCreate
+      ...(canUpdate || canCreate || canDelete
         ? [
             {
               id: 'actions',
@@ -61,6 +63,6 @@ export const useHostsListColumns = ({ onEdit, onDuplicate, onDataChanged, canUpd
           ]
         : []),
     ],
-    [t, onEdit, onDuplicate, onDataChanged, canUpdate, canCreate],
+    [t, onEdit, onDuplicate, onDataChanged, canUpdate, canCreate, canDelete],
   )
 }
