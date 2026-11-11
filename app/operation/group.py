@@ -49,8 +49,8 @@ from app.utils.logger import get_logger
 logger = get_logger("group-operation")
 
 
-async def _commit(db: AsyncSession) -> None:
-    await db.commit()
+async def _flush(db: AsyncSession) -> None:
+    await db.flush()
 
 
 class GroupOperation(BaseOperation):
@@ -80,6 +80,7 @@ class GroupOperation(BaseOperation):
             await self.raise_error(message=GROUP_LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
 
     async def _mark_pending_resync(self, db: AsyncSession, mark, *args) -> None:
+        await db.commit()
         try:
             await group_repair.mark_under_the_lock(db, mark, *args)
         except (DBAPIError, NamedLockMissing) as exc:
@@ -101,6 +102,32 @@ class GroupOperation(BaseOperation):
         user_ids = [user.id for user in users]
         markers = await group_repair.pending_resync_markers(db, user_ids)
         await self._sync_users_allocations(db, users)
+        await db.commit()
+        await group_repair.push_committed_users(db, user_ids, sync_users)
+        await group_repair.clear_resync_markers(db, markers)
+
+    async def _allocate_with_the_change(self, db: AsyncSession, users, user_ids: list[int]) -> None:
+        try:
+            await group_repair.allocate_and_grant_in_the_change(db, users, user_ids)
+        except ValueError as exc:
+            await self.raise_error(message=str(exc), code=400, db=db)
+        except group_repair.GroupChangeLost:
+            await self.raise_error(message=LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
+        except (DBAPIError, NamedLockMissing) as exc:
+            if not is_lock_unavailable(exc):
+                raise
+            await db.commit()
+            await group_repair.push_committed_users(db, user_ids, sync_users)
+            group_repair.schedule_allocation_repair(user_ids)
+            await self.raise_error(message=GROUP_LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
+
+    async def _finish_locked_group_change(self, db: AsyncSession, users) -> None:
+        if not users:
+            await db.commit()
+            return
+        user_ids = [user.id for user in users]
+        markers = await group_repair.pending_resync_markers(db, user_ids)
+        await self._allocate_with_the_change(db, users, user_ids)
         await db.commit()
         await group_repair.push_committed_users(db, user_ids, sync_users)
         await group_repair.clear_resync_markers(db, markers)
@@ -151,7 +178,7 @@ class GroupOperation(BaseOperation):
         db_group = await self._get_group_with_access(db, group_id, admin)
         if modified_group.inbound_tags is not None:
             await self.check_inbound_tags(modified_group.inbound_tags)
-        await self._mark_pending_resync(db, resync_markers.mark_group_members, [db_group.id])
+        await self._mark_pending_resync(db, group_repair.lock_and_mark_group_members, [db_group.id])
         db_group = await self._write_first_step(db, modify_group, db_group, modified_group)
 
         users = await get_users(
@@ -161,7 +188,7 @@ class GroupOperation(BaseOperation):
             load_usage_logs=False,
             load_group_inbounds=True,
         )
-        await self._finish_group_change(db, users)
+        await self._finish_locked_group_change(db, users)
 
         group = GroupResponse.model_validate(db_group)
 
@@ -192,9 +219,9 @@ class GroupOperation(BaseOperation):
             return BulkOperationDryRunResponse(affected_users=n)
 
         allowed_group_ids = get_allowed_group_ids(admin)
-        await self._mark_pending_resync(db, resync_markers.mark_bulk_group_scope, bulk_model, allowed_group_ids)
+        await self._mark_pending_resync(db, group_repair.lock_and_mark_bulk_group_scope, bulk_model, allowed_group_ids)
         users, users_count = await self._write_first_step(db, add_groups_to_users, bulk_model, allowed_group_ids)
-        await self._finish_group_change(db, users)
+        await self._finish_locked_group_change(db, users)
 
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
@@ -207,9 +234,9 @@ class GroupOperation(BaseOperation):
             return BulkOperationDryRunResponse(affected_users=n)
 
         allowed_group_ids = get_allowed_group_ids(admin)
-        await self._mark_pending_resync(db, resync_markers.mark_bulk_group_scope, bulk_model, allowed_group_ids)
+        await self._mark_pending_resync(db, group_repair.lock_and_mark_bulk_group_scope, bulk_model, allowed_group_ids)
         users, users_count = await self._write_first_step(db, remove_groups_from_users, bulk_model, allowed_group_ids)
-        await self._finish_group_change(db, users)
+        await self._finish_locked_group_change(db, users)
 
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
             return {"detail": f"operation has been successfuly done on {users_count} users"}
@@ -269,18 +296,18 @@ class GroupOperation(BaseOperation):
 
         groups_to_update = [db_group for db_group in db_groups if db_group.is_disabled != is_disabled]
 
+        await self._mark_pending_resync(
+            db, group_repair.lock_and_mark_group_members, [db_group.id for db_group in groups_to_update]
+        )
         for db_group in groups_to_update:
             db_group.is_disabled = is_disabled
-
-        await self._mark_pending_resync(
-            db, resync_markers.mark_group_members, [db_group.id for db_group in groups_to_update]
-        )
-        await self._write_first_step(db, _commit)
+        await self._write_first_step(db, _flush)
 
         for db_group in groups_to_update:
             await db.refresh(db_group)
             await load_group_attrs(db, db_group)
 
+        users = []
         if groups_to_update:
             users = await get_users(
                 db,
@@ -289,7 +316,7 @@ class GroupOperation(BaseOperation):
                 load_usage_logs=False,
                 load_group_inbounds=True,
             )
-            await self._finish_group_change(db, users)
+        await self._finish_locked_group_change(db, users)
 
         for db_group in groups_to_update:
             group = GroupResponse.model_validate(db_group)

@@ -143,17 +143,17 @@ async def _revoke_elsewhere(sessions, user_id):
         return str(revoked.vless.id)
 
 
-def _run_before_group_allocation(monkeypatch, action):
+def _run_before_the_group_change_locks(monkeypatch, action):
     from app.fork.proxy_secrets import group_repair
 
-    real = group_repair.allocate_and_grant_with_one_retry
+    real = group_repair.mark_under_the_lock
     state = SimpleNamespace(result=None)
 
-    async def interleaved(db, users, user_ids):
+    async def interleaved(db, mark, *args):
         state.result = await action()
-        return await real(db, users, user_ids)
+        return await real(db, mark, *args)
 
-    monkeypatch.setattr(group_repair, "allocate_and_grant_with_one_retry", interleaved)
+    monkeypatch.setattr(group_repair, "mark_under_the_lock", interleaved)
     return state
 
 
@@ -191,7 +191,7 @@ def _run_before_repair_allocation(monkeypatch, sessions, action):
 @pytest.mark.asyncio
 async def test_a_group_change_does_not_push_a_user_disabled_meanwhile_back_onto_the_nodes(sessions, monkeypatch, pushed):
     seed = await _seed(sessions)
-    _run_before_group_allocation(monkeypatch, lambda: _disable_elsewhere(sessions, seed.user_id))
+    _run_before_the_group_change_locks(monkeypatch, lambda: _disable_elsewhere(sessions, seed.user_id))
 
     async with sessions() as db:
         await _groups().modify_group(
@@ -224,7 +224,7 @@ async def test_the_background_repair_does_not_push_a_user_disabled_meanwhile_bac
 @pytest.mark.asyncio
 async def test_a_group_change_does_not_undo_a_subscription_revoked_meanwhile(sessions, monkeypatch, pushed):
     seed = await _seed(sessions)
-    state = _run_before_group_allocation(monkeypatch, lambda: _revoke_elsewhere(sessions, seed.user_id))
+    state = _run_before_the_group_change_locks(monkeypatch, lambda: _revoke_elsewhere(sessions, seed.user_id))
 
     async with sessions() as db:
         await _groups().modify_group(
