@@ -74,6 +74,9 @@ class NotificationQueue:
     async def dequeue(self, timeout: float | None = None) -> NotificationDelivery | None:
         raise NotImplementedError
 
+    def drain_nowait(self) -> list[dict]:
+        return []
+
 
 class NatsNotificationDelivery(NotificationDelivery):
     def __init__(self, queue, message, data, checkpoint=None):
@@ -446,6 +449,14 @@ class InMemoryNotificationQueue(NotificationQueue):
         self._count += 1
         self._size += len(data)
         self._put(json.loads(data), len(data), 0)
+
+    def drain_nowait(self) -> list[dict]:
+        drained = [heapq.heappop(self._items) for _ in range(len(self._items))]
+        for _, _, _, size, retry_size in drained:
+            self._count -= 1
+            self._size -= size
+            self._retry_size -= retry_size
+        return [item for _, _, item, _, _ in drained]
 
     async def dequeue(self, timeout: float | None = None) -> NotificationDelivery | None:
         deadline = time.monotonic() + timeout if timeout is not None else None
