@@ -1,12 +1,17 @@
 import hashlib
 import re
+from typing import TYPE_CHECKING
 
 from pydantic import Field
 
-from app.notification.nats_queue import QUEUE_MAX_MESSAGES, NotificationDelivery
-from app.notification.queue_manager import DiscordNotification, TelegramNotification
 from app.utils.logger import get_logger
 from config import EnvSettings
+
+if TYPE_CHECKING:
+    from app.notification.nats_queue import NotificationDelivery
+    from app.notification.queue_manager import DiscordNotification, TelegramNotification
+
+    Notification = TelegramNotification | DiscordNotification
 
 logger = get_logger("Notification")
 
@@ -17,8 +22,6 @@ RATE_LIMIT_SHARE_DROP_MESSAGE = (
     "Notification dropped: %s already holds %d rate-limited notifications, its share of the queue"
 )
 HELD_SLOT_GRACE = 60.0
-
-Notification = TelegramNotification | DiscordNotification
 
 
 class RateLimitShareSettings(EnvSettings):
@@ -59,6 +62,8 @@ def destination_label(destination: str) -> str:
 
 
 def destination_share(queue: object) -> int:
+    from app.notification.nats_queue import QUEUE_MAX_MESSAGES
+
     capacity = getattr(queue, "maxsize", None) or QUEUE_MAX_MESSAGES
     return max(1, int(capacity * rate_limit_share_settings.destination_share))
 
