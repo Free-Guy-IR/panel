@@ -53,20 +53,28 @@ async def mark_users(db: AsyncSession, user_ids: Iterable[int]) -> None:
         await db.execute(_mark_statement(dialect_name, chunk, token, requested_at))
 
 
-async def mark_group_members(db: AsyncSession, group_ids: Iterable[int]) -> None:
+async def group_member_ids(db: AsyncSession, group_ids: Iterable[int]) -> list[int]:
     wanted = sorted(set(group_ids))
     if not wanted:
-        return
+        return []
     column = users_groups_association.c.user_id
     members = await db.execute(select(column).where(users_groups_association.c.groups_id.in_(wanted)).distinct())
-    await mark_users(db, members.scalars().all())
+    return sorted(members.scalars().all())
 
 
-async def mark_bulk_group_scope(db: AsyncSession, bulk_model, allowed_group_ids: list[int] | None = None) -> None:
+async def bulk_group_scope_ids(db: AsyncSession, bulk_model, allowed_group_ids: list[int] | None = None) -> list[int]:
     from app.db.crud.bulk import _create_group_filter
 
     scope = await db.execute(select(User.id).where(_create_group_filter(bulk_model, allowed_group_ids)))
-    await mark_users(db, scope.scalars().all())
+    return sorted(scope.scalars().all())
+
+
+async def mark_group_members(db: AsyncSession, group_ids: Iterable[int]) -> None:
+    await mark_users(db, await group_member_ids(db, group_ids))
+
+
+async def mark_bulk_group_scope(db: AsyncSession, bulk_model, allowed_group_ids: list[int] | None = None) -> None:
+    await mark_users(db, await bulk_group_scope_ids(db, bulk_model, allowed_group_ids))
 
 
 async def markers_for(db: AsyncSession, user_ids: Iterable[int]) -> list[Marker]:

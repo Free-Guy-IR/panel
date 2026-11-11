@@ -128,14 +128,14 @@ async def test_a_group_change_that_allocates_wireguard_keeps_a_rotation_made_mea
     from app.fork.proxy_secrets import group_repair
 
     seed = await _seed(sessions)
-    real = group_repair.allocate_and_grant_with_one_retry
+    real = group_repair.mark_under_the_lock
     state = SimpleNamespace(rotated=None)
 
-    async def rotate_then_allocate(db, users, user_ids):
+    async def rotate_then_lock(db, mark, *args):
         state.rotated = await _rotate_auth(sessions, seed.user_id)
-        return await real(db, users, user_ids)
+        return await real(db, mark, *args)
 
-    monkeypatch.setattr(group_repair, "allocate_and_grant_with_one_retry", rotate_then_allocate)
+    monkeypatch.setattr(group_repair, "mark_under_the_lock", rotate_then_lock)
     operation = GroupOperation(operator_type=OperatorType.API)
 
     async def accept_tags(tags):
