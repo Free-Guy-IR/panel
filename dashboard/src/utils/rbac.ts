@@ -1,5 +1,7 @@
 import type { AdminDetails } from '@/service/api'
 import { ownerOnlyRoutePaths } from '@/fork/registry'
+import { routerPathname } from '@/fork/routing/route-path'
+import { settingsUrlVisibleTo } from '@/fork/settings/credential-tabs'
 
 type PermissionValue = boolean | { scope?: number | string | null } | null | undefined
 
@@ -11,6 +13,9 @@ const getActionPermission = (admin: AdminDetails | null | undefined, resource: s
 const isScopeNone = (value: PermissionValue) => typeof value === 'object' && value !== null && Number(value.scope) === 0
 const isScopeAllValue = (value: PermissionValue) => typeof value === 'object' && value !== null && Number(value.scope) === 2
 const READ_ACTIONS = new Set(['read', 'read_simple', 'read_general', 'logs', 'stats'])
+const OWNED_RESOURCES = new Set(['users', 'api_keys', 'hwids'])
+const isScopeOwnWithoutOwners = (resource: string, value: PermissionValue) =>
+  typeof value === 'object' && value !== null && Number(value.scope) === 1 && !OWNED_RESOURCES.has(resource)
 
 export const isOwner = (admin: AdminDetails | null | undefined) => admin?.role?.is_owner === true
 export const isLimited = (admin: AdminDetails | null | undefined) => admin?.status === 'limited' || admin?.is_limited === true
@@ -24,6 +29,7 @@ export const hasPermission = (admin: AdminDetails | null | undefined, resource: 
   const value = getActionPermission(admin, resource, action)
   if (value === true) return true
   if (isScopeNone(value)) return false
+  if (isScopeOwnWithoutOwners(resource, value)) return false
   return typeof value === 'object' && value !== null && value.scope != null
 }
 
@@ -68,8 +74,9 @@ export const firstAllowedRoute = (admin: AdminDetails | null | undefined) => {
   return '/settings/theme'
 }
 
-export const canAccessRoute = (admin: AdminDetails | null | undefined, pathname: string) => {
+export const canAccessRoute = (admin: AdminDetails | null | undefined, requestedPath: string) => {
   if (!admin) return false
+  const pathname = routerPathname(requestedPath)
   if (pathname === '/') return hasPermission(admin, 'system', 'read')
   if (pathname.startsWith('/theme') || pathname.startsWith('/settings/theme')) return true
   if (pathname.startsWith('/users')) return hasPermission(admin, 'users', 'read')
@@ -92,6 +99,7 @@ export const canAccessRoute = (admin: AdminDetails | null | undefined, pathname:
   if (pathname.startsWith('/nodes')) return canReadResourcePage(admin, 'nodes')
   const normalisedPath = pathname.toLowerCase()
   if (ownerOnlyRoutePaths().some(path => normalisedPath.startsWith(path.toLowerCase()))) return isOwner(admin)
+  if (normalisedPath.startsWith('/settings/') && !settingsUrlVisibleTo(normalisedPath, isOwner(admin))) return false
   if (pathname.startsWith('/settings/general')) return hasPermission(admin, 'settings', 'read_general') && hasPermission(admin, 'settings', 'update')
   if (pathname.startsWith('/settings')) {
     if (pathname === '/settings') return true
