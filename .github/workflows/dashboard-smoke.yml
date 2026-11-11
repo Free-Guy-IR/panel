@@ -36,6 +36,10 @@ jobs:
         working-directory: ./dashboard
         run: bun install --frozen-lockfile
 
+      - name: Type-check dashboard
+        working-directory: ./dashboard
+        run: bunx tsc -b
+
       - name: Dashboard unit tests
         working-directory: ./dashboard
         run: bun run test
