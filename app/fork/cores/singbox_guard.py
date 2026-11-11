@@ -203,3 +203,74 @@ def unsafe_singbox_node_message(subject: str, offenders: list[tuple[str, str]], 
     if not blocked:
         return None
     return unsafe_inbounds_message(subject, blocked, node_version)
+
+
+SINGBOX_MATCHER_DOMAIN_FIELDS = ("domain", "domain_suffix")
+SINGBOX_MATCHER_MARKERS = ("\n", "\r")
+
+
+def _entries(mapping, name: str) -> list[tuple[str, object]]:
+    if not isinstance(mapping, dict):
+        return []
+    return [(key, value) for key, value in mapping.items() if isinstance(key, str) and key.casefold() == name]
+
+
+def _marked_domain_values(rule: dict, path: str) -> list[str]:
+    found = []
+    for field in SINGBOX_MATCHER_DOMAIN_FIELDS:
+        for key, values in _entries(rule, field):
+            items = [values] if isinstance(values, str) else values if isinstance(values, list) else []
+            found.extend(
+                f"{path}.{key}[{index}]"
+                for index, value in enumerate(items)
+                if isinstance(value, str) and any(marker in value for marker in SINGBOX_MATCHER_MARKERS)
+            )
+    return found
+
+
+def _rules_with_marked_domains(rules, path: str) -> list[str]:
+    if not isinstance(rules, list):
+        return []
+    found = []
+    for index, rule in enumerate(rules):
+        if not isinstance(rule, dict):
+            continue
+        rule_path = f"{path}[{index}]"
+        found.extend(_marked_domain_values(rule, rule_path))
+        for key, nested in _entries(rule, "rules"):
+            found.extend(_rules_with_marked_domains(nested, f"{rule_path}.{key}"))
+    return found
+
+
+def domain_rule_line_breaks(config) -> list[str]:
+    found = []
+    for route_key, route in _entries(config, "route"):
+        for key, rules in _entries(route, "rules"):
+            found.extend(_rules_with_marked_domains(rules, f"{route_key}.{key}"))
+        for set_key, rule_sets in _entries(route, "rule_set"):
+            for index, rule_set in enumerate(rule_sets if isinstance(rule_sets, list) else []):
+                for key, rules in _entries(rule_set, "rules"):
+                    found.extend(_rules_with_marked_domains(rules, f"{route_key}.{set_key}[{index}].{key}"))
+    for dns_key, dns in _entries(config, "dns"):
+        for key, rules in _entries(dns, "rules"):
+            found.extend(_rules_with_marked_domains(rules, f"{dns_key}.{key}"))
+    return found
+
+
+def domain_rule_line_break_message(subject: str, *configs) -> str | None:
+    offenders = list(dict.fromkeys(path for config in configs for path in domain_rule_line_breaks(config)))
+    if not offenders:
+        return None
+    return (
+        f"{subject} has a line break (\\n or \\r) in a sing-box domain or domain_suffix value: "
+        f"{', '.join(offenders)}. sing-box uses these characters as markers in its domain matcher, so such a value "
+        "can crash sing-box while it loads the rules or change which domains the rule matches; remove it."
+    )
+
+
+def singbox_template_line_break_message(content: str, rendered) -> str | None:
+    try:
+        served = json.loads(content)
+    except ValueError:
+        served = None
+    return domain_rule_line_break_message("The sing-box subscription template", served, rendered)
