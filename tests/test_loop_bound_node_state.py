@@ -7,9 +7,10 @@ seen_loops = []
 clients_made = []
 
 
-async def test_one_test_loop_takes_the_node_manager_lock():
-    seen_loops.append(asyncio.get_running_loop())
-    assert await node_manager.get_node(-1) is None
+def test_one_test_loop_takes_the_node_manager_lock():
+    with asyncio.Runner() as runner:
+        seen_loops.append(runner.get_loop())
+        assert runner.run(node_manager.get_node(-1)) is None
 
 
 async def test_the_next_test_loop_takes_the_node_manager_lock_as_well():
