@@ -20,7 +20,12 @@ from sqlalchemy.pool import NullPool
 
 from app.db import base
 from app.db.crud.hwid import register_user_hwid
-from app.db.crud.user import get_user as get_db_user, get_users as get_db_users, update_users_status
+from app.db.crud.user import (
+    get_user as get_db_user,
+    get_users as get_db_users,
+    lock_admin_quota_row,
+    update_users_status,
+)
 from app.db.models import Admin, NodeUserUsage, User, UserStatus, UserUsageResetLogs
 from app.models.settings import ConfigFormat, General, HeaderPlacement, SubRule, Subscription, UsageSettings
 from app.models.stats import Period, UserCountMetric, UserCountMetricStat, UserCountMetricStatsList
@@ -2750,6 +2755,33 @@ def test_bulk_set_owner_credits_a_user_that_had_no_owner(access_token):
     finally:
         delete_user(access_token, user["username"])
         delete_admin(access_token, taker["username"])
+
+
+def test_lock_admin_quota_row_does_not_commit_the_caller(access_token):
+    """create_user prepares proxy secrets and WireGuard addresses under a named lock and row locks before the
+    quota check, so a commit here would publish the caller's pending writes and release those locks."""
+    admin = create_admin(access_token)
+
+    async def _admin_id() -> int:
+        async with TestSession() as session:
+            return (
+                await session.execute(select(Admin.id).where(Admin.username == admin["username"]))
+            ).scalar_one()
+
+    async def _traffic_after_rollback(admin_id: int) -> int:
+        async with TestSession() as session:
+            await session.execute(update(Admin).where(Admin.id == admin_id).values(used_traffic=4242))
+            await lock_admin_quota_row(session, admin_id)
+            await session.rollback()
+        async with TestSession() as session:
+            return (
+                await session.execute(select(Admin.used_traffic).where(Admin.id == admin_id))
+            ).scalar_one()
+
+    try:
+        assert asyncio.run(_traffic_after_rollback(asyncio.run(_admin_id()))) == 0
+    finally:
+        delete_admin(access_token, admin["username"])
 
 
 def _create_group_restricted_user_role(access_token: str, *, allowed_group_ids: list[int]) -> dict:
