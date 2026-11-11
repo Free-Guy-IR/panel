@@ -789,12 +789,17 @@ export interface WebSocketSettings {
   heartbeatPeriod?: number | null;
 }
 
+export interface MasqueHostSettings {
+  remote_dns?: string[] | null;
+}
+
 export interface TransportSettings {
   xhttp_settings?: XHttpSettings | null;
   grpc_settings?: GRPCSettings | null;
   kcp_settings?: KCPSettings | null;
   tcp_settings?: TcpSettings | null;
   websocket_settings?: WebSocketSettings | null;
+  masque_settings?: MasqueHostSettings | null;
 }
 
 export type MultiplexProtocol = typeof MultiplexProtocol[keyof typeof MultiplexProtocol];
