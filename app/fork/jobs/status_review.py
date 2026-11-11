@@ -30,8 +30,8 @@ NEXT_PLAN_POSTPONEMENTS_BEFORE_ERROR = 5
 _postponed_renewals: dict[int, int] = {}
 EXPIRABLE = (User.status == UserStatus.active, User.is_expired)
 STARTABLE = (User.status == UserStatus.on_hold, User.become_online)
-CAME_ONLINE = (*STARTABLE, User.online_at.isnot(None))
-TIMED_OUT = (*STARTABLE, User.online_at.is_(None))
+CAME_ONLINE = (*STARTABLE, User.came_online)
+TIMED_OUT = (*STARTABLE, ~User.came_online)
 
 
 async def lock_users_matching(db: AsyncSession, user_ids: list[int], predicates: tuple) -> list[User]:
