@@ -23,7 +23,7 @@ from app.nats.kv_watch import KvWatcher, watch_kv
 from app.node.nats_memory import NatsUserSyncStore
 
 
-@pytest_asyncio.fixture(loop_scope="function")
+@pytest_asyncio.fixture
 async def jetstream(tmp_path):
     binary = os.environ.get("NATS_SERVER_BINARY") or shutil.which("nats-server")
     if not binary:
