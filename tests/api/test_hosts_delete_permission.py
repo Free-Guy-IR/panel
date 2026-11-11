@@ -13,6 +13,7 @@ EDITOR = {"hosts": {"read": True, "update": True}}
 DELETER = {"hosts": {"read": True, "update": True, "delete": True}}
 DELETE_ONLY = {"hosts": {"read": True, "delete": True}}
 CREATOR = {"hosts": {"read": True, "create": True, "update": True}}
+CREATION_REFUSED = "Permission denied: hosts.create"
 
 
 def _host_payload(inbound: str) -> dict:
@@ -30,6 +31,10 @@ def _host_ids(access_token: str) -> set[int]:
     response = client.get("/api/hosts", headers=auth_headers(access_token))
     assert response.status_code == status.HTTP_200_OK, response.text
     return {item["id"] for item in response.json()}
+
+
+def _vanished(host_id: int) -> str:
+    return f"Host {host_id} was deleted while it was being edited"
 
 
 def _exists(access_token: str, host_id: int) -> bool:
@@ -89,6 +94,7 @@ def test_an_admin_who_can_edit_hosts_cannot_create_one_through_the_bulk_edit(acc
             "/api/hosts", headers=auth_headers(editor.token), json=[_host_payload(host["inbound_tag"])]
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
+        assert response.json()["detail"] == CREATION_REFUSED
         assert _host_ids(access_token) == before
     finally:
         editor.close()
@@ -105,6 +111,7 @@ def test_an_admin_who_can_edit_hosts_cannot_create_one_by_naming_an_id_that_does
             json=[{**_host_payload(host["inbound_tag"]), "id": missing_id}],
         )
         assert response.status_code == status.HTTP_403_FORBIDDEN, response.text
+        assert response.json()["detail"] == CREATION_REFUSED
         assert _host_ids(access_token) == before
     finally:
         editor.close()
@@ -155,6 +162,7 @@ def test_a_host_deleted_after_the_bulk_edit_read_it_is_never_recreated_and_answe
             "/api/hosts", headers=auth_headers(editor.token), json=[{**host, "priority": host["priority"] + 1}]
         )
         assert response.status_code == status.HTTP_409_CONFLICT, response.text
+        assert response.json()["detail"] == _vanished(host["id"])
         assert _host_ids(access_token) == before - {host["id"]}
         remarks = {item["remark"] for item in client.get("/api/hosts", headers=auth_headers(access_token)).json()}
         assert host["remark"] not in remarks
@@ -176,6 +184,10 @@ def test_a_bulk_edit_racing_a_delete_never_leaves_a_recreated_host_or_a_server_e
             status.HTTP_403_FORBIDDEN,
             status.HTTP_409_CONFLICT,
         ), edit_response.text
+        if edit_response.status_code == status.HTTP_403_FORBIDDEN:
+            assert edit_response.json()["detail"] == CREATION_REFUSED
+        if edit_response.status_code == status.HTTP_409_CONFLICT:
+            assert edit_response.json()["detail"] == _vanished(host["id"])
         assert _host_ids(access_token) == before - {host["id"]}
     finally:
         editor.close()
