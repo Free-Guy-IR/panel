@@ -16,6 +16,7 @@ from app.db.crud.client_template import (
     remove_client_templates,
     set_default_template,
 )
+from app.fork.cores.singbox_guard import singbox_template_line_break_message
 from app.models.admin import AdminDetails
 from app.models.client_template import (
     BulkClientTemplateSelection,
@@ -84,6 +85,10 @@ class ClientTemplateOperation(BaseOperation):
                     )
                 if not out:
                     raise ValueError("Subscription template content must contain at least one outbound proxy")
+                if template_type == ClientTemplateType.singbox_subscription:
+                    message = singbox_template_line_break_message(content, parsed)
+                    if message:
+                        raise ValueError(message)
         except Exception as exc:
             await self.raise_error(message=f"Invalid template content: {exc!s}", code=400)
 
