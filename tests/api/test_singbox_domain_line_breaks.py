@@ -1,10 +1,13 @@
+import asyncio
 import json
 import random
 
 import pytest
 from fastapi import status
+from sqlalchemy import update
 
-from tests.api import client
+from app.db.models import ClientTemplate
+from tests.api import GetTestDB, client
 from tests.api.helpers import (
     auth_headers,
     create_core,
@@ -238,6 +241,12 @@ def _make_default(access_token: str, template_id: int) -> None:
     assert response.status_code == status.HTTP_200_OK, response.text
 
 
+async def _store_template_content(template_id: int, content: str) -> None:
+    async with GetTestDB() as db:
+        await db.execute(update(ClientTemplate).where(ClientTemplate.id == template_id).values(content=content))
+        await db.commit()
+
+
 def _domain_values_with_line_breaks(rules, path: str) -> list[str]:
     found = []
     for index, rule in enumerate(rules or []):
@@ -314,7 +323,7 @@ def test_a_line_break_the_template_check_render_would_hide_is_still_refused(acce
             client.delete(f"/api/client_template/{response.json()['id']}", headers=auth_headers(access_token))
 
 
-def test_the_singbox_subscription_never_serves_a_line_break_in_a_domain_value(access_token):
+def test_a_refused_line_break_template_never_becomes_the_served_sing_box_template(access_token):
     core = create_core(access_token, name=unique_name("lb_sub_core"))
     hosts = create_hosts_for_inbounds(access_token)
     group = create_group(access_token, name=unique_name("lb_sub_group"))
@@ -334,6 +343,32 @@ def test_the_singbox_subscription_never_serves_a_line_break_in_a_domain_value(ac
         _make_default(access_token, previous_default["id"])
         if response.status_code == status.HTTP_201_CREATED:
             client.delete(f"/api/client_template/{response.json()['id']}", headers=auth_headers(access_token))
+        delete_user(access_token, user["username"])
+        for host in hosts:
+            client.delete(f"/api/host/{host['id']}", headers=auth_headers(access_token))
+        delete_group(access_token, group["id"])
+        delete_core(access_token, core["id"])
+
+
+def test_a_line_break_template_stored_before_the_check_is_served_as_stored(access_token):
+    core = create_core(access_token, name=unique_name("lb_old_core"))
+    hosts = create_hosts_for_inbounds(access_token)
+    group = create_group(access_token, name=unique_name("lb_old_group"))
+    user = create_user(access_token, group_ids=[group["id"]], payload={"username": unique_name("lb_old_user")})
+    previous_default = _default_singbox_template(access_token)
+    created = _post_template(access_token, json.dumps(TEMPLATE_BASE | CLEAN))
+    assert created.status_code == status.HTTP_201_CREATED, created.text
+    sections, _ = LINE_BREAKS[0].values
+    try:
+        asyncio.run(_store_template_content(created.json()["id"], json.dumps(TEMPLATE_BASE | sections)))
+        _make_default(access_token, created.json()["id"])
+        served = client.get(f"{user['subscription_url']}/sing_box")
+        assert served.status_code == status.HTTP_200_OK, served.text
+        rules = json.loads(served.text)["route"]["rules"]
+        assert _domain_values_with_line_breaks(rules, "route.rules") == ["route.rules[0].domain"]
+    finally:
+        _make_default(access_token, previous_default["id"])
+        client.delete(f"/api/client_template/{created.json()['id']}", headers=auth_headers(access_token))
         delete_user(access_token, user["username"])
         for host in hosts:
             client.delete(f"/api/host/{host['id']}", headers=auth_headers(access_token))
