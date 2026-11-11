@@ -1832,7 +1832,8 @@ def own_lines_missing(fork_sha, head, paths, reference=None):
 
 def design_fork_commit(reason, head, upstream_sha, in_range, reference=None):
     upstream_paths = set(commit_paths(upstream_sha))
-    for fork_sha in named_commits(reason, head, upstream_sha):
+    carrier = None
+    for fork_sha in named_commits(MISSING_LINE_RE.sub("", reason), head, upstream_sha):
         if fork_sha in in_range:
             continue
         touched = {path for path in git("show", "--format=", "--name-only", "-M", fork_sha).split("\n") if path}
@@ -1841,9 +1842,12 @@ def design_fork_commit(reason, head, upstream_sha, in_range, reference=None):
             continue
         named = {path for path in touched if re.search(rf"(?<![\w./-]){re.escape(path)}(?![\w/-])", reason)}
         expected, missing = own_lines_missing(fork_sha, head, named | brought if named else touched, reference)
-        if expected and not missing:
-            return fork_sha
-    return None
+        if not expected:
+            continue
+        if missing:
+            return None
+        carrier = carrier or fork_sha
+    return carrier
 
 
 @functools.lru_cache(maxsize=1024)

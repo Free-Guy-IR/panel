@@ -3152,6 +3152,58 @@ def dropped_line_world(tmp_path, case):
     return path, fix, text
 
 
+CHECK_TEST = "def test_handle(user):\n    handle(user)\n    assert done(user)\n"
+CHECK_TEST_FIXED = CHECK_TEST.replace("    assert done(user)\n", "    assert done(user)\n    assert checked(user)\n")
+
+
+def two_carrier_world(tmp_path, case):
+    path = tmp_path / f"two-carriers-{case}"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "upstream base", {"svc.py": SVC, "check_test.py": CHECK_TEST})
+    git(path, "tag", "v1.0")
+    fix = commit(
+        path, "fix: check the caller before handling", {"svc.py": SVC_FIXED, "check_test.py": CHECK_TEST_FIXED}
+    )
+    git(path, "update-ref", "refs/remotes/upstream/dev", fix)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    guard = commit(path, "fork: check the caller", {"svc.py": SVC_FIXED, "fork.py": "fork\n"})
+    test = commit(path, "fork: test the caller check", {"check_test.py": CHECK_TEST_FIXED})
+    rewrite = None
+    if case != "both-intact":
+        rewrite = commit(
+            path,
+            "fork: test the strict caller check",
+            {"check_test.py": CHECK_TEST_FIXED.replace("checked(user)", "checked(user, strict=True)")},
+        )
+    if case == "broken-named-only-in-missing-clause":
+        named = (
+            f"fork commit {guard}; missing `check_test.py:+4` because {test} was rewritten by {rewrite} for the "
+            "strict check"
+        )
+    else:
+        named = f"fork commits {guard} and {test}"
+    text = f"## Ported by design\n\n- `{fix}` the fork checks the caller itself in {named} security: yes\n"
+    return path, fix, text
+
+
+@pytest.mark.parametrize(
+    ("case", "code"),
+    [("both-intact", 0), ("second-broken", 1), ("broken-named-only-in-missing-clause", 0)],
+)
+def test_every_carrier_a_security_design_port_names_must_still_carry_its_lines(tmp_path, case, code):
+    path, fix, text = two_carrier_world(tmp_path, case)
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but its reason names no fork commit on main" in (
+            result.stdout
+        )
+
+
 @pytest.mark.parametrize(
     ("case", "code"),
     [("upstream-drops-it-too", 0), ("fork-only-drop", 1), ("moved-where-upstream-keeps-it", 1)],
