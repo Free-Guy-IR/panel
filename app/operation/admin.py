@@ -278,8 +278,8 @@ class AdminOperation(BaseOperation):
         await self._disable_all_active_users_for_admin(db, db_admin, admin)
 
     @staticmethod
-    async def _visible_users_of(
-        db: AsyncSession, db_admin: Admin, caller: AdminDetails, *, for_node_sync: bool = False
+    async def _load_visible_users(
+        db: AsyncSession, db_admin: Admin, caller: AdminDetails, *, load_usage_logs: bool
     ) -> list:
         query = visible_users_query(caller)
         if query is None:
@@ -290,9 +290,13 @@ class AdminOperation(BaseOperation):
             query=query,
             admin=db_admin,
             load_admin_role=True,
-            load_usage_logs=not for_node_sync,
-            load_group_inbounds=for_node_sync,
+            load_usage_logs=load_usage_logs,
+            load_group_inbounds=not load_usage_logs,
         )
+
+    @staticmethod
+    async def _visible_users_of(db: AsyncSession, db_admin: Admin, caller: AdminDetails) -> list:
+        return await AdminOperation._load_visible_users(db, db_admin, caller, load_usage_logs=False)
 
     @staticmethod
     async def _users_changed_but_no_longer_visible(db: AsyncSession, locked: list[int], visible: list) -> list:
@@ -314,7 +318,7 @@ class AdminOperation(BaseOperation):
     async def _push_admin_wide_change(
         self, db: AsyncSession, db_admin: Admin, admin: AdminDetails, locked: list[int]
     ) -> None:
-        visible = await self._visible_users_of(db, db_admin, admin, for_node_sync=True)
+        visible = await self._visible_users_of(db, db_admin, admin)
         await sync_users([*visible, *await self._users_changed_but_no_longer_visible(db, locked, visible)])
 
     async def _disable_all_active_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails):
@@ -375,7 +379,7 @@ class AdminOperation(BaseOperation):
 
     async def _remove_all_users_for_admin(self, db: AsyncSession, db_admin: Admin, admin: AdminDetails) -> int:
         """Delete all users that belong to the specified admin."""
-        users = await self._visible_users_of(db, db_admin, admin)
+        users = await self._load_visible_users(db, db_admin, admin, load_usage_logs=True)
         if not users:
             return 0
 
