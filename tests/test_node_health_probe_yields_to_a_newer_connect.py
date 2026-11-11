@@ -59,6 +59,7 @@ def wired(monkeypatch):
         fail_threshold=1, recover_threshold=1, probe_timeout=5, max_backoff=60
     )
     monkeypatch.setattr(node_checker, "_node_health_settings", AsyncMock(return_value=node_health))
+    monkeypatch.setattr(node_checker, "_owns_health_checks", lambda: True)
     monkeypatch.setattr(node_checker, "_health_streaks", {})
     monkeypatch.setattr(node_checker, "_probe_backoffs", {})
     writes: list = []
