@@ -11465,6 +11465,323 @@
           "removed": []
         }
       }
+    },
+    {
+      "upstream": "83fe90e07d33d97ebe1ec221799e1e268faa6b6a",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "confirmDeleteInactive"
+              ],
+              "Delete Inactive Accounts"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "confirmDeleteInactiveMessage"
+              ],
+              "Are you sure you want to delete accounts whose last activity was before the selected date? This action cannot be undone."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "deleteInactive"
+              ],
+              "Delete Inactive"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "deleteInactiveFailed"
+              ],
+              "Failed to delete inactive accounts"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "deleteInactiveSuccess"
+              ],
+              "{{count}} inactive accounts deleted successfully"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "lastActivityBefore"
+              ],
+              "Last Activity Before"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "selectInactiveDate"
+              ],
+              "Select a cutoff date. Accounts last online before it will match; for accounts never online, their creation date is used."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "targets",
+                "inactive"
+              ],
+              "Inactive Users"
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "confirmDeleteInactive"
+              ],
+              "حذف حساب‌های بدون فعالیت"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "confirmDeleteInactiveMessage"
+              ],
+              "آیا مطمئنید که می‌خواهید حساب‌هایی را که آخرین فعالیتشان قبل از تاریخ انتخابی بوده حذف کنید؟ این عمل قابل بازگشت نیست."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "deleteInactive"
+              ],
+              "حذف کاربران بدون فعالیت"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "deleteInactiveFailed"
+              ],
+              "حذف حساب‌های بدون فعالیت ناموفق بود"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "deleteInactiveSuccess"
+              ],
+              "{{count}} حساب بدون فعالیت با موفقیت حذف شد"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "lastActivityBefore"
+              ],
+              "آخرین فعالیت قبل از"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "selectInactiveDate"
+              ],
+              "یک تاریخ مرزی انتخاب کنید. حساب‌هایی که آخرین اتصالشان قبل از آن بوده انتخاب می‌شوند؛ برای حساب‌هایی که هرگز آنلاین نشده‌اند، تاریخ ساخت حساب ملاک است."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "targets",
+                "inactive"
+              ],
+              "کاربران بدون فعالیت"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "confirmDeleteInactive"
+              ],
+              "Удалить неактивные аккаунты"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "confirmDeleteInactiveMessage"
+              ],
+              "Удалить аккаунты, последняя активность которых была до выбранной даты? Это действие нельзя отменить."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "deleteInactive"
+              ],
+              "Удалить неактивные"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "deleteInactiveFailed"
+              ],
+              "Не удалось удалить неактивные аккаунты"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "deleteInactiveSuccess"
+              ],
+              "Успешно удалено {{count}} неактивных аккаунтов"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "lastActivityBefore"
+              ],
+              "Последняя активность до"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "selectInactiveDate"
+              ],
+              "Выберите дату отсечения. Будут выбраны аккаунты, которые последний раз были онлайн до неё; для аккаунтов, которые ещё не были онлайн, используется дата создания."
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "targets",
+                "inactive"
+              ],
+              "Неактивные пользователи"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "confirmDeleteInactive"
+              ],
+              "删除不活跃账户"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "confirmDeleteInactiveMessage"
+              ],
+              "您确定要删除最后活动时间早于所选日期的账户吗？此操作无法撤销。"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "deleteInactive"
+              ],
+              "删除不活跃账户"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "deleteInactiveFailed"
+              ],
+              "删除不活跃账户失败"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "deleteInactiveSuccess"
+              ],
+              "成功删除 {{count}} 个不活跃账户"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "lastActivityBefore"
+              ],
+              "最后活动时间早于"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "selectInactiveDate"
+              ],
+              "请选择截止日期。最后在线时间早于该日期的账户将被选中；从未上线的账户使用创建日期。"
+            ],
+            [
+              [
+                "settings",
+                "cleanup",
+                "expiredUsers",
+                "targets",
+                "inactive"
+              ],
+              "不活跃用户"
+            ]
+          ],
+          "removed": []
+        }
+      }
     }
   ]
 }
