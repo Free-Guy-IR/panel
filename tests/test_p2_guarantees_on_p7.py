@@ -21,7 +21,6 @@ from app.operation.user import UserOperation
 from app.utils.crypto import generate_wireguard_keypair
 from config import database_settings
 from tests.test_group_secret_lock_503 import (
-    FAILURES,
     GITHUB_MODE,
     OWNER,
     _errors,
@@ -32,9 +31,11 @@ from tests.test_group_secret_lock_503 import (
     _purge,
     _seed,
     _seed_lock_row,
+    _store_without_the_second_step,
 )
 
 EDITED_NOTE = "edited by the user request"
+GROUP_CHANGE_ATTEMPTS = 5
 MYSQL_FAMILY = ("mysql", "mariadb")
 
 
@@ -116,34 +117,6 @@ async def repair(monkeypatch, sessions):
     await group_repair.cancel_pending_repairs()
 
 
-def _switchable_lock(monkeypatch):
-    from app.fork.proxy_secrets import entitled as entitled_module, group_repair
-    from app.operation.group import GroupOperation
-
-    switch = SimpleNamespace(failing=True, marking=False)
-    for module in (entitled_module, group_repair):
-        real_acquire = module.acquire_proxy_secrets_lock
-
-        async def acquire(db, real_acquire=real_acquire):
-            if switch.failing and not switch.marking:
-                raise FAILURES["lock-row-missing"]
-            return await real_acquire(db)
-
-        monkeypatch.setattr(module, "acquire_proxy_secrets_lock", acquire)
-
-    real_mark = GroupOperation._mark_pending_resync
-
-    async def mark_holding_the_lock(self, db, mark, *args):
-        switch.marking = True
-        try:
-            return await real_mark(self, db, mark, *args)
-        finally:
-            switch.marking = False
-
-    monkeypatch.setattr(GroupOperation, "_mark_pending_resync", mark_holding_the_lock)
-    return switch
-
-
 def _users_operation(monkeypatch):
     from app.operation import user as user_module
 
@@ -195,24 +168,18 @@ async def test_a_second_failure_before_the_first_pass_reads_is_covered_and_leave
 
     seed = await _seed(sessions)
     member = seed.users["paused_member"]
-    operation = _groups()
-    switch = _switchable_lock(monkeypatch)
     monkeypatch.setattr(group_repair, "REPAIR_DELAYS_SECONDS", (0.5, 0.05, 0.05))
-    _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
-
-    async with sessions() as db:
-        with pytest.raises(HTTPException):
-            await enable(db)
-    async with sessions() as db:
-        with pytest.raises(HTTPException):
-            await operation.bulk_add_groups(db, BulkGroup(group_ids={seed.groups["mtp"]}, users={member}), OWNER)
-    switch.failing = False
+    await _store_without_the_second_step(sessions, member, enable_group_id=seed.groups["paused"])
+    group_repair.schedule_allocation_repair([member])
+    await _store_without_the_second_step(sessions, member, add_group_id=seed.groups["mtp"])
+    group_repair.schedule_allocation_repair([member])
 
     assert await repair.tasks[0] is True
     assert len(repair.tasks) == 1
     state = await _phase_two_state(sessions, member)
     assert len(state.peer_ips) == 1
     assert state.openvpn
+    assert state.l2tp
     assert await _markers(sessions, member) == []
     assert group_repair.pending_repair_user_ids() == set()
 
@@ -223,30 +190,18 @@ async def test_failures_arriving_during_the_first_two_passes_get_a_third_pass(se
 
     seed = await _seed(sessions)
     member = seed.users["paused_member"]
-    operation = _groups()
-    switch = _switchable_lock(monkeypatch)
     passes = []
-    changes = [
-        lambda db: operation.bulk_add_groups(db, BulkGroup(group_ids={seed.groups["mtp"]}, users={member}), OWNER),
-        lambda db: operation.bulk_add_groups(db, BulkGroup(group_ids={seed.groups["vpn"]}, users={member}), OWNER),
-    ]
+    added_groups = [seed.groups["mtp"], seed.groups["vpn"]]
 
     async def change_again_during_the_pass(users):
         passes.append(sorted(user.id for user in users))
-        if len(passes) <= len(changes):
-            switch.failing = True
-            async with sessions() as db:
-                with pytest.raises(HTTPException):
-                    await changes[len(passes) - 1](db)
-            switch.failing = False
+        if len(passes) <= len(added_groups):
+            await _store_without_the_second_step(sessions, member, add_group_id=added_groups[len(passes) - 1])
+            group_repair.schedule_allocation_repair([member])
 
     monkeypatch.setattr(group_repair, "sync_users", change_again_during_the_pass)
-    _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
-
-    async with sessions() as db:
-        with pytest.raises(HTTPException):
-            await enable(db)
-    switch.failing = False
+    await _store_without_the_second_step(sessions, member, enable_group_id=seed.groups["paused"])
+    group_repair.schedule_allocation_repair([member])
 
     assert await repair.tasks[0] is True
     assert passes == [[member], [member], [member]]
@@ -264,7 +219,6 @@ async def test_a_user_that_keeps_changing_is_stopped_at_five_passes_with_one_err
 
     seed = await _seed(sessions)
     member = seed.users["paused_member"]
-    switch = _switchable_lock(monkeypatch)
     passes = []
 
     async def another_failure_every_pass(users):
@@ -272,12 +226,8 @@ async def test_a_user_that_keeps_changing_is_stopped_at_five_passes_with_one_err
         group_repair.schedule_allocation_repair([member])
 
     monkeypatch.setattr(group_repair, "sync_users", another_failure_every_pass)
-    _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
-
-    async with sessions() as db:
-        with pytest.raises(HTTPException):
-            await enable(db)
-    switch.failing = False
+    await _store_without_the_second_step(sessions, member, enable_group_id=seed.groups["paused"])
+    group_repair.schedule_allocation_repair([member])
 
     assert group_repair.REPAIR_MAX_PASSES == 5
     assert await repair.tasks[0] is False
@@ -356,8 +306,14 @@ async def test_concurrent_group_changes_and_user_edits_finish_without_deadlock_o
     _, _, enable = _group_change(seed, "bulk_set_groups_disabled")
 
     async def in_session(work):
-        async with sessions() as db:
-            return await work(db)
+        for attempt in range(1, GROUP_CHANGE_ATTEMPTS + 1):
+            try:
+                async with sessions() as db:
+                    return await work(db)
+            except HTTPException as refused:
+                if refused.status_code != 503 or attempt == GROUP_CHANGE_ATTEMPTS:
+                    raise
+                await asyncio.sleep(0.2)
 
     async def edit(user_id):
         await _user_edit(users, sessions, user_id)
@@ -390,8 +346,7 @@ async def test_concurrent_group_changes_and_user_edits_finish_without_deadlock_o
             and not (isinstance(outcome, HTTPException) and outcome.status_code == 503)
         ]
         assert unexpected == []
-    for task in list(repair.tasks):
-        assert await asyncio.wait_for(task, timeout=60) is True
+    assert repair.scheduled == []
 
     for user_id in (member, outsider):
         state = await _phase_two_state(sessions, user_id)

@@ -111,15 +111,10 @@ class GroupOperation(BaseOperation):
             await group_repair.allocate_and_grant_in_the_change(db, users, user_ids)
         except ValueError as exc:
             await self.raise_error(message=str(exc), code=400, db=db)
-        except group_repair.GroupChangeLost:
-            await self.raise_error(message=LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
         except (DBAPIError, NamedLockMissing) as exc:
             if not is_lock_unavailable(exc):
                 raise
-            await db.commit()
-            await group_repair.push_committed_users(db, user_ids, sync_users)
-            group_repair.schedule_allocation_repair(user_ids)
-            await self.raise_error(message=GROUP_LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
+            await self.raise_error(message=LOCK_UNAVAILABLE_DETAIL, code=503, db=db)
 
     async def _finish_locked_group_change(self, db: AsyncSession, users) -> None:
         if not users:
