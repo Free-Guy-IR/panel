@@ -347,6 +347,7 @@ async def test_remove_expired_users_applies_disabled_and_immediate_modes(
         retention_db,
         include_limited,
         default_autodelete_days=retention_days,
+        on_chunk_deleted=remove_expired_users_job.sync_remove_users,
     )
 
 
@@ -457,14 +458,15 @@ async def test_expired_user_cleanup_locks_subnets_before_users(retention_db, mon
     async def record_lock(db, settings_list):
         calls.append(("subnets", list(settings_list)))
 
-    original_remove = user_crud.remove_users
+    original_delete = user_crud._delete_locked_users
 
-    async def record_remove(db, users):
-        calls.append(("users", [user.username for user in users]))
-        await original_remove(db, users)
+    async def record_delete(db, user_ids, *predicates, **kwargs):
+        rows = await original_delete(db, user_ids, *predicates, **kwargs)
+        calls.append(("users", [row.username for row in rows]))
+        return rows
 
     monkeypatch.setattr(user_crud, "lock_users_subnets", record_lock)
-    monkeypatch.setattr(user_crud, "remove_users", record_remove)
+    monkeypatch.setattr(user_crud, "_delete_locked_users", record_delete)
 
     await autodelete_expired_users(retention_db, default_autodelete_days=1)
 

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select, update
 
 from app.db.crud import user as user_crud
 from app.db.models import User, UserStatus
+from app.models.settings import CleanupSettings
 from tests.test_recorder_harness import recorder_db_fixture, seed_users_and_nodes  # noqa: F401
 
 
@@ -87,6 +89,7 @@ async def test_autodelete_job_pushes_a_node_removal_for_exactly_the_deleted_user
         return None
 
     monkeypatch.setattr(job, "GetDB", record_usages.GetDB)
+    monkeypatch.setattr(job, "cleanup_settings", AsyncMock(return_value=CleanupSettings()))
     monkeypatch.setattr(job, "sync_remove_users", record_removal)
     monkeypatch.setattr(job.notification, "remove_user", quiet)
 
