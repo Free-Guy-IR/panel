@@ -3,6 +3,7 @@ from urllib.parse import urlsplit
 import aiohttp
 import yarl
 
+from app.fork.outbound_proxy import outbound_connector
 from app.models.validators import ProxyValidator
 from app.utils.ssl_context import create_outbound_ssl_context
 
@@ -33,9 +34,9 @@ def checked_proxy_url(proxy: str | None) -> str | None:
 
 def create_outbound_http_session(*, proxy: str | None = None, timeout_seconds: float = 10) -> aiohttp.ClientSession:
     """Create an HTTP client whose TLS changes cannot affect server sockets."""
-    checked_proxy = checked_proxy_url(proxy)
+    connector, http_proxy = outbound_connector(checked_proxy_url(proxy), create_outbound_ssl_context())
     return aiohttp.ClientSession(
-        connector=aiohttp.TCPConnector(ssl=create_outbound_ssl_context()),
+        connector=connector,
         timeout=aiohttp.ClientTimeout(total=timeout_seconds),
-        proxy=checked_proxy,
+        proxy=http_proxy,
     )
