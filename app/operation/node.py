@@ -33,8 +33,22 @@ from app.db.models import Node, NodeStatus
 from app.fork.cores.singbox_guard import singbox_index_keyed_inbounds, unsafe_singbox_node_message
 from app.fork.crud.node import CoreConfigMissing
 from app.fork.node_error_status import node_error_status
+from app.fork.operation.node_background_connects import (
+    ConnectLanes,
+    connect_mark,
+    connecting_in_background,
+    remember_connect_mark,
+    request_wait,
+    settle,
+    unit_outcome,
+)
 from app.fork.operation.node_connect_generation import bump_connect_generation
-from app.fork.operation.node_connect_jobs import is_retiring, run_withdrawable_connect
+from app.fork.operation.node_connect_jobs import (
+    is_retiring,
+    readmit_connects,
+    run_withdrawable_connect,
+    withdraw_connects,
+)
 from app.fork.operation.node_extras import (
     _BACKEND_TYPE_BY_CORE,  # noqa: F401
     _CONNECT_LOCKS,  # noqa: F401
@@ -598,19 +612,25 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         """
         snapshot = current_connect_snapshot()
 
-        async def connect_under_the_lock() -> dict | None:
+        async def connect_under_the_lock():
             if connect_snapshot_superseded(db_node.id, snapshot):
                 logger.debug(f'Dropping a stale connect of "{db_node.name}" node, a newer config already reached it')
                 return None
             bump_connect_generation(db_node.id)
             try:
-                return await NodeOperation._connect_node_inner(
+                result = await NodeOperation._connect_node_inner(
                     db_node, core, users, extra_cores, force_start, stop_first, push_on_attach, snapshot
                 )
             finally:
                 bump_connect_generation(db_node.id)
+            return result, await connect_mark(db_node.id)
 
-        return await run_withdrawable_connect(db_node.id, connect_under_the_lock)
+        outcome = await run_withdrawable_connect(db_node.id, connect_under_the_lock)
+        if outcome is None:
+            return None
+        result, mark = outcome
+        remember_connect_mark(mark)
+        return result
 
     @staticmethod
     async def _connect_node_inner(
@@ -1258,35 +1278,35 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             return
         core_ids = {core_id for node in nodes for core_id in self._node_core_ids(node)}
         cores_by_id, users_by_core = await self._get_core_users_map(db, core_ids, lazy=True)
-        sem = asyncio.Semaphore(CONNECT_CONCURRENCY)
+        lanes = ConnectLanes(CONNECT_CONCURRENCY)
 
         async def connect_single(node: Node) -> dict | None:
             if node is None or node.status in (NodeStatus.disabled, NodeStatus.limited):
                 return
 
-            async with sem:
-                try:
-                    if not await NodeOperation._register_if_wanted(node):
-                        return
-                except NodeAPIError as e:
-                    return {
-                        "node_id": node.id,
-                        "status": NodeStatus.error,
-                        "message": e.detail,
-                        "xray_version": "",
-                        "node_version": "",
-                        "old_status": node.status,
-                    }
-                except InvalidProxyURL:
-                    return {
-                        "node_id": node.id,
-                        "status": NodeStatus.error,
-                        "message": INVALID_PROXY_MESSAGE,
-                        "xray_version": "",
-                        "node_version": "",
-                        "old_status": node.status,
-                    }
+            try:
+                if not await NodeOperation._register_if_wanted(node):
+                    return
+            except NodeAPIError as e:
+                return {
+                    "node_id": node.id,
+                    "status": NodeStatus.error,
+                    "message": e.detail,
+                    "xray_version": "",
+                    "node_version": "",
+                    "old_status": node.status,
+                }
+            except InvalidProxyURL:
+                return {
+                    "node_id": node.id,
+                    "status": NodeStatus.error,
+                    "message": INVALID_PROXY_MESSAGE,
+                    "xray_version": "",
+                    "node_version": "",
+                    "old_status": node.status,
+                }
 
+            async with lanes.admit(node):
                 core_id = node.core_config_id or 1
                 return await with_connect_snapshot(
                     snapshot,
@@ -1300,7 +1320,9 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                     ),
                 )
 
-        results = await asyncio.gather(*[connect_single(node) for node in nodes])
+        units = {node.id: asyncio.create_task(connect_single(node), name=f"connect-{node.id}") for node in nodes}
+        settled = await settle(units, request_wait(nodes), self._write_late_connect)
+        results = [unit_outcome(node_id, units[node_id]) for node_id in settled]
 
         # Filter out None results
         valid_results = [r for r in results if r is not None]
@@ -1346,8 +1368,9 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         self, db: AsyncSession, nodes: list[Node], *, force_start: bool = False, stop_first: bool = True
     ) -> None:
         await self._connect_nodes_bulk_local(db, nodes, force_start=force_start, stop_first=stop_first)
+        late = connecting_in_background()
         for node in nodes:
-            if node is not None and node.status not in (NodeStatus.disabled, NodeStatus.limited):
+            if node is not None and node.id not in late and node.status not in (NodeStatus.disabled, NodeStatus.limited):
                 await publish_node_sync("connect", node.id)
 
     async def _connect_nodes_bulk_remote(
@@ -1384,10 +1407,33 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
 
         # Update node manager
         old_status = db_node.status
-        try:
-            if not await NodeOperation._register_if_wanted(db_node):
+
+        async def register_then_connect():
+            try:
+                if not await NodeOperation._register_if_wanted(db_node):
+                    return None
+            except NodeAPIError as e:
+                return e
+            return await with_connect_snapshot(
+                snapshot, NodeOperation.connect_node(db_node, core, users, extra_cores, force_start=force_start)
+            )
+
+        async def write_late(late_node_id: int, outcome) -> bool:
+            if isinstance(outcome, NodeAPIError):
+                outcome = {"status": NodeStatus.error, "message": outcome.detail}
+            return await self._write_late_connect(late_node_id, outcome)
+
+        # Connect the node
+        if defer_health_status:
+            result = await register_then_connect()
+        else:
+            unit = asyncio.create_task(register_then_connect(), name=f"connect-{node_id}")
+            if node_id not in await settle({node_id: unit}, request_wait([db_node]), write_late):
                 return False
-        except NodeAPIError as e:
+            result = unit.result()
+
+        if isinstance(result, NodeAPIError):
+            e = result
             if defer_health_status:
                 logger.warning("Node recovery failed for %s: %s", node_id, e.detail)
                 return False
@@ -1407,11 +1453,6 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                 )
                 asyncio.create_task(notification.error_node(node_notif))
             return False
-
-        # Connect the node
-        result = await with_connect_snapshot(
-            snapshot, NodeOperation.connect_node(db_node, core, users, extra_cores, force_start=force_start)
-        )
 
         if not result:
             return False
@@ -1464,8 +1505,12 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         await node_nats_client.publish("connect_node", {"node_id": node_id, "force_start": force_start})
 
     async def _disconnect_single_node_local(self, node_id: int) -> None:
-        async with _connect_lock(node_id):
-            await node_manager.remove_node(node_id)
+        await withdraw_connects(node_id)
+        try:
+            async with _connect_lock(node_id):
+                await node_manager.remove_node(node_id)
+        finally:
+            readmit_connects(node_id)
 
     async def _disconnect_single_node_sync(self, node_id: int) -> None:
         await self._disconnect_single_node_local(node_id)

@@ -10,6 +10,7 @@ FORK_JOB_MODULES = (
     "cleanup_node_usages",
     "cleanup_node_user_usages",
     "connection_limiter",
+    "node_background_connects",
     "node_removals",
     "node_retirement",
     "pending_user_resync",

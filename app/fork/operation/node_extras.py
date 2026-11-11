@@ -10,8 +10,9 @@ from PasarGuardNodeBridge import NodeAPIError, PasarGuardNode
 from PasarGuardNodeBridge.common import service_pb2 as service
 from sqlalchemy import select
 
-from app.db import AsyncSession
-from app.db.crud.node import get_inbounds_usage as fetch_inbounds_usage, get_nodes
+from app import notification
+from app.db import AsyncSession, GetDB
+from app.db.crud.node import get_inbounds_usage as fetch_inbounds_usage, get_node_by_id, get_nodes
 from app.db.models import CoreConfig, Node, NodeStatus, User
 from app.fork.cores.singbox_guard import singbox_index_keyed_inbounds, unsafe_singbox_node_message
 from app.fork.crud.group_scope import user_in_allowed_groups
@@ -19,7 +20,7 @@ from app.fork.operation.node_snapshots import check_fence, full_sync_fence, node
 from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import AdminDetails
 from app.models.core import CoreType
-from app.models.node import InboundUsageQuery, NodeListQuery
+from app.models.node import InboundUsageQuery, NodeListQuery, NodeNotification
 from app.models.stats import USAGE_RECORD_GRANULARITY, InboundUsageStatsList
 from app.node import UserSyncPreemptedError, node_manager
 from app.operation.permissions import PermissionScope, _get_resource_action, _permission_level, get_allowed_group_ids
@@ -143,6 +144,26 @@ _BACKEND_TYPE_BY_CORE = {CoreType.xray: service.BackendType.XRAY, **_MULTI_INSTA
 
 
 class NodeExtraCoresMixin:
+    @classmethod
+    async def _write_late_connect(cls, node_id: int, result: dict) -> bool:
+        message = result.get("message") or ""
+        async with GetDB() as db:
+            written = await cls._update_single_node_status(
+                db,
+                node_id,
+                result["status"],
+                message=message,
+                xray_version=result.get("xray_version") or "",
+                node_version=result.get("node_version") or "",
+            )
+            if not written or result["status"] != NodeStatus.connected or not message:
+                return written
+            db_node = await get_node_by_id(db, node_id, load_usage_logs=False)
+        if db_node is not None:
+            logger.warning(f'Node "{db_node.name}" connected but some additional cores failed: {message}')
+            asyncio.create_task(notification.error_node(NodeNotification(id=node_id, name=db_node.name, message=message)))
+        return written
+
     async def _refuse_node_write(self, db: AsyncSession, name: str, core_ids: list[int | None]) -> None:
         await db.rollback()
         wanted = {core_id for core_id in core_ids if core_id is not None}
