@@ -28,6 +28,7 @@ from app.db.crud.wireguard import (
 from app.fork.operation.core_extras import (
     apply_l2tp_core_config,
     cores_in_use_message,
+    guard_singbox_domain_rules,
     guard_singbox_user_accounting,
 )
 from app.fork.operation.entitled_secrets import grant_entitled_secrets_for_core
@@ -135,6 +136,7 @@ class CoreOperation(BaseOperation):
         apply_l2tp_core_config(new_core)
         try:
             await guard_singbox_user_accounting(db, new_core)
+            guard_singbox_domain_rules(new_core)
             validated_core = core_manager.validate_core(
                 new_core.config,
                 new_core.exclude_inbound_tags,
@@ -184,6 +186,7 @@ class CoreOperation(BaseOperation):
         before = node_facing(await core_manager.get_core(db_core.id))
         try:
             await guard_singbox_user_accounting(db, modified_core, db_core.id)
+            guard_singbox_domain_rules(modified_core, db_core.type)
             validated_core = core_manager.validate_core(
                 modified_core.config,
                 modified_core.exclude_inbound_tags,

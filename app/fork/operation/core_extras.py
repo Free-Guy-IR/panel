@@ -4,7 +4,12 @@ from sqlalchemy import select, update
 
 from app.db import AsyncSession
 from app.db.models import CoreConfig, Node, node_additional_cores_association
-from app.fork.cores.singbox_guard import unsafe_singbox_core_message, unsafe_singbox_core_nodes_message
+from app.fork.cores.singbox_guard import (
+    domain_rule_line_break_message,
+    singbox_core_subject,
+    unsafe_singbox_core_message,
+    unsafe_singbox_core_nodes_message,
+)
 from app.fork.crud.core import get_node_versions_by_core
 from app.fork.proxy_secrets.locks import read_committed_rows
 from app.models.core import CoreType
@@ -26,6 +31,14 @@ async def guard_singbox_user_accounting(db: AsyncSession, core, core_id: int | N
     message = unsafe_singbox_core_nodes_message(
         core.type, core_name, core.config, await get_node_versions_by_core(db, core_id)
     )
+    if message:
+        raise ValueError(message)
+
+
+def guard_singbox_domain_rules(core, stored_type=None) -> None:
+    if (core.type or stored_type) != CoreType.singbox:
+        return
+    message = domain_rule_line_break_message(singbox_core_subject(getattr(core, "name", None)), core.config)
     if message:
         raise ValueError(message)
 
