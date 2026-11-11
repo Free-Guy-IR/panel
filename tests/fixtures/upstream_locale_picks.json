@@ -11300,6 +11300,171 @@
           "removed": []
         }
       }
+    },
+    {
+      "upstream": "547fa96d105179ff4c43d72d046cef68a06255d4",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "apiKeys",
+                "deleteOnLimit"
+              ],
+              "Delete on limit reached"
+            ],
+            [
+              [
+                "apiKeys",
+                "deleteOnLimitDescription"
+              ],
+              "Automatically delete this key once it reaches its request limit, instead of just disabling it."
+            ],
+            [
+              [
+                "apiKeys",
+                "maxRequests"
+              ],
+              "Max Requests"
+            ],
+            [
+              [
+                "apiKeys",
+                "maxRequestsDescription"
+              ],
+              "Maximum number of requests this key may make. Leave empty for unlimited."
+            ],
+            [
+              [
+                "apiKeys",
+                "requestCount"
+              ],
+              "Requests Used"
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "apiKeys",
+                "deleteOnLimit"
+              ],
+              "حذف در رسیدن به سقف"
+            ],
+            [
+              [
+                "apiKeys",
+                "deleteOnLimitDescription"
+              ],
+              "پس از رسیدن این کلید به سقف درخواست، به‌جای غیرفعال کردن، آن را به‌طور خودکار حذف کن."
+            ],
+            [
+              [
+                "apiKeys",
+                "maxRequests"
+              ],
+              "حداکثر درخواست‌ها"
+            ],
+            [
+              [
+                "apiKeys",
+                "maxRequestsDescription"
+              ],
+              "حداکثر تعداد درخواست‌هایی که این کلید می‌تواند انجام دهد. برای نامحدود بودن خالی بگذارید."
+            ],
+            [
+              [
+                "apiKeys",
+                "requestCount"
+              ],
+              "درخواست‌های استفاده‌شده"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "apiKeys",
+                "deleteOnLimit"
+              ],
+              "Удалить при достижении лимита"
+            ],
+            [
+              [
+                "apiKeys",
+                "deleteOnLimitDescription"
+              ],
+              "Автоматически удалять этот ключ при достижении лимита запросов, вместо того чтобы просто отключать его."
+            ],
+            [
+              [
+                "apiKeys",
+                "maxRequests"
+              ],
+              "Макс. запросов"
+            ],
+            [
+              [
+                "apiKeys",
+                "maxRequestsDescription"
+              ],
+              "Максимальное количество запросов, которые может выполнить этот ключ. Оставьте пустым для неограниченного количества."
+            ],
+            [
+              [
+                "apiKeys",
+                "requestCount"
+              ],
+              "Использовано запросов"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "apiKeys",
+                "deleteOnLimit"
+              ],
+              "达到限制后删除"
+            ],
+            [
+              [
+                "apiKeys",
+                "deleteOnLimitDescription"
+              ],
+              "达到请求限制后自动删除此密钥，而不仅仅是禁用它。"
+            ],
+            [
+              [
+                "apiKeys",
+                "maxRequests"
+              ],
+              "最大请求数"
+            ],
+            [
+              [
+                "apiKeys",
+                "maxRequestsDescription"
+              ],
+              "此密钥可发出的最大请求数。留空表示无限制。"
+            ],
+            [
+              [
+                "apiKeys",
+                "requestCount"
+              ],
+              "已用请求数"
+            ]
+          ],
+          "removed": []
+        }
+      }
     }
   ]
 }
