@@ -5,12 +5,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.fork.operation import node_extras
 from app.jobs import node_checker
-from app.node import UserSyncPreemptedError
+from app.node import NodeManager
 
 
 @contextlib.contextmanager
-def _checker_records():
+def _resync_records():
     records = []
 
     class Sink(logging.Handler):
@@ -18,15 +19,17 @@ def _checker_records():
             records.append(record)
 
     sink = Sink(level=logging.DEBUG)
-    log = logging.getLogger("node-checker")
-    previous = log.level
-    log.addHandler(sink)
-    log.setLevel(logging.DEBUG)
+    loggers = [logging.getLogger(name) for name in ("node-checker", "node-operation")]
+    previous = [log.level for log in loggers]
+    for log in loggers:
+        log.addHandler(sink)
+        log.setLevel(logging.DEBUG)
     try:
         yield records
     finally:
-        log.removeHandler(sink)
-        log.setLevel(previous)
+        for log, level in zip(loggers, previous, strict=True):
+            log.removeHandler(sink)
+            log.setLevel(level)
 
 
 @contextlib.asynccontextmanager
@@ -34,18 +37,27 @@ async def _fake_db():
     yield object()
 
 
-@pytest.mark.parametrize(
-    ("error", "expect_error_level"),
-    [(UserSyncPreemptedError("removed"), False), (RuntimeError("boom"), True)],
-    ids=["preempted", "other_failure"],
-)
 @pytest.mark.asyncio
-async def test_resync_logs_a_preemption_below_error(monkeypatch, error, expect_error_level):
+async def test_a_resync_refused_by_a_removal_is_logged_below_error(monkeypatch):
+    manager = NodeManager()
+    manager._removing[1] = 1
+    monkeypatch.setattr(node_extras, "node_manager", manager)
     monkeypatch.setattr(node_checker, "GetDB", _fake_db)
-    monkeypatch.setattr(node_checker.NodeOperation, "_resync_node_users", AsyncMock(side_effect=error))
+    monkeypatch.setattr(node_checker.NodeOperation, "_get_core_users_map", AsyncMock(return_value=({}, {})))
 
-    with _checker_records() as records:
-        assert await node_checker._resync_users(SimpleNamespace(id=1, name="n1")) is False
+    with _resync_records() as records:
+        assert await node_checker._resync_users(SimpleNamespace(id=1, name="n1", core_config_id=1)) is False
 
     assert records
-    assert any(record.levelno >= logging.ERROR for record in records) is expect_error_level
+    assert not [record for record in records if record.levelno >= logging.ERROR]
+
+
+@pytest.mark.asyncio
+async def test_any_other_resync_failure_is_still_logged_as_an_error(monkeypatch):
+    monkeypatch.setattr(node_checker, "GetDB", _fake_db)
+    monkeypatch.setattr(node_checker.NodeOperation, "_get_core_users_map", AsyncMock(side_effect=RuntimeError("boom")))
+
+    with _resync_records() as records:
+        assert await node_checker._resync_users(SimpleNamespace(id=2, name="n2", core_config_id=1)) is False
+
+    assert [record for record in records if record.levelno >= logging.ERROR]

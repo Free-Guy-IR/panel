@@ -21,7 +21,7 @@ from app.models.admin import AdminDetails
 from app.models.core import CoreType
 from app.models.node import InboundUsageQuery, NodeListQuery
 from app.models.stats import USAGE_RECORD_GRANULARITY, InboundUsageStatsList
-from app.node import node_manager
+from app.node import UserSyncPreemptedError, node_manager
 from app.operation.permissions import PermissionScope, _get_resource_action, _permission_level, get_allowed_group_ids
 from app.utils.logger import get_logger
 
@@ -201,7 +201,12 @@ class NodeExtraCoresMixin:
                 users_by_core.get(getattr(db_node, "core_config_id", None) or 1, []),
                 cls._extra_cores_for(db_node, cores_by_id, users_by_core),
             )
-            if await node_manager.sync_full(db_node.id, users, flush_pending=True) is None:
+            try:
+                synced = await node_manager.sync_full(db_node.id, users, flush_pending=True)
+            except UserSyncPreemptedError as exc:
+                logger.info(f"[{db_node.name}] User list push after attaching was preempted: {exc}")
+                return False
+            if synced is None:
                 return False
             cls._pending_user_sync.discard(db_node.id)
             return True

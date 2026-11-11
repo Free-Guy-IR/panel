@@ -15,7 +15,7 @@ from app.db.models import Node, NodeStatus
 from app.fork import node_health
 from app.fork.node_health import USAGE_STALLED_PREFIX, UsageCollectionTracker
 from app.jobs import node_checker, record_usages
-from app.models.settings import NodeHealthSettings
+from app.models.settings import General, NodeHealthSettings
 
 FAILED_COLLECTION_CYCLES = 60
 STATS_TIMEOUT = NodeAPIError(code=-1, detail="Timeout error: stats query did not answer")
@@ -148,7 +148,8 @@ def side_effects(monkeypatch: pytest.MonkeyPatch):
     node_health = NodeHealthSettings.model_construct(
         fail_threshold=1, recover_threshold=1, probe_timeout=5, max_backoff=60
     )
-    monkeypatch.setattr(node_checker, "_node_health_settings", AsyncMock(return_value=node_health))
+    general = General.model_construct(node_health=node_health)
+    monkeypatch.setattr(node_checker, "general_settings", AsyncMock(return_value=general))
     monkeypatch.setattr(node_checker, "_owns_health_checks", lambda: True)
     return seen
 

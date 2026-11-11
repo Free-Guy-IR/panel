@@ -7,7 +7,7 @@ from PasarGuardNodeBridge import Health, NodeAPIError
 
 from app.db.models import NodeStatus
 from app.jobs import node_checker
-from app.models.settings import NodeHealthSettings
+from app.models.settings import General, NodeHealthSettings
 from app.operation import node as node_operation
 from app.operation.node import NodeOperation
 
@@ -58,7 +58,8 @@ def wired(monkeypatch):
     node_health = NodeHealthSettings.model_construct(
         fail_threshold=1, recover_threshold=1, probe_timeout=5, max_backoff=60
     )
-    monkeypatch.setattr(node_checker, "_node_health_settings", AsyncMock(return_value=node_health))
+    general = General.model_construct(node_health=node_health)
+    monkeypatch.setattr(node_checker, "general_settings", AsyncMock(return_value=general))
     monkeypatch.setattr(node_checker, "_owns_health_checks", lambda: True)
     monkeypatch.setattr(node_checker, "_health_streaks", {})
     monkeypatch.setattr(node_checker, "_probe_backoffs", {})
@@ -113,7 +114,7 @@ async def test_a_probe_that_started_before_a_restart_does_not_undo_it(wired, mon
     bridge = _OldBridge(error, hang_in=hang_in)
     db_node = SimpleNamespace(id=9201, name="n9201", status=NodeStatus.connected, default_timeout=5, internal_timeout=5)
 
-    check = asyncio.create_task(node_checker.process_node_health_check(db_node, bridge))
+    check = asyncio.create_task(node_checker._bounded_health_check(db_node, bridge))
     await bridge.probe_started.wait()
     await _restart(bridge, db_node, writes, monkeypatch)
     assert writes[-1][0] == NodeStatus.connected
@@ -152,7 +153,7 @@ async def test_a_probe_with_no_connect_in_between_still_records_its_error(wired,
     bridge.gate.set()
     db_node = SimpleNamespace(id=9203, name="n9203", status=NodeStatus.connected, default_timeout=5, internal_timeout=5)
 
-    await node_checker.process_node_health_check(db_node, bridge)
+    await node_checker._bounded_health_check(db_node, bridge)
 
     assert any(w[0] == NodeStatus.error for w in writes), f"a current probe error was dropped: {writes}"
 
@@ -175,7 +176,7 @@ async def test_a_probe_that_ends_while_a_connect_is_running_leaves_the_status_to
     bridge = _OldBridge(error, hang_in=hang_in)
     db_node = SimpleNamespace(id=9205, name="n9205", status=NodeStatus.connected, default_timeout=5, internal_timeout=5)
 
-    check = asyncio.create_task(node_checker.process_node_health_check(db_node, bridge))
+    check = asyncio.create_task(node_checker._bounded_health_check(db_node, bridge))
     await bridge.probe_started.wait()
     async with node_operation._connect_lock(db_node.id):
         bridge.gate.set()
