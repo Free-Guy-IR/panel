@@ -7768,6 +7768,87 @@
           "removed": []
         }
       }
+    },
+    {
+      "upstream": "cc7c7108f44f1414c8e655a109d5b144e5543afc",
+      "locales": {
+        "en": {
+          "set": [
+            [
+              [
+                "hwids",
+                "count"
+              ],
+              "HWIDs"
+            ],
+            [
+              [
+                "hwids",
+                "registeredCount"
+              ],
+              "Registered hardware IDs"
+            ]
+          ],
+          "removed": []
+        },
+        "fa": {
+          "set": [
+            [
+              [
+                "hwids",
+                "count"
+              ],
+              "تعداد HWID"
+            ],
+            [
+              [
+                "hwids",
+                "registeredCount"
+              ],
+              "تعداد شناسه‌های سخت‌افزاری ثبت‌شده"
+            ]
+          ],
+          "removed": []
+        },
+        "ru": {
+          "set": [
+            [
+              [
+                "hwids",
+                "count"
+              ],
+              "HWID"
+            ],
+            [
+              [
+                "hwids",
+                "registeredCount"
+              ],
+              "Количество зарегистрированных HWID"
+            ]
+          ],
+          "removed": []
+        },
+        "zh": {
+          "set": [
+            [
+              [
+                "hwids",
+                "count"
+              ],
+              "HWID 数量"
+            ],
+            [
+              [
+                "hwids",
+                "registeredCount"
+              ],
+              "已注册的硬件 ID 数量"
+            ]
+          ],
+          "removed": []
+        }
+      }
     }
   ]
 }
