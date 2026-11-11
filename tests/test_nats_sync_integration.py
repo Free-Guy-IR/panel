@@ -283,13 +283,32 @@ async def test_health_poll_recovers_claim_that_expires_after_startup(jetstream, 
     monkeypatch.setattr(
         node_checker, "verify_node_backend_health", AsyncMock(return_value=(Health.HEALTHY, None, None))
     )
-    sync = AsyncMock(return_value=[])
+    evaluated = asyncio.Event()
+    polls: list[list[str]] = []
+    real_claim_users = store.claim_users
+
+    async def counted_claim_users(*args, **kwargs):
+        claimed = await real_claim_users(*args, **kwargs)
+        polls.append([item.user.email for item in claimed])
+        if len(polls) >= 2:
+            evaluated.set()
+        return claimed
+
+    async def delivered(*args, **kwargs):
+        evaluated.set()
+        return []
+
+    monkeypatch.setattr(store, "claim_users", counted_claim_users)
+    sync = AsyncMock(side_effect=delivered)
     monkeypatch.setattr(node, "_sync_batch_users", sync, raising=False)
+    monkeypatch.setattr(node, "sync_users_chunked", sync, raising=False)
     try:
         await node.connect("0.5.4", "26.3.27")
         await node_operation.NodeOperation._resume_shared_sync(node)
-        await asyncio.wait_for(node._sync_worker_task, timeout=5)
+        await asyncio.wait_for(evaluated.wait(), timeout=5)
         sync.assert_not_awaited()
+        assert polls[:2] == [[], []]
+        assert not node._sync_worker_task.done()
         now[0] += 61
         await node_checker.process_node_health_check(
             SimpleNamespace(id=93, name="restored", status=NodeStatus.connected, default_timeout=10), node
