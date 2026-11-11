@@ -24,8 +24,6 @@ from app.db.crud.node import (
     get_nodes_simple,
     get_nodes_usage,
     modify_node,
-    remove_node,
-    remove_nodes,
     reorder_nodes,
     reset_node_usage,
     update_node_status,
@@ -35,6 +33,7 @@ from app.db.models import Node, NodeStatus
 from app.fork.cores.singbox_guard import singbox_index_keyed_inbounds, unsafe_singbox_node_message
 from app.fork.crud.node import CoreConfigMissing
 from app.fork.node_error_status import node_error_status
+from app.fork.operation.node_connect_jobs import run_withdrawable_connect
 from app.fork.operation.node_extras import (
     _BACKEND_TYPE_BY_CORE,  # noqa: F401
     _CONNECT_LOCKS,  # noqa: F401
@@ -53,6 +52,7 @@ from app.fork.operation.node_extras import (
     note_connect_push,
     with_connect_snapshot,
 )
+from app.fork.operation.node_retirement import Retirement, refusal_message, retire_nodes
 from app.fork.operation.node_snapshots import (
     NO_ATTACH_PUSH,
     OWN_FENCE,
@@ -155,6 +155,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
     def __init__(self, operator_type: OperatorType):
         """Select local or remote node-operation handlers for this process role."""
         super().__init__(operator_type)
+        self._retires_here = runtime_settings.role.runs_node
         if runtime_settings.role.runs_node:
             sync = needs_shared_bridge_memory()
             self._update_node_impl = self._update_node_sync if sync else self._update_node_local
@@ -589,13 +590,16 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             None: if connection should be skipped
         """
         snapshot = current_connect_snapshot()
-        async with _connect_lock(db_node.id):
+
+        async def connect_under_the_lock() -> dict | None:
             if connect_snapshot_superseded(db_node.id, snapshot):
                 logger.debug(f'Dropping a stale connect of "{db_node.name}" node, a newer config already reached it')
                 return None
             return await NodeOperation._connect_node_inner(
                 db_node, core, users, extra_cores, force_start, stop_first, push_on_attach, snapshot
             )
+
+        return await run_withdrawable_connect(db_node.id, connect_under_the_lock)
 
     @staticmethod
     async def _connect_node_inner(
@@ -942,8 +946,12 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         db_node: Node = await self.get_validated_node(db=db, node_id=node_id)
         node_response = NodeResponse.model_validate(db_node)
 
-        await self._remove_node_impl(db_node.id)
-        await remove_node(db=db, db_node=db_node)
+        results = await retire_nodes(db, [db_node], here=self._retires_here)
+        refusal = refusal_message(results)
+        if refusal:
+            await self.raise_error(refusal, 503)
+        if results[0].outcome is Retirement.absent:
+            return
 
         logger.info(f'Node "{node_response.name}" with id "{node_response.id}" deleted by admin "{admin.username}"')
 
@@ -1813,23 +1821,23 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             db_node = await self.get_validated_node(db, node_id)
             db_nodes.append(db_node)
 
-        node_ids = [n.id for n in db_nodes]
-        node_names = [n.name for n in db_nodes]
         node_responses = [NodeResponse.model_validate(n) for n in db_nodes]
 
-        # Remove nodes from RPC first
-        for node_id in node_ids:
-            await self._remove_node_impl(node_id)
-
-        # Batch delete using CRUD function
-        await remove_nodes(db, node_ids)
+        results = await retire_nodes(db, db_nodes, here=self._retires_here)
+        outcomes = {result.node_id: result.outcome for result in results if not result.refused}
 
         # Notify
         for node_response in node_responses:
+            if outcomes.get(node_response.id, Retirement.absent) is Retirement.absent:
+                continue
             logger.info(f'Node "{node_response.name}" with id "{node_response.id}" deleted by admin "{admin.username}"')
             asyncio.create_task(notification.remove_node(node_response, admin.username))
 
-        return RemoveNodesResponse(nodes=node_names, count=len(db_nodes))
+        refusal = refusal_message(results)
+        if refusal:
+            await self.raise_error(refusal, 503)
+        deleted = [node_response.name for node_response in node_responses if node_response.id in outcomes]
+        return RemoveNodesResponse(nodes=deleted, count=len(deleted))
 
     async def _get_validated_nodes(self, db: AsyncSession, node_ids: list[int] | set[int]) -> list[Node]:
         if not node_ids:

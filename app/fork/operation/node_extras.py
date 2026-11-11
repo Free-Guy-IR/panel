@@ -86,6 +86,10 @@ def note_ambiguous_start(db_node: Node) -> None:
     _ambiguous_starts[db_node.id] = time.monotonic() + ambiguous_start_window(db_node)
 
 
+def ambiguous_start_pending(node_id: int) -> bool:
+    return _ambiguous_starts.get(node_id, 0.0) > time.monotonic()
+
+
 async def resync_while_a_start_may_land(db_node: Node, resync: Callable[[Node], Awaitable[bool]]) -> None:
     until = _ambiguous_starts.get(db_node.id)
     if until is None:

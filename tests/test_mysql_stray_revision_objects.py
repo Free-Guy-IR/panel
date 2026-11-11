@@ -73,6 +73,7 @@ DOWNGRADE_CUTS = (
     ("009f2a24cc7b", "DROP INDEX ix_pending_node_removals_requested_at ON pending_node_removals"),
     ("e79833e2a0b2", "DROP TABLE proxy_secret_claims"),
     ("e5a7c3f9b214", "DROP TABLE node_outbound_usages"),
+    ("630e70c7172b", "DROP INDEX ix_node_retirements_next_attempt_at ON node_retirements"),
 )
 
 mysql_only = pytest.mark.skipif(

@@ -26,8 +26,15 @@ OFFICIAL_COMMIT = "72ad0e4a53dd5ce56d651a98ca005c3014cae0c3"
 OFFICIAL_GRAPH_SIZE = 180
 OFFICIAL_GRAPH_FINGERPRINT = "9f251514d0c297e705615cce4fa14bb5ccb8466e889d6b9eac07062b27b44023"
 PASSKEY_TABLES = {"admin_passkeys", "passkey_challenges"}
-RELEASE_ONLY_TABLES = {"pending_user_resyncs", "node_stat_acks", "proxy_secret_claims", "pending_node_removals"}
-RELEASE_HEAD = "2d198a5a8068"
+RELEASE_ONLY_TABLES = {
+    "pending_user_resyncs",
+    "node_stat_acks",
+    "proxy_secret_claims",
+    "pending_node_removals",
+    "node_retirements",
+}
+RELEASE_HEAD = "630e70c7172b"
+HOSTS_DELETE = "2d198a5a8068"
 FORK_RELEASE_HEAD = "e79833e2a0b2"
 GUARDED_MERGE = "fd33c6013baa"
 UPSTREAM_MERGE = "b708c8d4fc31"
@@ -182,7 +189,7 @@ def test_a_plain_downgrade_past_the_passkey_merge_is_refused_before_it_can_leave
 
     with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
         downgrade(config, PROD_REVISION)
-    assert _versions(sync_url) == [UPSTREAM_MERGE]
+    assert _versions(sync_url) == [RELEASE_HEAD]
     assert ROLLBACK_FLAG not in config.attributes
 
     rollback(config, FORK_RELEASE_HEAD, echo=lambda _line: None)
@@ -219,6 +226,14 @@ def test_every_path_that_removes_the_passkey_merge_is_guarded(tmp_path):
     for target in (FORK_RELEASE_HEAD, UPSTREAM_TIP, "b4c7e8f1a2d3", "base"):
         with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
             downgrade(config, target)
+        assert _versions(sync_url) == [RELEASE_HEAD]
+    downgrade(config, "-1")
+    assert _versions(sync_url) == [HOSTS_DELETE]
+    downgrade(config, UPSTREAM_MERGE)
+    assert _versions(sync_url) == [UPSTREAM_MERGE]
+    for target in (FORK_RELEASE_HEAD, UPSTREAM_TIP, "b4c7e8f1a2d3", "base"):
+        with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
+            downgrade(config, target)
         assert _versions(sync_url) == [UPSTREAM_MERGE]
     with pytest.raises(CommandError, match="Ambiguous walk"):
         downgrade(config, "-1")
@@ -235,6 +250,48 @@ def test_every_path_that_removes_the_passkey_merge_is_guarded(tmp_path):
     with pytest.raises(CommandError, match="Ambiguous walk"):
         downgrade(config, "b4c7e8f1a2d3@-1")
     assert GUARDED_MERGE in _versions(sync_url)
+
+
+def _owe_a_node_stop(sync_url):
+    with create_engine(sync_url).begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO node_retirements (node_id, name, connection_type, address, port, api_port, server_ca, "
+                "api_key, proxy_url, default_timeout, internal_timeout, reason, created_at, next_attempt_at, attempts, "
+                "last_error) VALUES (9, 'gone', 'grpc', 'gone.example', 62050, 62051, 'ca', NULL, NULL, 10, 15, "
+                "'unreachable', '2026-11-11 00:00:00', '2026-11-11 00:01:00', 0, NULL)"
+            )
+        )
+
+
+def _owed_node_stops(sync_url):
+    with create_engine(sync_url).connect() as connection:
+        return connection.execute(text("SELECT node_id, address FROM node_retirements")).all()
+
+
+@pytest.mark.parametrize("target", [PROD_REVISION, FORK_RELEASE_HEAD, UPSTREAM_TIP, "base"])
+def test_a_refused_plain_downgrade_keeps_the_owed_node_stops_and_changes_nothing(tmp_path, target):
+    config, sync_url, _before = _at_release_head(tmp_path)
+    _owe_a_node_stop(sync_url)
+    schema_at_head = _schema(sync_url)
+
+    with pytest.raises(RuntimeError, match="python -m app.fork.db_rollback"):
+        downgrade(config, target)
+
+    assert _versions(sync_url) == [RELEASE_HEAD]
+    assert _schema(sync_url) == schema_at_head
+    assert _owed_node_stops(sync_url) == [(9, "gone.example")]
+
+
+@pytest.mark.parametrize(("target", "lands_on"), [("-1", HOSTS_DELETE), (UPSTREAM_MERGE, UPSTREAM_MERGE)])
+def test_a_downgrade_that_keeps_the_guarded_merges_still_removes_the_node_retirements(tmp_path, target, lands_on):
+    config, sync_url, _before = _at_release_head(tmp_path)
+    _owe_a_node_stop(sync_url)
+
+    downgrade(config, target)
+
+    assert _versions(sync_url) == [lands_on]
+    assert "node_retirements" not in _schema(sync_url)
 
 
 def test_rollback_repairs_a_database_an_older_release_left_with_two_heads(tmp_path):
@@ -283,7 +340,7 @@ def test_the_dry_run_changes_nothing(tmp_path, capsys):
     assert _versions(sync_url) == heads_before
     printed = capsys.readouterr().out
     assert (
-        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 1a2b3c4d5e6f, 2d198a5a8068, 2e045b99a67e, 6698b9a695e3, "
+        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 1a2b3c4d5e6f, 2d198a5a8068, 2e045b99a67e, 630e70c7172b, 6698b9a695e3, "
         "6d8eb8fba21b, 8158387867c9, 86f7c2a14d3e, 9a5c2e7f1b4d, a4d8c7e91b32, a8c2d491e705, b176d23e434c, "
         "b4c7e8f1a2d3, b708c8d4fc31, b7e2c4d91f60, b849540d85bb, bfd88026565b, c8d2e4f6a1b3, d73f8a2c4e91, e5a7c3f9b214, "
         "e79833e2a0b2, e9a7edd9de06, f0420da90ff1, f7c63e209a37, fd192e9628a5, fd33c6013baa\n"
@@ -361,7 +418,7 @@ def test_the_prod_image_starts_on_the_rolled_back_database_and_not_after_a_plain
         downgrade(config, PROD_REVISION)
     refused = _prod_alembic(tree, url, "upgrade", "head")
     assert refused.returncode != 0
-    assert f"Can't locate revision identified by '{UPSTREAM_MERGE}'" in refused.stdout + refused.stderr
+    assert f"Can't locate revision identified by '{RELEASE_HEAD}'" in refused.stdout + refused.stderr
 
     rollback(config, PROD_REVISION, echo=lambda _line: None)
     started = _prod_alembic(tree, config.get_main_option("sqlalchemy.url"), "upgrade", "head")
@@ -427,7 +484,7 @@ def test_the_official_dry_run_lists_every_revision_the_rollback_removes(tmp_path
 
     assert _versions(sync_url) == heads_before
     assert (
-        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 1a2b3c4d5e6f, 2d198a5a8068, 2e045b99a67e, 6698b9a695e3, "
+        "revisions to remove: 009f2a24cc7b, 0374ac83604b, 1a2b3c4d5e6f, 2d198a5a8068, 2e045b99a67e, 630e70c7172b, 6698b9a695e3, "
         "6d8eb8fba21b, 8158387867c9, 86f7c2a14d3e, 9a5c2e7f1b4d, a4d8c7e91b32, a8c2d491e705, b176d23e434c, "
         "b4c7e8f1a2d3, b708c8d4fc31, b7e2c4d91f60, b849540d85bb, bfd88026565b, c8d2e4f6a1b3, d73f8a2c4e91, e5a7c3f9b214, "
         "e5a9c3f1b7d2, e79833e2a0b2, e9a7edd9de06, f0420da90ff1, f7c63e209a37, fd192e9628a5, fd33c6013baa\n"

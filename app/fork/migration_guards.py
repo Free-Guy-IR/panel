@@ -74,6 +74,11 @@ REVISION_OBJECTS = (
             ("node_stats", "ix_node_stats_node_id_created_at", ("node_id", "created_at")),
         ),
     ),
+    (
+        "630e70c7172b",
+        ("node_retirements",),
+        (("node_retirements", "ix_node_retirements_next_attempt_at", ("next_attempt_at",)),),
+    ),
 )
 REVISION_COLUMNS = (
     ("f0420da90ff1", (("settings", "cleanup"),)),
