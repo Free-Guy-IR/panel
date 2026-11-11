@@ -1,5 +1,6 @@
 from functools import wraps
 
+from app.fork.auth.owned_scope import scope_own_refusal
 from app.models.admin import AdminDetails
 from app.models.admin_role import PermissionScope, RoleLimits, RolePermissions
 
@@ -101,6 +102,8 @@ def enforce_permission(admin: AdminDetails, resource: str, action: str) -> None:
     scope = _resolve_scope(action_perm)
     if scope is PermissionScope.NONE:
         raise PermissionDenied(f"Permission denied: {resource}.{action}")
+    if refusal := scope_own_refusal(resource, action, scope):
+        raise PermissionDenied(refusal)
 
 
 def enforce_scope(admin: AdminDetails, resource: str, action: str, target_admin_id: int | None) -> None:
