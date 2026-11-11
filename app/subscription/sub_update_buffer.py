@@ -22,6 +22,7 @@ logger = get_logger("sub-update-buffer")
 
 FLUSH_INTERVAL_SECONDS = 2.0
 FLUSH_BATCH_SIZE = 100
+READ_FLUSH_WAIT_SECONDS = 1.0
 _MAX_BUFFER = 50_000
 
 _USER_AGENT_MAX_LEN = UserSubscriptionUpdate.__table__.columns.user_agent.type.length or 512
@@ -121,6 +122,18 @@ async def flush_user_sub_updates() -> int:
                         del _pending[:overflow]
                 logger.exception("Failed to flush %s buffered subscription updates", len(batch))
                 raise
+
+
+async def flush_before_read(wait_seconds: float = READ_FLUSH_WAIT_SECONDS) -> None:
+    flush = asyncio.create_task(flush_user_sub_updates(), name="sub_update_read_flush")
+    _background_flushes.add(flush)
+    flush.add_done_callback(_forget_background_flush)
+    try:
+        await asyncio.wait_for(asyncio.shield(flush), wait_seconds)
+    except TimeoutError:
+        logger.warning("Subscription-update flush still running after %ss; reading committed rows", wait_seconds)
+    except Exception:
+        logger.warning("Subscription-update flush failed; reading committed rows")
 
 
 async def _flush_loop() -> None:

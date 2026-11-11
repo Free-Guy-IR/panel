@@ -73,7 +73,7 @@ from app.models.user import (
     UserSortOption,
 )
 from app.models.validators import MAX_ON_HOLD_EXPIRE_DURATION_SECONDS
-from app.subscription.sub_update_buffer import flush_user_sub_updates, queue_user_sub_update
+from app.subscription.sub_update_buffer import flush_before_read, queue_user_sub_update
 from app.utils.jwt import next_revocation_instant
 from config import user_cleanup_settings
 
@@ -1714,7 +1714,7 @@ async def bulk_revoke_user_sub(
 @asynccontextmanager
 async def _subscription_update_read_session(db: AsyncSession) -> AsyncIterator[AsyncSession]:
     """Read committed updates without reusing the caller's pre-flush snapshot."""
-    await flush_user_sub_updates()
+    await flush_before_read()
     # MySQL/MariaDB REPEATABLE READ may already have a snapshot from the
     # authorization/user lookup. A separate session sees the flushed rows
     # without committing or rolling back any work owned by the caller.
