@@ -25,6 +25,7 @@ from app.models.user import UserStatusToggle
 from app.operation import OperatorType, admin as admin_operation, user as user_operation
 from app.operation.admin import AdminOperation
 from app.operation.user import UserOperation
+from app.utils import connection_enforcement
 from tests.test_recorder_harness import _database_url, recorder_db_fixture, seed_users_and_nodes  # noqa: F401
 from tests.test_status_lock_order_interleavings import _deadlocks
 
@@ -330,3 +331,53 @@ async def test_a_forget_that_cannot_lock_the_history_answers_503_and_keeps_the_r
     assert await _final(recorder_db, seed.user_id) == (UserStatus.active, [])
     assert await _inactive_ids(recorder_db, seed.user_id) == sorted([seed.restriction_id, earlier_id])
     assert pushes == [("release", seed.user_id, UserStatus.active)]
+
+
+@pytest.mark.asyncio
+async def test_forgetting_the_history_never_deletes_a_restriction_that_is_active_again(
+    recorder_db, monkeypatch: pytest.MonkeyPatch
+):
+    seed = await _seed(recorder_db, due=False)
+    async with recorder_db() as session:
+        history = [
+            ConnectionRestriction(
+                user_id=seed.user_id,
+                created_at=datetime.now(UTC) - timedelta(days=days),
+                previous_status=UserStatus.active.value,
+                disable_minutes=30,
+                restored_at=datetime.now(UTC) - timedelta(days=days) + timedelta(minutes=30),
+                active=False,
+            )
+            for days in (3, 2)
+        ]
+        session.add_all(history)
+        await session.commit()
+        forgotten_id, revived_id = (row.id for row in history)
+
+    real_restriction_ids = connection_enforcement._restriction_ids
+
+    async def ids_read_then_one_revived(db, user_ids, *predicates):
+        ids = await real_restriction_ids(db, user_ids, *predicates)
+        async with recorder_db() as other:
+            await other.execute(
+                update(ConnectionRestriction).where(ConnectionRestriction.id == revived_id).values(active=True)
+            )
+            await other.commit()
+        return ids
+
+    monkeypatch.setattr(connection_enforcement, "_restriction_ids", ids_read_then_one_revived)
+    async with recorder_db() as db:
+        forgotten = await connection_enforcement.forget_inactive_restrictions(db, seed.user_id)
+        await db.commit()
+
+    async with recorder_db() as session:
+        left = dict(
+            (
+                await session.execute(
+                    select(ConnectionRestriction.id, ConnectionRestriction.active).where(
+                        ConnectionRestriction.user_id == seed.user_id
+                    )
+                )
+            ).all()
+        )
+    assert (forgotten, left) == (1, {seed.restriction_id: True, revived_id: True}), forgotten_id

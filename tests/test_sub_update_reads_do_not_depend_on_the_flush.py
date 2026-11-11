@@ -134,7 +134,7 @@ async def test_a_subscription_update_read_does_not_wait_for_a_stuck_flush_and_th
 
 
 @pytest.mark.asyncio
-async def test_a_cancelled_subscription_update_read_does_not_cancel_the_flush_it_started(
+async def test_a_cancelled_subscription_update_read_loses_no_pending_row(
     recorder_db, subscribed_user, monkeypatch: pytest.MonkeyPatch
 ):
     release, entered = asyncio.Event(), asyncio.Event()
@@ -149,5 +149,27 @@ async def test_a_cancelled_subscription_update_read_does_not_cancel_the_flush_it
     if sub_update_buffer.pending_count():
         assert await sub_update_buffer.flush_user_sub_updates() == 1
 
+    assert sub_update_buffer.pending_count() == 0
+    assert await _stored_agents(recorder_db, subscribed_user) == ["committed-client", "pending-client"]
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_subscription_update_read_does_not_cancel_the_flush_it_started(
+    recorder_db, subscribed_user, monkeypatch: pytest.MonkeyPatch
+):
+    release, entered = asyncio.Event(), asyncio.Event()
+    monkeypatch.setattr(sub_update_buffer, "GetDB", _stuck_get_db(release, entered))
+    reader = asyncio.create_task(_read(recorder_db, "list", subscribed_user))
+    await asyncio.wait_for(entered.wait(), BOUND)
+    (flush,) = sub_update_buffer._background_flushes
+
+    reader.cancel()
+    await asyncio.gather(reader, return_exceptions=True)
+    release.set()
+    done, _ = await asyncio.wait({flush}, timeout=BOUND)
+
+    assert flush in done
+    assert not flush.cancelled()
+    assert flush.result() == 1
     assert sub_update_buffer.pending_count() == 0
     assert await _stored_agents(recorder_db, subscribed_user) == ["committed-client", "pending-client"]
