@@ -31,7 +31,7 @@ from app.db.models import (
 )
 from app.models.core import CoreType
 from app.models.proxy import ProxyTable
-from app.models.settings import NodeHealthSettings
+from app.models.settings import General, NodeHealthSettings
 from app.node import manager_sync, node_manager, sync as node_sync
 from app.node.user import _serialize_user_for_node
 from app.operation import OperatorType, node as node_operation
@@ -57,7 +57,8 @@ def _serve_node_health_settings(monkeypatch: pytest.MonkeyPatch):
     node_health = NodeHealthSettings.model_construct(
         fail_threshold=1, recover_threshold=1, probe_timeout=5, max_backoff=60
     )
-    monkeypatch.setattr(health_checker, "_node_health_settings", AsyncMock(return_value=node_health))
+    general = General.model_construct(node_health=node_health)
+    monkeypatch.setattr(health_checker, "general_settings", AsyncMock(return_value=general))
     monkeypatch.setattr(health_checker, "_health_streaks", {})
     monkeypatch.setattr(health_checker, "_probe_backoffs", {})
     return node_health
