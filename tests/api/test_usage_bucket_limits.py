@@ -101,7 +101,9 @@ def test_user_usage_bucket_limit(access_token):
             assert response.status_code == status.HTTP_200_OK, response.text
 
         sub_usage = f"{user['subscription_url']}/usage"
-        assert client.get(sub_usage, params=TOO_LONG).status_code == status.HTTP_400_BAD_REQUEST
+        response = client.get(sub_usage, params=TOO_LONG)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST, response.text
+        assert "a minute usage range may span at most 1 day(s)" in response.json()["detail"]
         response = client.get(sub_usage, params=NORMAL)
         assert response.status_code == status.HTTP_200_OK, response.text
     finally:
