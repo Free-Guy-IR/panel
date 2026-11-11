@@ -9,6 +9,7 @@ REQUIRED_CREDENTIALS = {
     "open_vpn": ("password",),
     "tuic": ("uuid", "password"),
     "l2tp": ("password",),
+    "masque": ("pass",),
 }
 
 
@@ -18,3 +19,10 @@ def omit_empty_credentials(proxy):
         if any(not getattr(section, attribute) for attribute in required):
             proxy.ClearField(name)
     return proxy
+
+
+def usable_credentials(proxy_kwargs: dict) -> dict:
+    masque_pass = proxy_kwargs.get("masque_pass")
+    if masque_pass is None or (isinstance(masque_pass, str) and masque_pass):
+        return proxy_kwargs
+    return {key: value for key, value in proxy_kwargs.items() if key != "masque_pass"}

@@ -15,7 +15,7 @@ from app.db.models import (
     inbounds_groups_association,
     users_groups_association,
 )
-from app.fork.node_credentials import omit_empty_credentials
+from app.fork.node_credentials import omit_empty_credentials, usable_credentials
 from app.models.protocol import ProxyProtocol
 from app.models.proxy import VLESS_NODE_FLOWS, L2TPSettings, XTLSFlows
 from app.utils.logger import get_logger
@@ -166,7 +166,7 @@ def _serialize_user_for_node(
 
     return create_user(
         str(id),
-        omit_empty_credentials(create_proxy(**proxy_kwargs)),
+        omit_empty_credentials(create_proxy(**usable_credentials(proxy_kwargs))),
         inbounds,
     )
 
