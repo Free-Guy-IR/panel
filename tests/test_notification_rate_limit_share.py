@@ -8,6 +8,7 @@ import pytest
 from aiohttp import web
 from nats.js.api import RetentionPolicy, StreamConfig
 
+from app.fork import notification_rate_limit, notification_spool
 from app.models.settings import NotificationSettings
 from app.notification import client as notification_client, nats_queue, queue_manager
 from app.notification.nats_queue import QUEUE_MAX_MESSAGES, InMemoryNotificationQueue, NatsNotificationQueue
@@ -36,6 +37,7 @@ def shifted_clock(monkeypatch):
     monkeypatch.setattr(notification_client, "time", SimpleNamespace(time=lambda: time.time() + state.offset))
     monkeypatch.setattr(nats_queue, "time", SimpleNamespace(monotonic=state.monotonic))
     monkeypatch.setattr(notification_client, "_rate_limits", {})
+    monkeypatch.setattr(notification_rate_limit, "_held", {})
     return state
 
 
@@ -312,6 +314,89 @@ async def test_a_message_arriving_while_its_destination_answers_is_counted_after
     assert destinations.contents("111", 204) == ["front"]
     assert _lines(caplog, "Notification dropped:") == []
     assert _queued(queue) == 2
+
+
+async def test_a_restart_through_the_spool_keeps_a_rate_limited_destination_at_its_share(
+    shifted_clock, monkeypatch, caplog, tmp_path
+):
+    monkeypatch.setattr(notification_spool, "SPOOL_PATH", tmp_path / "notification_spool.json")
+    monkeypatch.setattr(queue_manager, "webhook_queue_instance", InMemoryNotificationQueue())
+    before = _use_queue("memory", shifted_clock, monkeypatch, size=20)
+    destinations = _Destinations()
+    destinations.limited.add("111")
+    caplog.set_level(logging.WARNING)
+    async with _real_client_against(destinations, monkeypatch) as url:
+        for number in range(2):
+            await queue_manager.enqueue_discord({"content": f"held {number}"}, url("111"))
+        await _due(before)
+        await notification_spool.persist_notification_backlog()
+        monkeypatch.setattr(notification_client, "_rate_limits", {})
+        monkeypatch.setattr(notification_rate_limit, "_held", {})
+        after = _use_queue("memory", shifted_clock, monkeypatch, size=20)
+        await notification_spool.restore_notification_backlog()
+        dispatcher = asyncio.create_task(notification_client.run_notification_dispatcher())
+        try:
+            await queue_manager.enqueue_discord({"content": "after the restart"}, url("111"))
+            async with asyncio.timeout(10):
+                while "after the restart" not in [content for _, content, _ in destinations.seen]:
+                    await asyncio.sleep(0.05)
+            await asyncio.sleep(0.2)
+        finally:
+            dispatcher.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await dispatcher
+
+    assert _lines(caplog, "Notification dropped:") == [SHARE_DROPPED.format("Discord webhook 111", 2)]
+    assert _queued(after) == 2
+
+
+async def _restart_holding_two(monkeypatch, shifted_clock, tmp_path, url, size):
+    monkeypatch.setattr(notification_spool, "SPOOL_PATH", tmp_path / "notification_spool.json")
+    monkeypatch.setattr(queue_manager, "webhook_queue_instance", InMemoryNotificationQueue())
+    before = _use_queue("memory", shifted_clock, monkeypatch, size=size)
+    for number in range(2):
+        await queue_manager.enqueue_discord({"content": f"held {number}"}, url("111"))
+    await _due(before)
+    await notification_spool.persist_notification_backlog()
+    monkeypatch.setattr(notification_client, "_rate_limits", {})
+    monkeypatch.setattr(notification_rate_limit, "_held", {})
+    after = _use_queue("memory", shifted_clock, monkeypatch, size=size)
+    await notification_spool.restore_notification_backlog()
+    await notification_rate_limit.seed_held_from_queue(after, notification_client.time.time())
+    return after
+
+
+async def test_messages_held_before_a_restart_are_not_dropped_when_they_come_back(
+    shifted_clock, monkeypatch, caplog, tmp_path
+):
+    destinations = _Destinations()
+    destinations.limited.add("111")
+    caplog.set_level(logging.WARNING)
+    async with _real_client_against(destinations, monkeypatch) as url:
+        queue = await _restart_holding_two(monkeypatch, shifted_clock, tmp_path, url, size=20)
+        await _hours(queue, shifted_clock, 1)
+        destinations.limited.clear()
+        await _hours(queue, shifted_clock, 2)
+
+    assert _lines(caplog, "Notification dropped:") == []
+    assert destinations.contents("111", 204) == ["held 0", "held 1"]
+    assert_drained(queue)
+
+
+async def test_a_held_message_that_comes_back_after_a_restart_is_counted_once(
+    shifted_clock, monkeypatch, caplog, tmp_path
+):
+    destinations = _Destinations()
+    destinations.limited.add("111")
+    caplog.set_level(logging.WARNING)
+    async with _real_client_against(destinations, monkeypatch) as url:
+        queue = await _restart_holding_two(monkeypatch, shifted_clock, tmp_path, url, size=30)
+        await _hours(queue, shifted_clock, 1)
+        await queue_manager.enqueue_discord({"content": "after they came back"}, url("111"))
+        await _due(queue)
+
+    assert _lines(caplog, "Notification dropped:") == []
+    assert _queued(queue) == 3
 
 
 @pytest.mark.parametrize(("existing", "expected"), [(None, QUEUE_MAX_MESSAGES), (200, 200)])
