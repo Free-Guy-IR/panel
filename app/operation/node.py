@@ -1018,7 +1018,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         Args:
             db (AsyncSession): Database session.
             nodes (list[Node]): List of nodes to connect.
-            force_start: Push a new Start RPC even to healthy nodes (config apply / restart).
+            force_start: Push a new Start RPC (admin restart / core apply).
             stop_first: With force_start, stop each core before Start.
         """
         await self._connect_bulk_impl(db, nodes, force_start=force_start, stop_first=stop_first)
