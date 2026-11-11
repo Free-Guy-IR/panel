@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any
 
@@ -193,7 +194,17 @@ class NodeManager:
 
         # Keep the per-node lock identity stable for the lifetime of the manager so a
         # waiter cannot overlap a later operation through a newly-created lock.
-        lock = self._user_sync_locks.setdefault(id, asyncio.Lock())
+        lock = self._user_sync_lock_until(id, deadline)
+        async with lock, self._lock.writer_lock:
+            old_node: PasarGuardNode | None = self._nodes.pop(id, None)
+            self._node_signatures.pop(id, None)
+            self._keep_alives.pop(id, None)
+            self._user_sync_tasks.pop(id, None)
+        return old_node
+
+    @contextlib.asynccontextmanager
+    async def _user_sync_lock_until(self, node_id: int, deadline: float):
+        lock = self._user_sync_locks.setdefault(node_id, asyncio.Lock())
         acquired = False
         try:
             async with asyncio.timeout_at(deadline):
@@ -201,18 +212,14 @@ class NodeManager:
                 acquired = True
         except TimeoutError:
             self.logger.warning(
-                "a cancelled user sync to node %s still holds its lock; removing the node without waiting for it", id
+                "a cancelled user sync to node %s still holds its lock; removing the node without waiting for it",
+                node_id,
             )
         try:
-            async with self._lock.writer_lock:
-                old_node: PasarGuardNode | None = self._nodes.pop(id, None)
-                self._node_signatures.pop(id, None)
-                self._keep_alives.pop(id, None)
-                self._user_sync_tasks.pop(id, None)
+            yield
         finally:
             if acquired:
                 lock.release()
-        return old_node
 
     def _refuse_while_removing(self, node_id: int) -> None:
         if self._removing.get(node_id):
