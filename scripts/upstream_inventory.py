@@ -326,6 +326,8 @@ NAMED_BRANCH_RE = re.compile(
 )
 MOVED_TO_RE = re.compile(r"\bmoved\s+(?:it\s+)?(?:to|into)\s+`?([^`\s;,]*[^`\s;,.])`?", re.IGNORECASE)
 MISSING_LINE_RE = re.compile(r"\bmissing\s+`?([^`\s]+:[+-]\d+)`?\s+because\b([^;]*)", re.IGNORECASE)
+TEST_DIR_NAMES = frozenset({"tests", "test", "__tests__", "testdata", "e2e"})
+TEST_FILE_RE = re.compile(r"test_[^/]*\.py|[^/]*_test\.(?:py|go)|conftest\.py|[^/]*\.(?:test|spec)\.[cm]?[jt]sx?")
 SCOPED_PATH_SPLIT_RE = re.compile(r"\s*,\s*|\s+and\s+", re.IGNORECASE)
 SECURITY_NO_REASON_RE = re.compile(r"\bsecurity:\s*no\s*,\s*[^\W_]", re.IGNORECASE)
 SYNC_LEDGER_FILE = "UPSTREAM_SYNC.md"
@@ -1550,6 +1552,11 @@ def picks_upstream(fork_sha, upstream_sha):
     return upstream_sha in set(CHERRY_PICK_RE.findall(body)) | set(UPSTREAM_TRAILER_RE.findall(body))
 
 
+def test_path(path):
+    *folders, name = path.split("/")
+    return any(folder in TEST_DIR_NAMES for folder in folders) or bool(TEST_FILE_RE.fullmatch(name))
+
+
 def changed_offsets(path, side):
     marked = [changed for text, changed in side if normalise_line(path, text)]
     changed_at = [i for i, changed in enumerate(marked) if changed]
@@ -1889,8 +1896,9 @@ def design_fork_commit(reason, head, upstream_sha, in_range, reference=None, use
         if fork_sha in in_range:
             continue
         touched = {path for path in git("show", "--format=", "--name-only", "-M", fork_sha).split("\n") if path}
-        brought = paths_bringing_upstream_change(upstream_sha, fork_sha, touched & upstream_paths)
-        if not brought and not picks_upstream(fork_sha, upstream_sha):
+        shared = touched & upstream_paths
+        brought = paths_bringing_upstream_change(upstream_sha, fork_sha, shared)
+        if not brought and not (picks_upstream(fork_sha, upstream_sha) and any(not test_path(path) for path in shared)):
             continue
         named = {path for path in touched if re.search(rf"(?<![\w./-]){re.escape(path)}(?![\w/-])", reason)}
         expected, missing = own_lines_missing(

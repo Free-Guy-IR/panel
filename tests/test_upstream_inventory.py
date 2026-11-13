@@ -3023,7 +3023,9 @@ def design_repo(tmp_path, name, undo=False):
     git(repo_path, "checkout", "-q", "-b", "main", "v1.0")
     commit(repo_path, "fork guard", {"guard.py": GUARD})
     fork_fix = commit(
-        repo_path, f"fork: delete needs update in the guard\n\nUpstream: {fix}\n", {"guard.py": GUARD_FIXED}
+        repo_path,
+        f"fork: delete needs update in the guard\n\nUpstream: {fix}\n",
+        {"guard.py": GUARD_FIXED, "router.py": ROUTER_GUARDED},
     )
     if undo:
         commit(repo_path, "fork: drop the guard rule", {"guard.py": GUARD})
@@ -3338,6 +3340,73 @@ def test_a_carrier_line_a_later_fork_commit_replaced_needs_a_missing_clause_for_
         assert f"`{fix[:12]}` is ported by design as a security fix, but {message}" in result.stdout
 
 
+SVC_STRICT = SVC_FIXED.replace("    check(user)\n", "    check(user, strict=True)\n")
+TRAILER_FILES = {
+    "test-only": {"extra_test.py": "def test_extra_caller():\n    assert checked(extra())\n"},
+    "non-test": {"svc.py": SVC_STRICT},
+    "non-test-elsewhere": {"fork.py": "def guard(user):\n    return check(user, strict=True)\n"},
+}
+TRAILER_CASES = {
+    "test-only-trailer-alone": ("test-only", None, False, 1),
+    "broken-test-only-trailer-alongside-carriers": (
+        "test-only",
+        {"extra_test.py": "def test_other_caller():\n    assert other()\n"},
+        True,
+        0,
+    ),
+    "non-test-trailer-alone": ("non-test", None, False, 0),
+    "non-test-trailer-with-a-lost-line": (
+        "non-test",
+        {"svc.py": SVC_STRICT.replace("strict=True", "lenient=True")},
+        False,
+        1,
+    ),
+    "non-test-trailer-in-a-file-upstream-leaves-alone": ("non-test-elsewhere", None, False, 1),
+}
+
+
+def trailer_world(tmp_path, kind, case):
+    files, later, alongside, _ = TRAILER_CASES[case]
+    path = tmp_path / f"trailer-{kind}-{case}"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "upstream base", {"svc.py": SVC, "check_test.py": CHECK_TEST, "notes.txt": "notes\n"})
+    git(path, "tag", "v1.0")
+    fix = commit(
+        path,
+        "fix: check the caller before handling",
+        {"svc.py": SVC_FIXED, "check_test.py": CHECK_TEST_FIXED, "notes.txt": "notes\ncheck the caller first\n"},
+    )
+    git(path, "update-ref", "refs/remotes/upstream/dev", fix)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    guard = commit(path, "fork: check the caller", {"svc.py": SVC_FIXED})
+    test = commit(path, "fork: test the caller check", {"check_test.py": CHECK_TEST_FIXED})
+    trailer = commit(path, f"fork: take the caller check\n\n{trailer_line(kind, fix)}", TRAILER_FILES[files])
+    if later:
+        commit(path, "fork: rework the trailer commit's lines", later)
+    carriers = f"{trailer}, {guard} and {test}" if alongside else trailer
+    text = f"## Ported by design\n\n- `{fix}` the fork took the caller check in fork commits {carriers} security: yes\n"
+    return path, fix, text
+
+
+@pytest.mark.parametrize("kind", ["cherry-pick", "upstream-trailer"])
+@pytest.mark.parametrize("case", sorted(TRAILER_CASES))
+def test_a_pick_trailer_carries_a_security_design_port_only_through_a_file_upstream_changes_outside_tests(
+    tmp_path, kind, case
+):
+    code = TRAILER_CASES[case][3]
+    path, fix, text = trailer_world(tmp_path, kind, case)
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but {NO_CARRIER}" in result.stdout
+    else:
+        assert "covered by its ledger entry" in result.stdout
+
+
 @pytest.mark.parametrize(
     ("case", "code"),
     [("upstream-drops-it-too", 0), ("fork-only-drop", 1), ("moved-where-upstream-keeps-it", 1)],
@@ -3365,7 +3434,11 @@ def test_a_fork_commit_cited_with_its_files_is_checked_in_those_files(tmp_path, 
     fork_fix = commit(
         repo_path,
         f"fork: delete needs update in the guard\n\nUpstream: {fix}\n",
-        {"guard.py": GUARD_FIXED, "NOTES.md": "guard notes\n\nthe guard checks update and delete\n"},
+        {
+            "guard.py": GUARD_FIXED,
+            "router.py": ROUTER_GUARDED,
+            "NOTES.md": "guard notes\n\nthe guard checks update and delete\n",
+        },
     )
     commit(repo_path, "fork: rewrite the notes", {"NOTES.md": "guard notes\n\nsee guard.py\n"})
     if undo_guard:
@@ -3421,6 +3494,13 @@ DESIGN_RELATIONS = {
     "upstream-trailer": (
         "fork: delete needs update in the guard\n\nUpstream: {fix}\n",
         {"guard.py": GUARD_FIXED},
+        "",
+        None,
+        1,
+    ),
+    "upstream-trailer-in-the-upstream-file": (
+        "fork: guard delete in the router\n\nUpstream: {fix}\n",
+        {"router.py": ROUTER_GUARDED, "guard.py": GUARD_FIXED},
         "",
         None,
         0,
