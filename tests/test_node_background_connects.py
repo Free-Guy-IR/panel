@@ -17,6 +17,7 @@ import app.node as app_node
 from app.core.manager import core_manager
 from app.db.models import Node, NodeConnectionType, NodeStatus
 from app.fork.operation import node_background_connects, node_extras
+from app.fork.operation.node_connect_generation import bump_connect_generation
 from app.jobs import node_checker
 from app.models.admin import AdminDetails
 from app.models.core import CoreType
@@ -631,3 +632,34 @@ async def test_concurrent_restarts_and_reconnects_neither_delay_live_nodes_nor_l
         assert not [written_id for written_id, _ in late_writes if written_id in live + dead], (
             f"seed {seed}: a node that answered within the wait was written late: {late_writes}"
         )
+
+
+async def _late_unit(node_id: int) -> asyncio.Task:
+    async def connect():
+        node_background_connects.remember_connect_mark(await node_background_connects.connect_mark(node_id))
+        return {"status": NodeStatus.connected}
+
+    unit = node_background_connects.start_connect(node_id, connect())
+    await unit
+    return unit
+
+
+async def test_a_late_result_is_skipped_once_a_newer_connect_already_finished_or_is_still_pending():
+    node_id = 990_000 + random.randrange(10_000)
+
+    alone = await _late_unit(node_id)
+    assert await node_background_connects._still_latest(node_id, alone)
+
+    finished_after = await _late_unit(node_id)
+    bump_connect_generation(node_id)
+    assert not await node_background_connects._still_latest(node_id, finished_after)
+
+    pending_after = await _late_unit(node_id)
+    gate = asyncio.Event()
+    newer = node_background_connects.start_connect(node_id, gate.wait())
+    try:
+        assert not await node_background_connects._still_latest(node_id, pending_after)
+    finally:
+        gate.set()
+        await newer
+    assert await node_background_connects._still_latest(node_id, pending_after)

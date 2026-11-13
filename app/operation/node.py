@@ -40,6 +40,7 @@ from app.fork.operation.node_background_connects import (
     remember_connect_mark,
     request_wait,
     settle,
+    start_connect,
     unit_outcome,
 )
 from app.fork.operation.node_connect_generation import bump_connect_generation
@@ -1320,7 +1321,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
                     ),
                 )
 
-        units = {node.id: asyncio.create_task(connect_single(node), name=f"connect-{node.id}") for node in nodes}
+        units = {node.id: start_connect(node.id, connect_single(node)) for node in nodes}
         settled = await settle(units, request_wait(nodes), self._write_late_connect)
         results = [unit_outcome(node_id, units[node_id]) for node_id in settled]
 
@@ -1427,7 +1428,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         if defer_health_status:
             result = await register_then_connect()
         else:
-            unit = asyncio.create_task(register_then_connect(), name=f"connect-{node_id}")
+            unit = start_connect(node_id, register_then_connect())
             if node_id not in await settle({node_id: unit}, request_wait([db_node]), write_late):
                 return False
             result = unit.result()

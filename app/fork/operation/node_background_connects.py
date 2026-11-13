@@ -1,11 +1,11 @@
 import asyncio
 import contextlib
 import weakref
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from dataclasses import dataclass
 
 from app.fork.operation.node_connect_generation import bump_connect_generation, connect_generation
-from app.fork.operation.node_connect_jobs import is_retiring
+from app.fork.operation.node_connect_jobs import connects_in_flight, is_retiring
 from app.fork.operation.node_extras import _connect_lock
 from app.fork.operation.node_messages import describe_error
 from app.nats import needs_shared_bridge_memory
@@ -28,7 +28,30 @@ class ConnectMark:
 
 
 _marks: weakref.WeakKeyDictionary[asyncio.Task, ConnectMark] = weakref.WeakKeyDictionary()
+_pending: dict[int, set[asyncio.Task]] = {}
 _background: dict[asyncio.Task, tuple[int, asyncio.Task]] = {}
+
+
+def _forget_unit(node_id: int, unit: asyncio.Task) -> None:
+    units = _pending.get(node_id)
+    if units is None:
+        return
+    units.discard(unit)
+    if not units:
+        _pending.pop(node_id, None)
+
+
+def start_connect(node_id: int, work: Coroutine) -> asyncio.Task:
+    unit = asyncio.create_task(work, name=f"connect-{node_id}")
+    _pending.setdefault(node_id, set()).add(unit)
+    unit.add_done_callback(lambda done: _forget_unit(node_id, done))
+    return unit
+
+
+def _another_connect_pending(node_id: int, unit: asyncio.Task) -> bool:
+    if any(other is not unit and not other.done() for other in _pending.get(node_id, ())):
+        return True
+    return connects_in_flight(node_id)
 
 
 def _seconds(node) -> int:
@@ -104,9 +127,10 @@ def unit_outcome(node_id: int, unit: asyncio.Task) -> dict | None:
     return unit.result()
 
 
-async def _still_latest(node_id: int, mark: ConnectMark | None) -> bool:
-    if is_retiring(node_id):
+async def _still_latest(node_id: int, unit: asyncio.Task) -> bool:
+    if is_retiring(node_id) or _another_connect_pending(node_id, unit):
         return False
+    mark = _marks.get(unit)
     if mark is None:
         return True
     if connect_generation(node_id) != mark.generation:
@@ -125,10 +149,9 @@ async def _finish(node_id: int, unit: asyncio.Task, write: LateWrite) -> None:
     result = unit_outcome(node_id, unit)
     if not result:
         return
-    mark = _marks.get(unit)
     written = False
     async with _connect_lock(node_id):
-        if not await _still_latest(node_id, mark):
+        if not await _still_latest(node_id, unit):
             logger.info(f"Not recording the late connect result of node {node_id}: a newer connect or removal won")
             return
         written = await write(node_id, result)

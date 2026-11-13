@@ -28,6 +28,10 @@ def is_retiring(node_id: int) -> bool:
     return node_id in _retiring
 
 
+def connects_in_flight(node_id: int) -> bool:
+    return any(not job.done() for job in _connects.get(node_id, ()))
+
+
 async def _locked_connect[Result](node_id: int, work: Callable[[], Awaitable[Result]]) -> Result | None:
     async with _connect_lock(node_id):
         if is_retiring(node_id):
