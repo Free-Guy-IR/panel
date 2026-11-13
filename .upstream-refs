@@ -1,10 +1,13 @@
 ac167e4244f1c9fcaeab6ffaf37768832f24b469 upstream/amaziaWG
 1ad2a186348bb5913b2f873bd3684babb8598885 upstream/coderabbit/improve-changed-function-docstrings/1c06464e
+4c2c8a6705a450d886092181e8614c730c4a7fec upstream/dependabot/github_actions/dev/github/codeql-action-4.39.3
 6fdcc389a2ad72eec1b044316e1ea2b957484623 upstream/dependabot/uv/certifi-2026.10.19
 3b836fd76eeff8b8656c2796a1347d223971c622 upstream/dependabot/uv/dev/asyncmy-0.2.17
+1d7436e02fdaf281ceefec569b745a150174de78 upstream/dependabot/uv/dev/click-8.5.1
 e2707d99064e75acd1ea4d8e1d9bb4542906c5e8 upstream/dependabot/uv/dev/cryptography-50.0.2
 b021d6f7be94bb5c7dc57cf6a648d4b89584e776 upstream/dependabot/uv/dev/fastapi-0.142.2
 3d1a1a3605f527dd765064a0aa4992a00db0bc71 upstream/dependabot/uv/dev/fastapi-0.162.0
+c2f11949395d013dae4df8e2316b2e4a13d8c9e3 upstream/dependabot/uv/dev/psycopg-binary--gte-3.3.8
 6759a6e3db38103b4b8588b37931df4bc0018f48 upstream/dependabot/uv/dev/pydantic-settings-2.16.1
 654e6280de32defd60b3924d8f677ba184fac3c1 upstream/dependabot/uv/dev/pytest-asyncio-1.4.1.post1
 19611f74522391cc2e8239591aaadc7ea8ebcb2a upstream/dependabot/uv/dev/python-dateutil-3.0.0
@@ -12,7 +15,10 @@ b021d6f7be94bb5c7dc57cf6a648d4b89584e776 upstream/dependabot/uv/dev/fastapi-0.14
 59a347e6517ec9888ffb21102b954430d492b6b4 upstream/dependabot/uv/dev/ruff-0.16.10
 2f60c83098103ebf36d7b833f893309c883bc8d7 upstream/dependabot/uv/dev/sqlalchemy-asyncio--gte-2.1.1
 75f3788a312ef593f5642466faa380154ce95e09 upstream/dependabot/uv/dev/sqlalchemy-asyncio--gte-2.1.2
+64676845b80564146f4df3d13a1641a08fd48705 upstream/dependabot/uv/dev/sqlalchemy-asyncio--gte-2.1.8
 3de496c0129d72440d9d59b0756e119b3b649629 upstream/dependabot/uv/dev/sse-starlette-3.6.0
+b3059a947d8a7d459dace44a0d5511475a91e84c upstream/dependabot/uv/dev/sse-starlette-3.7.0
+a08f3306e23fad7c68f4b007526af7fed6ebc214 upstream/dependabot/uv/dev/typer-0.28.0
 30b9f2d176cdaf3713493c8520ffaa386d96ba93 upstream/dependabot/uv/dev/uvloop-0.23.0
 d3fdded8243273e754f18b993dc3efdcec36d24a upstream/dependabot/uv/idna-3.15
 cfdce3765ee7ad7cb46782ba00fa360d0c7134ed upstream/dependabot/uv/pyasn1-0.6.5
@@ -41,6 +47,7 @@ d4d2fd4238469f34d6d730544f15d7ab96907d4a upstream/dev
 d94e157791ac1d098a48172e50a3689caaf2f46f upstream/dev
 da871f475782da54ec547da1945d2478a35171b0 upstream/dev
 de75b25f55817990a16508566de741c215d0375f upstream/dev
+e108479fa2ef02ae712ad177ce540d8f0b6ebc2a upstream/dev
 f92acaf51cec0b8f57236d75e39fe25cdbb98a40 upstream/dev
 ff6e596e090dd8901f073d32fefb4b96e2338ebd upstream/dev
 7ad4c7d3cee9bb479237eeb34198d61c554b4eb4 upstream/feat/apikey-request-limit
