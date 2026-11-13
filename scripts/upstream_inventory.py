@@ -3055,10 +3055,9 @@ def go_module_minor(ref, path):
         folder = folder.parent
 
 
-def moved_hunk_problem(ident, why, target, head, upstream_sha, hunks, carriers):
+def moved_hunk_problem(ident, why, target, head, upstream_sha, hunk, carriers):
     tokens = FORK_COMMIT_RE.findall(why)
     label = f"names missing `{ident}` as moved to `{target}` by {', '.join(tokens) or 'no commit'}"
-    hunk = next((hunk for hunk in hunks if hunk_ident(hunk) == ident), None)
     if hunk is None:
         return None
     if not tokens:
@@ -3144,10 +3143,10 @@ def cited_history_problems(entry, head, ledger_tokens=frozenset()):
     return problems
 
 
-def own_line_exceptions(reason, head, upstream_sha, decision_covers, hunks=(), carriers=()):
+def own_line_exceptions(reason, head, upstream_sha, decision_covers, hunk_of=None, carriers=()):
     named = {}
     problems = []
-    by_ident = {hunk_ident(hunk): hunk for hunk in hunks}
+    hunk_of = hunk_of or {}
     for ident, why in MISSING_LINE_RE.findall(reason):
         why = why.strip()
         named[ident] = why
@@ -3162,14 +3161,14 @@ def own_line_exceptions(reason, head, upstream_sha, decision_covers, hunks=(), c
             continue
         moved = MOVED_TO_RE.search(why)
         if moved:
-            problem = moved_hunk_problem(ident, why, moved.group(1), head, upstream_sha, hunks, carriers)
+            problem = moved_hunk_problem(ident, why, moved.group(1), head, upstream_sha, hunk_of.get(ident), carriers)
             if problem:
                 problems.append(problem)
             continue
         path = ident.rsplit(":", 1)[0]
         explained = False
         for token in FORK_COMMIT_RE.findall(why):
-            sha = fork_only_commit(token, head, upstream_sha, carriers, by_ident.get(ident))
+            sha = fork_only_commit(token, head, upstream_sha, carriers, hunk_of.get(ident))
             if sha and first_parent_changes(sha, path):
                 explained = True
                 break
@@ -3212,6 +3211,40 @@ def named_token_problems(reason, head, upstream_sha, hunks, allowed=frozenset())
     return problems
 
 
+def carrier_line_numbers(fork_sha, hunk):
+    path = hunk["new"] or hunk["old"]
+    post = hunk_side(path, hunk["post"]) if hunk["new"] is not None else None
+    content = head_blob(fork_sha, path)
+    if post is None or content is None:
+        return []
+    _, added = fork_line_changes(fork_sha, path)
+    offsets = changed_offsets(path, hunk["post"])
+    kept = kept_line_numbers(path, content)
+    return [
+        [kept[i + offset] for offset in offsets]
+        for i in block_positions(normalised_file(fork_sha, path), post)
+        if any(i + offset in added for offset in offsets)
+    ]
+
+
+def hunk_own_lines(hunk, upstream_sha, carried_by):
+    path = hunk["new"] or hunk["old"]
+    if hunk["new"] is None or hunk["post_span"] is None:
+        return []
+    start = hunk["post_span"][0]
+    own = [
+        (start + k, normalise_line(path, text))
+        for k, (text, changed) in enumerate(hunk["post"])
+        if changed and normalise_line(path, text)
+    ]
+    spots = [(sha, numbers) for sha in carried_by for numbers in carrier_line_numbers(sha, hunk)]
+    lines = []
+    for index, (number, text) in enumerate(own):
+        places = [(sha, numbers[index]) for sha, numbers in spots] or [(upstream_sha, number)]
+        lines.append((frozenset(f"{path}:+{line}" for _, line in places), places, text))
+    return lines
+
+
 def security_design_problems(reason, head, upstream_sha, decision_covers):
     hunks = commit_hunks(upstream_sha)
     carriers = [
@@ -3230,12 +3263,8 @@ def security_design_problems(reason, head, upstream_sha, decision_covers):
         ]
         problems.extend(named_token_problems(reason, head, upstream_sha, hunks, frozenset({pick})))
         return problems
-    named, problems = own_line_exceptions(reason, head, upstream_sha, decision_covers, hunks, frozenset(carriers))
-    problems.extend(named_token_problems(reason, head, upstream_sha, hunks))
-    carried = 0
-    seen = set()
-    expected = 0
-    gaps = []
+    checked = []
+    hunk_of = {}
     for hunk in hunks:
         path = hunk["new"] or hunk["old"]
         post = hunk_side(path, hunk["post"])
@@ -3245,39 +3274,70 @@ def security_design_problems(reason, head, upstream_sha, decision_covers):
         check_pre = pre is not None and pre != post and not block_in_place(own, pre)
         if not (check_post or check_pre):
             continue
-        expected += 1
-        ident = hunk_ident(hunk)
-        seen.add(ident)
+        carried_by = [sha for sha in carriers if hunk_brought(sha, hunk)]
+        lines = hunk_own_lines(hunk, upstream_sha, carried_by)
+        for ident in [ident for idents, _, _ in lines for ident in idents] or [hunk_ident(hunk)]:
+            hunk_of.setdefault(ident, hunk)
+        checked.append((hunk, path, post, pre, check_post, check_pre, carried_by, lines))
+    named, problems = own_line_exceptions(reason, head, upstream_sha, decision_covers, hunk_of, frozenset(carriers))
+    problems.extend(named_token_problems(reason, head, upstream_sha, hunks))
+    carried = 0
+    expected = len(checked)
+    gaps = []
+    used = set()
+    carried_hunks = []
+    for hunk, path, post, pre, check_post, check_pre, carried_by, lines in checked:
         here = normalised_file(head, path)
         absent = (check_post and not block_in_place(here, post)) or (check_pre and block_in_place(here, pre))
-        if (
-            absent
-            and check_post
-            and any(hunk_brought(sha, hunk) for sha in carriers)
-            and superseded_by_ported_later(upstream_sha, head, path, hunk, here)
-        ):
+        if absent and check_post and carried_by and superseded_by_ported_later(upstream_sha, head, path, hunk, here):
             absent = False
-        brought = not absent and any(hunk_brought(sha, hunk) for sha in carriers)
-        carried += brought
-        if ident in named:
-            if brought:
-                problems.append(f"names missing `{ident}`, but that hunk is carried to {head}; remove the exception")
+        if not absent and carried_by:
+            carried += 1
+            carried_hunks.append(hunk)
             continue
+        lost = [
+            (idents, text)
+            for idents, places, text in lines
+            if absent and all(followed_line(sha, head, path, number) is None for sha, number in places)
+        ]
+        if lost:
+            required = lost
+        elif lines:
+            required = [(lines[0][0], lines[0][2])]
+        else:
+            required = [(frozenset({hunk_ident(hunk)}), f"-{pre[1][0]}" if pre else "")]
+        unexcused = []
+        for idents, text in required:
+            found = idents & named.keys()
+            used |= found
+            if not found:
+                unexcused.append((min(idents), text))
+        if not unexcused:
+            continue
+        ident, text = unexcused[0]
+        rest = ", ".join(f"`{other}`" for other, _ in unexcused[1:])
         if absent:
-            line = post[1][0] if check_post else f"-{pre[1][0]}"
-            gaps.append(f"`{ident}` is not on {head} ({line[:60]!r})")
-        elif not brought:
+            gaps.append(f"`{ident}` is not on {head} ({text[:60]!r})" + (f", nor are {rest}" if rest else ""))
+        else:
             gaps.append(f"`{ident}` is on {head}, but no fork commit its reason names brings it")
-    for ident in sorted(set(named) - seen):
-        problems.append(f"names missing `{ident}`, but no hunk of it starts there")
+    for ident in sorted(set(named) - used):
+        hunk = hunk_of.get(ident)
+        if hunk is None:
+            where = "no hunk of it has that line"
+        elif any(hunk is other for other in carried_hunks):
+            where = f"that hunk is carried to {head}"
+        else:
+            where = f"that line is on {head}"
+        problems.append(f"names missing `{ident}`, but {where}; the exception excuses nothing, remove it")
     if expected and not carried and not gaps:
         problems.insert(0, f"excuses all {expected} hunk(s) of its own change; at least one must be carried to {head}")
     if gaps:
         problems.insert(
             0,
             f"{len(gaps)} of {expected} hunk(s) of its own change are not carried to {head} by the commits its "
-            f"reason names ({', '.join(sha[:12] for sha in carriers)}): {'; '.join(gaps)}; port each, or name it "
-            "as missing `<path>:<line>` because <reason>",
+            f"reason names ({', '.join(sha[:12] for sha in carriers)}): {'; '.join(gaps)}; port each, or name each "
+            "missing line as missing `<path>:+<line>` because <reason>, with <line> its number in the carrier that "
+            "brought it, or in the upstream commit when no carrier did",
         )
     return problems
 
