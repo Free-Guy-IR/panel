@@ -1425,3 +1425,121 @@ def test_a_tracked_security_fix_is_superseded_only_by_a_released_later_upstream_
     result = run(config, "--today", "2026-11-15")
     assert result.returncode == code, result.stdout + result.stderr
     assert (f"`{fix[:12]}` {NOT_CARRIED}" in result.stdout) is not released, result.stdout
+
+
+REMOVE = "def remove(admin, name):\n    load(name)\n    return crud.remove(name)\n"
+REMOVE_CHECKED = REMOVE.replace(
+    "    load(name)\n", "    load(name)\n    check_token(admin)\n    check_scope(admin)\n    audit(admin)\n"
+)
+STRICT_LINE_CASES = {
+    "intact": ([], "", 0, None),
+    "token-replaced-and-excepted": (
+        ["strict-token"],
+        " missing `a.py:+3` because <strict-token> pins the token;",
+        0,
+        None,
+    ),
+    "token-replaced-scope-dropped-only-token-excepted": (
+        ["strict-token", "drop-scope"],
+        " missing `a.py:+3` because <strict-token> pins the token;",
+        1,
+        "`a.py:+4` is not on refs/remotes/fork/main ('    check_scope(admin)')",
+    ),
+    "scope-dropped-hunk-start-excepted": (
+        ["drop-scope"],
+        " missing `a.py:+3` because <drop-scope> drops the scope check;",
+        1,
+        "names missing `a.py:+3`, but that line is on refs/remotes/fork/main; the exception excuses nothing",
+    ),
+    "both-excepted": (
+        ["strict-token", "drop-scope"],
+        " missing `a.py:+3` because <strict-token> pins the token; missing `a.py:+4` because <drop-scope> drops it;",
+        0,
+        None,
+    ),
+    "carrier-numbered": (
+        ["prefix", "strict-token"],
+        " missing `a.py:+4` because <strict-token> pins the token;",
+        0,
+        None,
+    ),
+    "upstream-numbered": (
+        ["prefix", "strict-token"],
+        " missing `a.py:+3` because <strict-token> pins the token;",
+        1,
+        "names missing `a.py:+3`, but no hunk of it has that line; the exception excuses nothing",
+    ),
+    "unused-line": (
+        ["strict-token"],
+        " missing `a.py:+3` because <strict-token> pins the token; missing `a.py:+5` because <strict-token> audits;",
+        1,
+        "names missing `a.py:+5`, but that line is on refs/remotes/fork/main; the exception excuses nothing",
+    ),
+}
+
+
+def strict_line_world(tmp_path, steps, exception):
+    upstream = new_repo(tmp_path / "upstream")
+    base = commit(upstream, "base", {"a.py": REMOVE, "b.py": "three\nfour\n"})
+    fix = commit(
+        upstream,
+        "fix: check the token and its scope before a removal",
+        {"a.py": REMOVE_CHECKED, "b.py": "three\nCHECK_SCOPE\nfour\n"},
+    )
+    git(upstream, "tag", "v1.1.0")
+    fork = tmp_path / "fork"
+    git(tmp_path, "clone", "-q", str(upstream), str(fork))
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(fork, "config", key, value)
+    git(fork, "reset", "-q", "--hard", base)
+    prefix = "import fork_helper\n" if "prefix" in steps else ""
+    if prefix:
+        commit(fork, "fork: import the fork helper", {"a.py": prefix + REMOVE})
+    made = {
+        "port": commit(fork, "port the checks", {"a.py": prefix + REMOVE_CHECKED, "b.py": "three\nCHECK_SCOPE\nfour\n"})
+    }
+    text = prefix + REMOVE_CHECKED
+    for step in steps:
+        if step == "strict-token":
+            text = text.replace("check_token(admin)", "check_token(admin, strict=True)")
+            made[step] = commit(fork, "fork: pin the strict token check", {"a.py": text})
+        elif step == "drop-scope":
+            text = text.replace("    check_scope(admin)\n", "")
+            made[step] = commit(fork, "fork: drop the scope check here", {"a.py": text})
+    commit(fork, "fork feature", {"f.py": "fork\n"})
+    for step, sha in made.items():
+        exception = exception.replace(f"<{step}>", sha)
+    panel = new_repo(tmp_path / "panel")
+    forks = panel / "upstream-forks"
+    forks.mkdir()
+    (forks / "forks.toml").write_text(f"""
+[[repo]]
+name = "kit"
+mode = "ledger"
+fork = "Owner/kit"
+upstream = "Up/kit"
+fork_url = "{fork}"
+upstream_url = "{upstream}"
+ported_ref = "main"
+grandfathered_base = "{base}"
+ledger = "upstream-forks/kit.md"
+reason = "no tracker of its own"
+""")
+    (forks / "kit.md").write_text(
+        f"## Ported by design\n\n- `{fix}` ported in fork commit {made['port']};{exception} security: yes, "
+        "it checks tokens\n"
+    )
+    return forks / "forks.toml", fix
+
+
+@pytest.mark.parametrize("case", sorted(STRICT_LINE_CASES))
+def test_a_strict_exception_excuses_only_the_carrier_line_it_names(tmp_path, case):
+    steps, exception, code, message = STRICT_LINE_CASES[case]
+    config, fix = strict_line_world(tmp_path, steps, exception)
+    result = run(config, "--today", "2026-10-27")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but" in result.stdout
+        assert message in result.stdout
+    else:
+        assert "Upstream parity gate OK" in result.stdout
