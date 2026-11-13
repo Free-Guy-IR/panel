@@ -36,7 +36,7 @@ async def test_a_worker_keeps_polling_a_live_foreign_lease_and_takes_it_over_onc
         await node.connect("0.5.4", "26.3.27")
         await node_operation.NodeOperation._resume_shared_sync(node)
         await asyncio.sleep(1)
-        assert not node._sync_worker_task.done()
+        assert node._sync_worker_task is not None and not node._sync_worker_task.done()
         sync.assert_not_awaited()
         now[0] += 61
         await asyncio.wait_for(node._sync_worker_task, timeout=5)
