@@ -4,7 +4,6 @@ import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_interface, ip_network
-from types import SimpleNamespace
 
 from sqlalchemy import and_, delete, false, insert, inspect, select, update
 from sqlalchemy.dialects.mysql import insert as mysql_insert
@@ -412,27 +411,14 @@ async def get_wg_cores(db: AsyncSession) -> list[CoreConfig]:
     return [core for core in result.scalars().all() if wg_core_interfaces(core)]
 
 
-async def _committed_wg_cores(db: AsyncSession) -> list:
-    statement = select(
-        CoreConfig.id,
-        CoreConfig.type,
-        CoreConfig.config,
-        CoreConfig.exclude_inbound_tags,
-        CoreConfig.fallbacks_inbound_tags,
-    )
-    cores = [
-        SimpleNamespace(
-            id=core_id,
-            type=core_type,
-            config=config,
-            exclude_inbound_tags=exclude_inbound_tags,
-            fallbacks_inbound_tags=fallbacks_inbound_tags,
-        )
-        for core_id, core_type, config, exclude_inbound_tags, fallbacks_inbound_tags in await _committed_rows(
-            db, statement
-        )
-    ]
-    return [core for core in cores if wg_core_interfaces(core)]
+async def _committed_wg_cores(db: AsyncSession) -> list[CoreConfig]:
+    from app.fork.proxy_secrets.locks import MYSQL_FAMILY, side_engine
+
+    bind = db.get_bind()
+    if bind.dialect.name not in MYSQL_FAMILY:
+        return await get_wg_cores(db)
+    async with AsyncSession(side_engine(bind.engine)) as fresh:
+        return await get_wg_cores(fresh)
 
 
 def _accessible_tags_stmt(*, tags: Iterable[str] | None = None, user_ids: Iterable[int] | None = None):
