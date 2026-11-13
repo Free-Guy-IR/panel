@@ -44,11 +44,7 @@ jobs:
       - name: Import the node runtime against the locked bridge
         run: uv run --frozen python -c "import app.node, app.app_factory"
 
-      - name: Run the test suite on SQLite
-        run: uv run --frozen pytest tests -q -p no:cacheprovider
-
       - name: Install the pinned NATS server
-        if: ${{ !cancelled() }}
         env:
           NATS_VERSION: v2.10.25
           NATS_SHA256: 8a54ebad5f08311257e4267a96c5333ae58667c3ef50a7897bce00e01f6d8d6c
@@ -59,10 +55,9 @@ jobs:
             "https://github.com/nats-io/nats-server/releases/download/${NATS_VERSION}/${archive}"
           echo "${NATS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
-          echo "NOTIFICATION_NATS_SERVER=$RUNNER_TEMP/nats-server-${NATS_VERSION}-linux-amd64/nats-server" >> "$GITHUB_ENV"
+          binary="$RUNNER_TEMP/nats-server-${NATS_VERSION}-linux-amd64/nats-server"
+          "$binary" --version
+          echo "NATS_SERVER_BINARY=$binary" >> "$GITHUB_ENV"
 
-      - name: Run the notification tests on a real NATS server
-        if: ${{ !cancelled() }}
-        run: |
-          NATS_SERVER_BINARY="$NOTIFICATION_NATS_SERVER" \
-            uv run --frozen pytest tests/test_notification_nats_integration.py -q -p no:cacheprovider -rs
+      - name: Run the test suite on SQLite
+        run: uv run --frozen pytest tests -q -p no:cacheprovider
