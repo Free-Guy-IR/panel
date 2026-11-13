@@ -316,7 +316,7 @@ async def test_bulk_reset_statement_count_does_not_grow_with_users(session_facto
 @pytest.mark.asyncio
 async def test_reset_cycle_length_is_elapsed_time_on_every_database(session_factory):  # noqa: F811
     def at(*args):
-        return literal(datetime(*args), DateTime())
+        return literal(datetime(*args), DateTime())  # noqa: DTZ001
 
     async with session_factory() as db:
         across_midnight, within_one_date = (
