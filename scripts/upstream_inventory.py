@@ -3307,7 +3307,7 @@ def carrier_line_numbers(fork_sha, hunk):
 def hunk_own_lines(hunk, upstream_sha, carried_by):
     path = hunk["new"] or hunk["old"]
     if hunk["new"] is None or hunk["post_span"] is None:
-        return []
+        return [], False
     start = hunk["post_span"][0]
     own = [
         (start + k, normalise_line(path, text))
@@ -3319,7 +3319,7 @@ def hunk_own_lines(hunk, upstream_sha, carried_by):
     for index, (number, text) in enumerate(own):
         places = [(sha, numbers[index]) for sha, numbers in spots] or [(upstream_sha, number)]
         lines.append((frozenset(f"{path}:+{line}" for _, line in places), places, text))
-    return lines
+    return lines, bool(spots)
 
 
 def security_design_problems(reason, head, upstream_sha, decision_covers):
@@ -3352,10 +3352,10 @@ def security_design_problems(reason, head, upstream_sha, decision_covers):
         if not (check_post or check_pre):
             continue
         carried_by = [sha for sha in carriers if hunk_brought(sha, hunk)]
-        lines = hunk_own_lines(hunk, upstream_sha, carried_by)
-        for ident in [ident for idents, _, _ in lines for ident in idents] or [hunk_ident(hunk)]:
+        lines, placed = hunk_own_lines(hunk, upstream_sha, carried_by)
+        for ident in [ident for idents, _, _ in lines for ident in idents] if placed else [hunk_ident(hunk)]:
             hunk_of.setdefault(ident, hunk)
-        checked.append((hunk, path, post, pre, check_post, check_pre, carried_by, lines))
+        checked.append((hunk, path, post, pre, check_post, check_pre, carried_by, lines, placed))
     named, problems = own_line_exceptions(reason, head, upstream_sha, decision_covers, hunk_of, frozenset(carriers))
     problems.extend(named_token_problems(reason, head, upstream_sha, hunks))
     carried = 0
@@ -3363,7 +3363,7 @@ def security_design_problems(reason, head, upstream_sha, decision_covers):
     gaps = []
     used = set()
     carried_hunks = []
-    for hunk, path, post, pre, check_post, check_pre, carried_by, lines in checked:
+    for hunk, path, post, pre, check_post, check_pre, carried_by, lines, placed in checked:
         here = normalised_file(head, path)
         absent = (check_post and not block_in_place(here, post)) or (check_pre and block_in_place(here, pre))
         if absent and check_post and carried_by and superseded_by_ported_later(upstream_sha, head, path, hunk, here):
@@ -3375,14 +3375,14 @@ def security_design_problems(reason, head, upstream_sha, decision_covers):
         lost = [
             (idents, text)
             for idents, places, text in lines
-            if absent and all(followed_line(sha, head, path, number) is None for sha, number in places)
+            if placed and absent and all(followed_line(sha, head, path, number) is None for sha, number in places)
         ]
-        if lost:
+        if not placed:
+            required = [(frozenset({hunk_ident(hunk)}), lines[0][2] if lines else f"-{pre[1][0]}" if pre else "")]
+        elif lost:
             required = lost
-        elif lines:
-            required = [(lines[0][0], lines[0][2])]
         else:
-            required = [(frozenset({hunk_ident(hunk)}), f"-{pre[1][0]}" if pre else "")]
+            required = [(lines[0][0], lines[0][2])]
         unexcused = []
         for idents, text in required:
             found = idents & named.keys()
@@ -3414,7 +3414,7 @@ def security_design_problems(reason, head, upstream_sha, decision_covers):
             f"{len(gaps)} of {expected} hunk(s) of its own change are not carried to {head} by the commits its "
             f"reason names ({', '.join(sha[:12] for sha in carriers)}): {'; '.join(gaps)}; port each, or name each "
             "missing line as missing `<path>:+<line>` because <reason>, with <line> its number in the carrier that "
-            "brought it, or in the upstream commit when no carrier did",
+            "brought it; a hunk no carrier brought is named once, by its first line in the upstream commit",
         )
     return problems
 
