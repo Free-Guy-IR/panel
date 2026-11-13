@@ -1475,6 +1475,18 @@ STRICT_LINE_CASES = {
         1,
         "names missing `a.py:+5`, but that line is on refs/remotes/fork/main; the exception excuses nothing",
     ),
+    "never-ported-hunk-excused-by-its-start": (
+        ["port-b-only", "gateway"],
+        " missing `a.py:+3` because <gateway> checks the token and its scope in the gateway;",
+        0,
+        None,
+    ),
+    "never-ported-hunk-named-by-a-later-line": (
+        ["port-b-only", "gateway"],
+        " missing `a.py:+4` because <gateway> checks the token and its scope in the gateway;",
+        1,
+        "names missing `a.py:+4`, but no hunk of it has that line; the exception excuses nothing",
+    ),
 }
 
 
@@ -1495,9 +1507,10 @@ def strict_line_world(tmp_path, steps, exception):
     prefix = "import fork_helper\n" if "prefix" in steps else ""
     if prefix:
         commit(fork, "fork: import the fork helper", {"a.py": prefix + REMOVE})
-    made = {
-        "port": commit(fork, "port the checks", {"a.py": prefix + REMOVE_CHECKED, "b.py": "three\nCHECK_SCOPE\nfour\n"})
-    }
+    ported = {"b.py": "three\nCHECK_SCOPE\nfour\n"}
+    if "port-b-only" not in steps:
+        ported["a.py"] = prefix + REMOVE_CHECKED
+    made = {"port": commit(fork, "port the checks", ported)}
     text = prefix + REMOVE_CHECKED
     for step in steps:
         if step == "strict-token":
@@ -1506,6 +1519,9 @@ def strict_line_world(tmp_path, steps, exception):
         elif step == "drop-scope":
             text = text.replace("    check_scope(admin)\n", "")
             made[step] = commit(fork, "fork: drop the scope check here", {"a.py": text})
+        elif step == "gateway":
+            gateway = REMOVE.replace("    load(name)\n", "    load(name)\n    gateway_check(admin)\n")
+            made[step] = commit(fork, "fork: check the token and its scope in the gateway", {"a.py": gateway})
     commit(fork, "fork feature", {"f.py": "fork\n"})
     for step, sha in made.items():
         exception = exception.replace(f"<{step}>", sha)
