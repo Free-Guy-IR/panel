@@ -3153,10 +3153,12 @@ def dropped_line_world(tmp_path, case):
 
 
 CHECK_TEST = "def test_handle(user):\n    handle(user)\n    assert done(user)\n"
-CHECK_TEST_FIXED = CHECK_TEST.replace("    assert done(user)\n", "    assert done(user)\n    assert checked(user)\n")
+CHECK_TEST_FIXED = CHECK_TEST.replace(
+    "    assert done(user)\n", "    assert done(user)\n    assert checked(user)\n    assert logged(user)\n"
+)
 
 
-def two_carrier_world(tmp_path, case):
+def two_carrier_world(tmp_path, case, fork_prefix=""):
     path = tmp_path / f"two-carriers-{case}"
     path.mkdir()
     git(path, "init", "-q", "-b", "up")
@@ -3170,14 +3172,16 @@ def two_carrier_world(tmp_path, case):
     git(path, "update-ref", "refs/remotes/upstream/dev", fix)
     git(path, "checkout", "-q", "--orphan", "main", "v1.0")
     git(path, "commit", "-q", "-m", "fork root")
+    if fork_prefix:
+        commit(path, "fork: import the fork helper", {"check_test.py": fork_prefix + CHECK_TEST})
     guard = commit(path, "fork: check the caller", {"svc.py": SVC_FIXED, "fork.py": "fork\n"})
-    test = commit(path, "fork: test the caller check", {"check_test.py": CHECK_TEST_FIXED})
+    test = commit(path, "fork: test the caller check", {"check_test.py": fork_prefix + CHECK_TEST_FIXED})
     rewrite = None
     if case != "both-intact":
         rewrite = commit(
             path,
             "fork: test the strict caller check",
-            {"check_test.py": CHECK_TEST_FIXED.replace("checked(user)", "checked(user, strict=True)")},
+            {"check_test.py": fork_prefix + CHECK_TEST_FIXED.replace("checked(user)", "checked(user, strict=True)")},
         )
     if case == "broken-named-only-in-missing-clause":
         named = (
@@ -3191,17 +3195,147 @@ def two_carrier_world(tmp_path, case):
 
 
 @pytest.mark.parametrize(
-    ("case", "code"),
-    [("both-intact", 0), ("second-broken", 1), ("broken-named-only-in-missing-clause", 0)],
+    ("case", "code", "message"),
+    [
+        ("both-intact", 0, None),
+        ("second-broken", 1, "its reason names no fork commit on main"),
+        ("broken-named-only-in-missing-clause", 1, "its exception for `check_test.py:+4` excuses nothing"),
+    ],
 )
-def test_every_carrier_a_security_design_port_names_must_still_carry_its_lines(tmp_path, case, code):
+def test_every_carrier_a_security_design_port_names_must_still_carry_its_lines(tmp_path, case, code, message):
     path, fix, text = two_carrier_world(tmp_path, case)
     result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
     assert result.returncode == code, result.stdout + result.stderr
-    if code:
-        assert f"`{fix[:12]}` is ported by design as a security fix, but its reason names no fork commit on main" in (
-            result.stdout
+    if message:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but {message}" in result.stdout
+
+
+def excepted_line_world(tmp_path, case):
+    numbered = case in ("carrier-numbered", "upstream-numbered")
+    world = "both-intact" if case in ("dropped-with-clause", "dropped-then-refilled") else "second-broken"
+    path, fix, _ = two_carrier_world(tmp_path, world, "import fork_helper\n" if numbered else "")
+
+    def made(subject):
+        return git(path, "log", "-1", "--format=%H", f"--grep=^{subject}$", "main").strip()
+
+    guard, test = made("fork: check the caller"), made("fork: test the caller check")
+    rewrite = made("fork: test the strict caller check")
+    strict = CHECK_TEST_FIXED.replace("checked(user)", "checked(user, strict=True)")
+    writers = rewrite
+    if case == "second-line-missing":
+        second = commit(
+            path,
+            "fork: test the strict caller log",
+            {"check_test.py": strict.replace("logged(user)", "logged(user, strict=True)")},
         )
+        writers = f"{rewrite} and {second}"
+    later = None
+    if case.startswith("blocker-"):
+        later = commit(
+            path,
+            "fork: let the check pass lenient callers",
+            {"svc.py": SVC_FIXED.replace("    check(user)\n", "    check(user, lenient=True)\n")},
+        )
+    if case == "replacement-shares-a-block":
+        later = commit(
+            path,
+            "fork: audit the strict check",
+            {
+                "check_test.py": strict.replace(
+                    "    assert logged(user)\n", "    assert audited(user)\n    assert logged(user)\n"
+                )
+            },
+        )
+    if case == "dropped-with-clause":
+        later = commit(
+            path,
+            "fork: stop testing the log",
+            {"check_test.py": CHECK_TEST_FIXED.replace("    assert logged(user)\n", "")},
+        )
+    if case == "dropped-then-refilled":
+        dropped = commit(
+            path,
+            "fork: stop asserting the check",
+            {"check_test.py": CHECK_TEST_FIXED.replace("    assert checked(user)\n", "")},
+        )
+        later = commit(
+            path,
+            "fork: assert the verification",
+            {"check_test.py": CHECK_TEST_FIXED.replace("assert checked(user)", "assert verified(user)")},
+        )
+        writers = f"{dropped} and {later}"
+    if case == "unrelated-later-commit-named":
+        later = commit(path, "fork: tidy the fork module", {"fork.py": "fork\ntidy\n"})
+    clause = {
+        "excepted": f"missing `check_test.py:+4` because {rewrite} pins the strict check",
+        "no-exception": "",
+        "wrong-line": f"missing `check_test.py:+5` because {rewrite} pins the strict check",
+        "replacer-unnamed": "missing `check_test.py:+4` because the fork pins the strict check",
+        "second-line-missing": f"missing `check_test.py:+4` because {writers} pin the strict check",
+        "excepted-and-unused": (
+            f"missing `check_test.py:+4` because {rewrite} pins the strict check; "
+            f"missing `check_test.py:+5` because {rewrite} pins the strict log"
+        ),
+        "carrier-numbered": f"missing `check_test.py:+5` because {rewrite} pins the strict check",
+        "upstream-numbered": f"missing `check_test.py:+4` because {rewrite} pins the strict check",
+        "blocker-named-only-in-clause": (
+            f"missing `check_test.py:+4` because {rewrite} pins the strict check after {later} loosened {guard}"
+        ),
+        "blocker-named-outside": f"missing `check_test.py:+4` because {rewrite} pins the strict check",
+        "replacement-shares-a-block": f"missing `check_test.py:+4` because {rewrite} pins the strict check",
+        "dropped-with-clause": f"missing `check_test.py:+5` because {later} stops testing the log",
+        "dropped-then-refilled": f"missing `check_test.py:+4` because {writers} assert the verification instead",
+        "earlier-commit-named": f"missing `check_test.py:+4` because {guard} pins the strict check",
+        "unrelated-later-commit-named": f"missing `check_test.py:+4` because {later} pins the strict check",
+        "alongside-intact-carrier-no-exception": "",
+        "alongside-intact-carrier-excepted": f"missing `check_test.py:+4` because {rewrite} pins the strict check",
+    }[case]
+    alongside = case in (
+        "blocker-named-outside",
+        "alongside-intact-carrier-no-exception",
+        "alongside-intact-carrier-excepted",
+    )
+    carriers = f"{test} and {guard}" if alongside else test
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the caller itself, tested in fork commit {carriers}; "
+        f"{clause} security: yes\n"
+    )
+    return path, fix, text
+
+
+NO_CARRIER = "its reason names no fork commit on main"
+
+
+@pytest.mark.parametrize(
+    ("case", "code", "message"),
+    [
+        ("excepted", 0, None),
+        ("no-exception", 1, NO_CARRIER),
+        ("wrong-line", 1, NO_CARRIER),
+        ("replacer-unnamed", 1, NO_CARRIER),
+        ("second-line-missing", 1, NO_CARRIER),
+        ("excepted-and-unused", 1, "its exception for `check_test.py:+5` excuses nothing"),
+        ("carrier-numbered", 0, None),
+        ("upstream-numbered", 1, NO_CARRIER),
+        ("blocker-named-only-in-clause", 0, None),
+        ("blocker-named-outside", 1, NO_CARRIER),
+        ("replacement-shares-a-block", 0, None),
+        ("dropped-with-clause", 1, NO_CARRIER),
+        ("dropped-then-refilled", 1, NO_CARRIER),
+        ("earlier-commit-named", 1, NO_CARRIER),
+        ("unrelated-later-commit-named", 1, NO_CARRIER),
+        ("alongside-intact-carrier-no-exception", 1, NO_CARRIER),
+        ("alongside-intact-carrier-excepted", 0, None),
+    ],
+)
+def test_a_carrier_line_a_later_fork_commit_replaced_needs_a_missing_clause_for_that_line(
+    tmp_path, case, code, message
+):
+    path, fix, text = excepted_line_world(tmp_path, case)
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if message:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but {message}" in result.stdout
 
 
 @pytest.mark.parametrize(
