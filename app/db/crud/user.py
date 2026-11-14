@@ -97,8 +97,8 @@ from .general import (
 )
 from .group import get_groups_by_ids
 from .wireguard import (
+    LockedWireGuardPools,
     lock_for_allocation_release,
-    lock_users_subnets,
     release_locked_allocations,
     release_users_allocations,
     sync_user_allocations,
@@ -1288,8 +1288,10 @@ async def _delete_locked_users(
     *predicates,
     extra_columns: Sequence = (),
     keep: Callable[[Row], bool] | None = None,
+    pools: LockedWireGuardPools | None = None,
 ) -> list[Row]:
-    pools = await lock_for_allocation_release(db)
+    if pools is None:
+        pools = await lock_for_allocation_release(db)
     rows = (
         await db.execute(
             select(User.id, User.username, User.proxy_settings, User.hwid_limit, *extra_columns)
@@ -1951,7 +1953,7 @@ async def autodelete_expired_users(
         candidate_ids = [candidate.id for candidate in candidates]
         prelocked = {candidate.id: _wireguard_settings(candidate.proxy_settings) for candidate in candidates}
         # remove_users releases WireGuard peer IPs, which locks subnet rows: take them before the user rows
-        await lock_users_subnets(db, [candidate.proxy_settings for candidate in candidates])
+        pools = await lock_for_allocation_release(db)
 
         # Revalidate after candidate selection, then hold row locks until remove_users commits.
         # This prevents a concurrent status or retention-policy update from racing the delete.
@@ -1979,7 +1981,7 @@ async def autodelete_expired_users(
             responses[user.id] = UserNotificationResponse.model_validate(user)
 
         try:
-            removed = await _delete_locked_users(db, list(responses), *eligibility_conditions)
+            removed = await _delete_locked_users(db, list(responses), *eligibility_conditions, pools=pools)
             await db.commit()
         except Exception:
             await db.rollback()
