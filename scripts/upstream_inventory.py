@@ -1453,7 +1453,7 @@ def pick_reference(sha, upstream, containing_tips):
     return sha
 
 
-def release_reference(sha):
+def final_releases(sha):
     finals = []
     for ref in git("for-each-ref", "--format=%(refname)", f"--contains={sha}", "refs/upstream-tags/").split():
         try:
@@ -1462,6 +1462,11 @@ def release_reference(sha):
             continue
         if not version.is_prerelease:
             finals.append((version, ref))
+    return finals
+
+
+def release_reference(sha):
+    finals = final_releases(sha)
     return resolve_ref(f"{max(finals)[1]}^{{commit}}") if finals else sha
 
 
@@ -2026,7 +2031,7 @@ def superseding_pick(reason, head, upstream_sha):
             continue
         body = git("log", "-1", "--format=%B", fork_sha)
         for later in sorted(set(CHERRY_PICK_RE.findall(body)) | set(UPSTREAM_TRAILER_RE.findall(body))):
-            if later == upstream_sha or not commit_exists(later) or not on_upstream_ref(later):
+            if later == upstream_sha or not commit_exists(later) or not final_releases(later):
                 continue
             if not is_ancestor(upstream_sha, later):
                 continue
@@ -2049,7 +2054,7 @@ def ported_later_changes(upstream_sha, head, path):
             continue
         laters = set(CHERRY_PICK_RE.findall(body)) | set(UPSTREAM_TRAILER_RE.findall(body))
         for later in sorted(laters - {upstream_sha, fork_sha}):
-            if not commit_exists(later) or not on_upstream_ref(later) or not is_ancestor(upstream_sha, later):
+            if not commit_exists(later) or not final_releases(later) or not is_ancestor(upstream_sha, later):
                 continue
             if on_upstream_ref(fork_sha):
                 continue
