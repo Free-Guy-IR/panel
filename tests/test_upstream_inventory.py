@@ -4344,3 +4344,58 @@ def test_an_unrecorded_release_tag_head_still_fails_the_gate(tmp_path):
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert f"upstream head v1.1 at {released[:12]} is not recorded in .upstream-refs" in result.stdout
+
+
+MOVED_SVC = "def handle(user):\n    load(user)\n    a(user)\n    return b(user)\n"
+MOVED_SVC_FIXED = MOVED_SVC.replace("    a(user)\n", "    check(user)\n    a(user)\n")
+MOVED_SVC_MOVED = MOVED_SVC.replace("    load(user)\n", "    check(user)\n    load(user)\n")
+MOVED_SVC_FORK_FINAL = {
+    "check-lost": MOVED_SVC,
+    "check-copied-elsewhere": MOVED_SVC + "\n\ndef audit(user):\n    check(user)\n",
+    "fork-follows-move": MOVED_SVC_MOVED,
+    "move-unreleased": MOVED_SVC,
+}
+
+
+def moved_check_world(tmp_path, case):
+    path = tmp_path / f"moved-{case}"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "upstream base", {"svc.py": MOVED_SVC})
+    git(path, "tag", "v1.0")
+    git(path, "update-ref", "refs/upstream-tags/v1.0", "v1.0")
+    fix = commit(path, "fix: check the caller before handling", {"svc.py": MOVED_SVC_FIXED})
+    git(path, "update-ref", "refs/upstream-tags/v1.1", fix)
+    move = commit(path, "refactor: run the caller check first", {"svc.py": MOVED_SVC_MOVED})
+    if case == "move-unreleased":
+        git(path, "update-ref", "refs/remotes/upstream/main", fix)
+    else:
+        git(path, "update-ref", "refs/upstream-tags/v1.2", move)
+        git(path, "update-ref", "refs/remotes/upstream/main", move)
+    git(path, "update-ref", "refs/remotes/upstream/dev", move)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    carrier = commit(path, "fork: check the caller before handling", {"svc.py": MOVED_SVC_FIXED, "fork.py": "fork\n"})
+    sync = commit(
+        path, "fork: take upstream's handler order", {"svc.py": MOVED_SVC_FORK_FINAL[case], "fork.py": "fork\nsync\n"}
+    )
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the caller itself in fork commit {carrier} security: yes\n"
+        f"- `{move}` the fork takes the new handler order in fork commit {sync} security: no, it only reorders "
+        "the handler lines\n"
+    )
+    return path, fix, text
+
+
+@pytest.mark.parametrize(
+    ("case", "code"),
+    [("check-lost", 1), ("check-copied-elsewhere", 1), ("fork-follows-move", 0), ("move-unreleased", 1)],
+)
+def test_a_security_line_the_release_moved_is_not_upstream_form_where_the_fork_dropped_it(tmp_path, case, code):
+    path, fix, text = moved_check_world(tmp_path, case)
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0", *CALLER_RELEASE_ARGS)
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but" in result.stdout
