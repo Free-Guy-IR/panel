@@ -5,6 +5,7 @@ function kindFor(path) {
   if (path.endsWith(".tsx")) return ts.ScriptKind.TSX;
   if (path.endsWith(".ts") || path.endsWith(".mts") || path.endsWith(".cts")) return ts.ScriptKind.TS;
   if (path.endsWith(".jsx")) return ts.ScriptKind.JSX;
+  if (path.endsWith(".json") || path.endsWith(".code-workspace")) return ts.ScriptKind.JSON;
   return ts.ScriptKind.JS;
 }
 
