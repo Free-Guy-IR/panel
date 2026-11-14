@@ -69,6 +69,8 @@ HEADER_LINES = 30
 DOCKERFILE_DIRECTIVE = re.compile(r"#\s*(syntax|escape|check)\s*=\s*\S", re.IGNORECASE)
 CSS_UNQUOTED_URL = re.compile(r"url\(\s*(?=[^\s'\"])", re.IGNORECASE)
 ZERO = "0" * 40
+GRANDFATHERED_BASE = "bb4bfd2a21a6493600bf98ab6e67cdd5c20e2995"
+FULL_SHA = re.compile(r"[0-9a-f]{40}")
 
 
 def dockerfile(name: str) -> bool:
@@ -134,6 +136,9 @@ class Git:
     def commit(self, rev: str) -> str | None:
         found = self.run("rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}", check=False)
         return found.stdout.decode().strip() if found.returncode == 0 else None
+
+    def is_ancestor(self, ancestor: str, descendant: str) -> bool:
+        return self.run("merge-base", "--is-ancestor", ancestor, descendant, check=False).returncode == 0
 
     def merge_base(self, left: str, right: str) -> str:
         found = self.run("merge-base", left, right, check=False)
@@ -463,19 +468,23 @@ def required_commit(git: Git, rev: str, role: str) -> str:
     return sha
 
 
-def resolve_base(git: Git, head: str, given: str | None, trusted: str, grandfathered: str | None) -> tuple[str, str]:
+def resolve_base(git: Git, head: str, given: str | None, trusted: str, grandfathered: str) -> tuple[str, str]:
+    if not FULL_SHA.fullmatch(grandfathered):
+        raise SystemExit(
+            f"comment guard: the grandfathered base {grandfathered!r} is not a full commit sha; refusing to pass"
+        )
     trusted_sha = required_commit(git, trusted, "trusted branch")
-    grandfathered_sha = required_commit(git, grandfathered, "grandfathered base") if grandfathered else None
+    grandfathered_sha = required_commit(git, grandfathered, "grandfathered base")
     given_sha = required_commit(git, given, "base") if given and given != ZERO else None
     base = git.merge_base(head, trusted_sha)
     reason = f"merge base with {trusted}"
     if base == head:
-        if grandfathered_sha is None:
+        if not git.is_ancestor(grandfathered_sha, head):
             raise SystemExit(
-                f"comment guard: {head[:12]} is already on {trusted}, so only a grandfathered base is trusted; "
-                "pass --grandfathered-base"
+                f"comment guard: {head[:12]} is already on {trusted} but does not descend from the grandfathered base "
+                f"{grandfathered_sha[:12]}; refusing to pass"
             )
-        base = git.merge_base(head, grandfathered_sha)
+        base = grandfathered_sha
         reason = f"grandfathered base, as {head[:12]} is already on {trusted}"
     if given_sha is not None:
         widened = git.merge_base(given_sha, base)
@@ -492,7 +501,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--trusted-branch", "--fallback-base", dest="trusted_branch", default="refs/remotes/origin/main"
     )
-    parser.add_argument("--grandfathered-base")
     parser.add_argument("--upstream", action="append", required=True)
     parser.add_argument("--typescript")
     parser.add_argument("--github", action="store_true")
@@ -502,7 +510,7 @@ def main(argv: list[str] | None = None) -> int:
     if missing:
         raise SystemExit(f"comment guard: upstream refs not found: {', '.join(missing)}")
     head = required_commit(git, args.head, "head")
-    base, reason = resolve_base(git, head, args.base, args.trusted_branch, args.grandfathered_base)
+    base, reason = resolve_base(git, head, args.base, args.trusted_branch, GRANDFATHERED_BASE)
     hits = Guard(git, args.upstream, ScriptComments(args.typescript)).added(base, head)
     print(f"comment guard: {base[:12]}..{head[:12]} ({reason}), upstream {', '.join(args.upstream)}")
     for path, number, kind, norm in hits:
