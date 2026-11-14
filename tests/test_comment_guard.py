@@ -23,6 +23,7 @@ GONE = "1" * 40
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "upstream-inventory.yml"
 EXPRESSION = re.compile(r"\$\{\{\s*([\w.]+)\s*\}\}")
 CI_UPSTREAM_REFS = ("refs/upstream-tags/v5.6.0", "refs/remotes/upstream/dev", "refs/remotes/upstream/main")
+PINNED_BASE = re.compile(r'^GRANDFATHERED_BASE = "([0-9a-f]{40})"$', re.MULTILINE)
 UPSTREAM_CONFIG_FILES = {
     "Dockerfile": "FROM python:3.12\n# upstream builder note\nRUN true\n",
     "Makefile": "# upstream target note\nrun:\n\ttrue\n",
@@ -53,7 +54,7 @@ def _commit(repo: Path, files: dict[str, str | None], message: str) -> str:
 
 
 @pytest.fixture
-def repo(tmp_path):
+def repo(tmp_path, monkeypatch):
     root = tmp_path / "repo"
     root.mkdir()
     _git(root, "init", "-q", "-b", "main")
@@ -63,6 +64,7 @@ def repo(tmp_path):
     _git(root, "branch", "upstream-dev", upstream)
     base = _commit(root, {"app/fork/feature.py": FORK_FEATURE}, "fork base")
     _git(root, "update-ref", "refs/remotes/origin/main", base)
+    monkeypatch.setattr(comment_guard, "GRANDFATHERED_BASE", base)
     return root
 
 
@@ -201,13 +203,23 @@ def test_a_base_that_is_not_in_the_clone_fails_closed_instead_of_falling_back(re
         _guard(repo, GONE, head)
 
 
-def test_a_head_already_on_the_trusted_branch_needs_the_grandfathered_base(repo):
-    before = _git(repo, "rev-parse", "HEAD")
+def test_a_head_already_on_the_trusted_branch_that_does_not_descend_from_the_grandfathered_base_fails_closed(repo):
+    _git(repo, "checkout", "-q", "--orphan", "rewritten")
+    head = _commit(repo, {"app/fork/feature.py": _feature_with("    # explain")}, "a rewritten main")
+    _git(repo, "update-ref", "refs/remotes/origin/main", head)
+
+    with pytest.raises(SystemExit, match="does not descend from the grandfathered base"):
+        _guard(repo, None, head)
+
+
+def test_the_grandfathered_base_cannot_be_given_on_the_command_line(repo, capsys):
     head = _commit(repo, {"app/fork/other.py": "VALUE = 2\n"}, "a push to main")
     _git(repo, "update-ref", "refs/remotes/origin/main", head)
 
-    with pytest.raises(SystemExit, match="only a grandfathered base is trusted"):
-        _guard(repo, before, head)
+    with pytest.raises(SystemExit) as stopped:
+        _guard(repo, None, head, "--grandfathered-base", head)
+    assert stopped.value.code == 2
+    assert "unrecognized arguments: --grandfathered-base" in capsys.readouterr().err
 
 
 def test_a_head_already_on_the_trusted_branch_is_checked_from_the_grandfathered_base(repo, capsys):
@@ -216,7 +228,7 @@ def test_a_head_already_on_the_trusted_branch_is_checked_from_the_grandfathered_
     head = _commit(repo, {"app/fork/other.py": "VALUE = 2\n"}, "the next push to main")
     _git(repo, "update-ref", "refs/remotes/origin/main", head)
 
-    assert _guard(repo, first, head, "--grandfathered-base", grandfathered) == 1
+    assert _guard(repo, first, head) == 1
     out = capsys.readouterr().out
     assert f"comment guard: {grandfathered[:12]}..{head[:12]} (grandfathered base" in out
     assert "app/fork/feature.py:2: new comment that upstream does not have: # explain" in out
@@ -230,12 +242,23 @@ def test_a_missing_trusted_branch_fails_closed(repo):
         _guard(repo, base, head, "--fallback-base", "refs/remotes/origin/gone")
 
 
-def test_a_missing_grandfathered_base_fails_closed_even_off_the_trusted_branch(repo):
+def test_a_missing_grandfathered_base_fails_closed_even_off_the_trusted_branch(repo, monkeypatch):
     base = _git(repo, "rev-parse", "HEAD")
     head = _commit(repo, {"app/fork/other.py": "VALUE = 2\n"}, "a clean change")
+    monkeypatch.setattr(comment_guard, "GRANDFATHERED_BASE", GONE)
 
     with pytest.raises(SystemExit, match=f"grandfathered base {GONE} is not a commit"):
-        _guard(repo, base, head, "--grandfathered-base", GONE)
+        _guard(repo, base, head)
+
+
+@pytest.mark.parametrize("pinned", ["short", "refs/remotes/origin/main", "HEAD"])
+def test_a_grandfathered_base_that_is_not_a_full_commit_sha_fails_closed(repo, monkeypatch, pinned):
+    base = _git(repo, "rev-parse", "HEAD")
+    head = _commit(repo, {"app/fork/other.py": "VALUE = 2\n"}, "a clean change")
+    monkeypatch.setattr(comment_guard, "GRANDFATHERED_BASE", base[:12] if pinned == "short" else pinned)
+
+    with pytest.raises(SystemExit, match="is not a full commit sha"):
+        _guard(repo, base, head)
 
 
 def test_a_base_from_unrelated_history_fails_closed(repo):
@@ -473,14 +496,18 @@ def test_jsonc_comments_in_tsconfig_and_workspace_files_fail(repo, capsys, name)
     assert out.count("new comment that upstream does not have") == 1
 
 
-def test_the_recorded_grandfathered_base_is_a_full_commit_on_this_history():
-    recorded = (REPO_ROOT / ".comment-guard-base").read_text()
+def test_the_grandfathered_base_is_the_commit_the_guard_came_in_on_top_of():
+    pinned = comment_guard.GRANDFATHERED_BASE
+    source = (REPO_ROOT / "scripts" / "comment_guard.py").read_text()
 
-    assert re.fullmatch(r"[0-9a-f]{40}\n", recorded)
-    ancestor = subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "merge-base", "--is-ancestor", recorded.strip(), "HEAD"], check=False
-    )
+    assert PINNED_BASE.findall(source) == [pinned]
+    ancestor = subprocess.run(["git", "-C", str(REPO_ROOT), "merge-base", "--is-ancestor", pinned, "HEAD"], check=False)
     assert ancestor.returncode == 0
+    parents = _git(
+        REPO_ROOT, "log", "--topo-order", "--diff-filter=A", "--format=%P", "HEAD", "--", "scripts/comment_guard.py"
+    ).splitlines()
+    assert parents[-1] == pinned
+    assert not (REPO_ROOT / ".comment-guard-base").exists()
 
 
 def _workflow_step(name: str) -> tuple[dict[str, str], str]:
@@ -524,12 +551,20 @@ def checkout(tmp_path):
         {"app/fork/feature.py": FORK_FEATURE, "app/fork/legacy.py": "LEGACY = 1  # grandfathered note\n"},
         "the fork before the guard",
     )
-    main = _commit(root, {".comment-guard-base": f"{grandfathered}\n"}, "record the grandfathered base")
+    main = _commit(root, {}, "the guard comes in")
     _git(root, "update-ref", "refs/remotes/origin/main", main)
-    (root / "scripts").mkdir()
-    for name in ("comment_guard.py", "comment_guard_ts.js"):
-        shutil.copy2(REPO_ROOT / "scripts" / name, root / "scripts" / name)
+    _install_guard(root, grandfathered)
     return root
+
+
+def _install_guard(root: Path, grandfathered: str) -> None:
+    source = (REPO_ROOT / "scripts" / "comment_guard.py").read_text()
+    assert len(PINNED_BASE.findall(source)) == 1
+    (root / "scripts").mkdir(exist_ok=True)
+    (root / "scripts" / "comment_guard.py").write_text(
+        PINNED_BASE.sub(f'GRANDFATHERED_BASE = "{grandfathered}"', source)
+    )
+    shutil.copy2(REPO_ROOT / "scripts" / "comment_guard_ts.js", root / "scripts" / "comment_guard_ts.js")
 
 
 def _ci_step(checkout: Path, tmp_path: Path, event: str, head: str, before: str, ref: str):
@@ -608,6 +643,65 @@ def test_ci_a_force_push_to_main_whose_old_tip_is_gone_still_checks_the_tip(chec
     assert "app/fork/feature.py:2: new comment that upstream does not have: # explain" in result.stdout
 
 
+@pytest.mark.parametrize("branch", ["main", "lane"])
+def test_ci_a_push_that_records_its_own_comment_as_the_grandfathered_base_still_fails(checkout, tmp_path, branch):
+    before = _git(checkout, "rev-parse", "HEAD")
+    red = _red_commit(checkout)
+    head = _commit(checkout, {".comment-guard-base": f"{red}\n"}, "record the red commit as the grandfathered base")
+
+    result = _push(checkout, tmp_path, head, before, branch)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "app/fork/feature.py:2: new comment that upstream does not have: # explain" in result.stdout
+
+
+def test_ci_a_later_push_to_main_that_records_the_red_push_as_the_grandfathered_base_still_fails(checkout, tmp_path):
+    before = _git(checkout, "rev-parse", "HEAD")
+    red = _red_commit(checkout)
+    assert _push(checkout, tmp_path, red, before, "main").returncode == 1
+    head = _commit(checkout, {".comment-guard-base": f"{red}\n"}, "record the red push as the grandfathered base")
+
+    result = _push(checkout, tmp_path, head, red, "main")
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "app/fork/feature.py:2: new comment that upstream does not have: # explain" in result.stdout
+
+
+def test_ci_a_force_push_of_a_history_that_records_its_own_root_as_the_grandfathered_base_fails_closed(
+    checkout, tmp_path
+):
+    main = _git(checkout, "rev-parse", "HEAD")
+    _git(checkout, "checkout", "-q", "--orphan", "rewritten")
+    root = _red_commit(checkout)
+    head = _commit(
+        checkout, {".comment-guard-base": f"{root}\n"}, "record the rewritten root as the grandfathered base"
+    )
+
+    result = _push(checkout, tmp_path, head, main, "main")
+
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "no new comments or docstrings" not in result.stdout
+    assert "does not descend from the grandfathered base" in result.stderr
+
+
+def test_ci_a_merge_onto_main_that_brings_its_own_root_as_the_grandfathered_base_still_fails(checkout, tmp_path):
+    main = _git(checkout, "rev-parse", "HEAD")
+    _git(checkout, "checkout", "-q", "--orphan", "unrelated")
+    root = _red_commit(checkout)
+    _commit(checkout, {".comment-guard-base": f"{root}\n"}, "record the unrelated root as the grandfathered base")
+    _git(checkout, "merge", "-q", "--allow-unrelated-histories", "--no-edit", "-s", "ours", main)
+    head = _git(checkout, "rev-parse", "HEAD")
+    fast_forward = subprocess.run(
+        ["git", "-C", str(checkout), "merge-base", "--is-ancestor", main, head], capture_output=True, check=False
+    )
+    assert fast_forward.returncode == 0
+
+    result = _push(checkout, tmp_path, head, main, "main")
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "app/fork/feature.py:2: new comment that upstream does not have: # explain" in result.stdout
+
+
 def test_ci_a_clean_push_to_main_passes_and_leaves_grandfathered_and_upstream_comments_alone(checkout, tmp_path):
     before = _git(checkout, "rev-parse", "HEAD")
     head = _commit(
@@ -648,25 +742,42 @@ def test_ci_a_pull_request_is_checked_against_main(checkout, tmp_path):
     assert "app/fork/feature.py:2: new comment that upstream does not have: # explain" in result.stdout
 
 
-@pytest.mark.parametrize(
-    ("recorded", "branch", "message"),
-    [
-        (None, "main", ""),
-        ("not a commit\n", "main", ""),
-        (f"{GONE}\n", "main", f"grandfathered base {GONE} is not a commit"),
-        (f"{GONE}\n", "lane", f"grandfathered base {GONE} is not a commit"),
-    ],
-    ids=["file-missing", "not-a-sha", "commit-not-in-the-clone-on-main", "commit-not-in-the-clone-on-a-branch"],
-)
-def test_ci_the_step_fails_closed_without_a_usable_grandfathered_base(checkout, tmp_path, recorded, branch, message):
+@pytest.mark.parametrize("branch", ["main", "lane"])
+def test_ci_the_step_fails_closed_without_the_grandfathered_base_in_the_clone(checkout, tmp_path, branch):
     before = _git(checkout, "rev-parse", "HEAD")
-    head = _commit(checkout, {".comment-guard-base": recorded, "app/fork/other.py": "VALUE = 2\n"}, "a clean push")
+    head = _commit(checkout, {"app/fork/other.py": "VALUE = 2\n"}, "a clean push")
+    _install_guard(checkout, GONE)
 
     result = _push(checkout, tmp_path, head, before, branch)
 
     assert result.returncode != 0, result.stdout + result.stderr
     assert "no new comments or docstrings" not in result.stdout
-    assert message in result.stderr
+    assert f"grandfathered base {GONE} is not a commit in this clone" in result.stderr
+
+
+@pytest.mark.parametrize("branch", ["main", "lane"])
+@pytest.mark.parametrize("with_base", [False, True], ids=["base-not-fetched", "base-fetched-but-cut-off"])
+def test_ci_a_shallow_clone_fails_closed(checkout, tmp_path, branch, with_base):
+    main = _git(checkout, "rev-parse", "HEAD")
+    grandfathered = _git(checkout, "rev-parse", "HEAD~1")
+    _git(checkout, "checkout", "-q", "--detach")
+    head = _red_commit(checkout)
+    _git(checkout, "branch", "-f", "lane", head)
+    _git(checkout, "update-ref", "refs/heads/grandfathered", grandfathered)
+    shallow = tmp_path / "shallow"
+    _git(tmp_path, "clone", "-q", "--depth", "1", "--branch", "lane", f"file://{checkout}", str(shallow))
+    _git(shallow, "fetch", "-q", "--depth", "1", "origin", "+refs/heads/main:refs/remotes/origin/main")
+    _git(shallow, "fetch", "-q", "--depth", "1", "origin", *(f"+{ref}:{ref}" for ref in CI_UPSTREAM_REFS))
+    if with_base:
+        _git(shallow, "fetch", "-q", "--depth", "1", "origin", "+refs/heads/grandfathered:refs/grandfathered")
+    assert _git(shallow, "rev-parse", "--is-shallow-repository") == "true"
+    _install_guard(shallow, grandfathered)
+
+    result = _push(shallow, tmp_path, head, main, branch)
+
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "no new comments or docstrings" not in result.stdout
+    assert "refusing to pass" in result.stderr
 
 
 def test_ci_the_step_fails_closed_when_main_is_not_in_the_clone(checkout, tmp_path):
