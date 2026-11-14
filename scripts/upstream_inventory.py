@@ -1447,6 +1447,18 @@ def pick_reference(sha, upstream, containing_tips):
     return sha
 
 
+def release_reference(sha):
+    finals = []
+    for ref in git("for-each-ref", "--format=%(refname)", f"--contains={sha}", "refs/upstream-tags/").split():
+        try:
+            version = Version(re.sub(r"^v\.?", "", ref.rsplit("/", 1)[-1], flags=re.IGNORECASE))
+        except InvalidVersion:
+            continue
+        if not version.is_prerelease:
+            finals.append((version, ref))
+    return resolve_ref(f"{max(finals)[1]}^{{commit}}") if finals else sha
+
+
 def merged_into_head(head, candidates, upstream, tips_for):
     if not candidates:
         return set(), {}
@@ -1781,12 +1793,40 @@ def aligned_lines(lines, reference_lines):
     return {i + k: j + k for i, j, size in matcher.get_matching_blocks() for k in range(size)}
 
 
-def upstream_drops_too(pairs, kept, anchor, reference_size):
-    previous = bisect.bisect_right(kept, anchor) - 1
-    following = previous + 1
-    before = -1 if previous < 0 else pairs.get(previous)
-    after = reference_size if following >= len(kept) else pairs.get(following)
-    return before is not None and after is not None and after == before + 1
+def upstream_between(pairs, kept, anchor, added, reference_size):
+    if added:
+        left, right = added[0] - 1, added[-1] + 1
+    else:
+        left = bisect.bisect_right(kept, anchor) - 1
+        right = left + 1
+    aligned = sorted(pairs)
+    at = bisect.bisect_right(aligned, left)
+    before = pairs[aligned[at - 1]] if at else -1
+    at = bisect.bisect_left(aligned, right)
+    after = pairs[aligned[at]] if at < len(aligned) else reference_size
+    return before + 1, after
+
+
+def upstream_had_lines(fork_sha, upstream_sha, path, numbers):
+    content = head_blob(fork_sha, path)
+    fixed = normalised_file(upstream_sha, path)
+    if content is None or fixed is None:
+        return False
+    carrier = normalised(path, content)
+    kept = kept_line_numbers(path, content)
+    pairs = aligned_lines(carrier, fixed)
+    aligned = sorted(pairs)
+    _, fix_added = fork_line_changes(upstream_sha, path)
+    for number in numbers:
+        index = bisect.bisect_left(kept, number)
+        if index >= len(kept) or kept[index] != number or index in pairs:
+            continue
+        at = bisect.bisect_left(aligned, index)
+        low = pairs[aligned[at - 1]] if at else -1
+        high = pairs[aligned[at]] if at < len(aligned) else len(fixed)
+        if not any(position in fix_added for position in range(low + 1, high)):
+            return False
+    return True
 
 
 def missing_clauses(reason):
@@ -1798,11 +1838,26 @@ def missing_clauses(reason):
 
 def replaced_by(fork_sha, sha, head, path, number):
     if sha == fork_sha or on_upstream_ref(sha) or not (is_ancestor(fork_sha, sha) and is_ancestor(sha, head)):
-        return False
+        return None
     before = followed_line(fork_sha, f"{sha}^", path, number)
-    return before is not None and any(
-        old_at <= before < old_at + old_count and new_count
-        for old_at, old_count, _, new_count in change_counts(f"{sha}^", sha, path)
+    if before is None:
+        return None
+    for old_at, old_count, new_at, new_count in change_counts(f"{sha}^", sha, path):
+        if old_at <= before < old_at + old_count and new_count:
+            return range(new_at, new_at + new_count)
+    return None
+
+
+def current_replacement(fork_sha, sha, head, path, number, named):
+    lines = replaced_by(fork_sha, sha, head, path, number)
+    if not lines:
+        return False
+    kept = set(kept_line_numbers(path, head_blob(sha, path) or ""))
+    meaningful = [line for line in lines if line in kept]
+    return bool(meaningful) and all(
+        followed_line(sha, head, path, line) is not None
+        or any(current_replacement(sha, later, head, path, line, named) for later in named)
+        for line in meaningful
     )
 
 
@@ -1812,14 +1867,16 @@ def excepted_replacement(fork_sha, head, path, own_numbers, added, exceptions):
     if not added:
         return False
     for number, ident in idents.items():
-        named = {sha for sha in map(resolve_commit, FORK_COMMIT_RE.findall(clauses.get(ident, ""))) if sha}
-        if not any(replaced_by(fork_sha, sha, head, path, number) for sha in named):
+        named = frozenset(sha for sha in map(resolve_commit, FORK_COMMIT_RE.findall(clauses.get(ident, ""))) if sha)
+        if not any(current_replacement(fork_sha, sha, head, path, number, named) for sha in named):
             return False
     used.update(idents.values())
     return True
 
 
-def own_hunk_in_upstream_form(fork_sha, head, path, hunk, reference, here, dropped, inserted, gone, exceptions=None):
+def own_hunk_in_upstream_form(
+    fork_sha, upstream_sha, head, path, hunk, reference, here, dropped, inserted, gone, exceptions=None
+):
     upstream_now = normalised_file(reference, path) if reference else None
     content = head_blob(head, path)
     if upstream_now is None or here is None or content is None or hunk["post_span"] is None:
@@ -1832,17 +1889,20 @@ def own_hunk_in_upstream_form(fork_sha, head, path, hunk, reference, here, dropp
     replacements = {}
     covered = set()
     for removed, added_numbers, anchor in later_change_blocks(fork_sha, head, path):
-        if not removed & own:
+        lost = removed & own
+        if not lost:
             continue
         added = sorted(normalised_positions(head, path, added_numbers))
-        upstream_form = (
-            all(i in pairs for i in added) if added else upstream_drops_too(pairs, kept, anchor, len(upstream_now))
+        replacement = tuple(here[i] for i in added)
+        between = upstream_between(pairs, kept, anchor, added, len(upstream_now))
+        upstream_form = upstream_now[between[0] : between[1]] == replacement and upstream_had_lines(
+            fork_sha, upstream_sha, path, lost
         )
         if not upstream_form and not (
-            exceptions and excepted_replacement(fork_sha, head, path, removed & own, added, exceptions)
+            exceptions and excepted_replacement(fork_sha, head, path, lost, added, exceptions)
         ):
             return False
-        replacements[min(removed & span)] = tuple(here[i] for i in added)
+        replacements[min(removed & span)] = replacement
         covered |= removed
     if not covered:
         return False
@@ -1857,7 +1917,7 @@ def own_hunk_in_upstream_form(fork_sha, head, path, hunk, reference, here, dropp
     return own_lines_in_place(here, path, side, dropped, inserted, gone)
 
 
-def own_lines_missing(fork_sha, head, paths, reference=None, exceptions=None):
+def own_lines_missing(fork_sha, head, paths, reference=None, exceptions=None, upstream_sha=None):
     expected = 0
     missing = []
     for hunk in commit_hunks(fork_sha):
@@ -1878,7 +1938,7 @@ def own_lines_missing(fork_sha, head, paths, reference=None, exceptions=None):
             if not own_lines_in_place(here, path, hunk["post"], dropped, inserted, gone) and not (
                 reference
                 and own_hunk_in_upstream_form(
-                    fork_sha, head, path, hunk, reference, here, dropped, inserted, gone, exceptions
+                    fork_sha, upstream_sha, head, path, hunk, reference, here, dropped, inserted, gone, exceptions
                 )
             ):
                 missing.append((path, post[1][0]))
@@ -1892,7 +1952,8 @@ def design_fork_commit(reason, head, upstream_sha, in_range, reference=None, use
     exceptions = (missing_clauses(reason), set() if used is None else used)
     carrier = None
     broken = False
-    for fork_sha in named_commits(MISSING_LINE_RE.sub("", reason), head, upstream_sha):
+    stated = MISSING_LINE_RE.sub("", reason)
+    for fork_sha in named_commits(stated, head, upstream_sha):
         if fork_sha in in_range:
             continue
         touched = {path for path in git("show", "--format=", "--name-only", "-M", fork_sha).split("\n") if path}
@@ -1900,9 +1961,9 @@ def design_fork_commit(reason, head, upstream_sha, in_range, reference=None, use
         brought = paths_bringing_upstream_change(upstream_sha, fork_sha, shared)
         if not brought and not (picks_upstream(fork_sha, upstream_sha) and any(not test_path(path) for path in shared)):
             continue
-        named = {path for path in touched if re.search(rf"(?<![\w./-]){re.escape(path)}(?![\w/-])", reason)}
+        named = {path for path in touched if re.search(rf"(?<![\w./-]){re.escape(path)}(?![\w/-])", stated)}
         expected, missing = own_lines_missing(
-            fork_sha, head, named | brought if named else touched, reference, exceptions
+            fork_sha, head, named | brought if named else touched, reference, exceptions, upstream_sha
         )
         if expected:
             broken = broken or bool(missing)
@@ -4034,10 +4095,7 @@ def parity_gate(
             if strict_security_design:
                 problems = security_design_problems(entry["reason"], head, sha, entry.get("exception_covers", {}))
             else:
-                tips = [tip_by_name[name] for name in sorted(containing.get(sha, [])) if name in tip_by_name]
-                problems = design_port_problems(
-                    entry["reason"], head, sha, in_range, pick_reference(sha, upstream, tips)
-                )
+                problems = design_port_problems(entry["reason"], head, sha, in_range, release_reference(sha))
             if problems is None:
                 del coverage[sha]
                 ledger_errors.append(
