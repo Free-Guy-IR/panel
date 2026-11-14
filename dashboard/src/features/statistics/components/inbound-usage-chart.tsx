@@ -7,6 +7,7 @@ import { type ChartConfig, ChartContainer, ChartTooltip } from '@/components/ui/
 import { useTranslation } from 'react-i18next'
 import useDirDetection from '@/hooks/use-dir-detection'
 import { useChartViewType } from '@/hooks/use-chart-view-type'
+import { useChartPeriodLimit } from '@/hooks/use-chart-period-limit'
 import { Period, type InboundUsageStat, useGetInboundsUsageStats } from '@/service/api'
 import { formatBytes, formatGigabytes } from '@/utils/formatByte'
 import { getChartSeriesColor } from '@/utils/chart-colors'
@@ -31,6 +32,7 @@ import {
   resolvePeriodOverride,
   toStatsRecord,
   TrafficShortcutKey,
+  USAGE_RECORD_BUCKET_MINUTES,
 } from '@/utils/chart-period-utils'
 import { getChartBrushWindow, getChartRenderFlags } from '@/utils/chart-performance'
 import { axisPeriodOverride } from '@/fork/charts/usage-axis-period'
@@ -197,9 +199,12 @@ function NodePieTooltip({ active, payload }: TooltipProps<number, string>) {
 export default function InboundUsageChart() {
   const [chartView, setChartView] = useState<'bar' | 'pie'>('bar')
   const [selectedTime, setSelectedTime] = useState<TrafficShortcutKey>('1w')
-  const [periodOverride, setPeriodOverride] = useState<ChartPeriodOverride>(CHART_PERIOD_OVERRIDE_AUTO)
+  const [selectedPeriodOverride, setPeriodOverride] = useState<ChartPeriodOverride>(CHART_PERIOD_OVERRIDE_AUTO)
   const [showCustomRange, setShowCustomRange] = useState(false)
   const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined)
+  const { allowedPeriods, periodOverride } = useChartPeriodLimit({ shortcut: selectedTime, customRange: showCustomRange ? customRange : undefined }, selectedPeriodOverride, setPeriodOverride, {
+    recordBucketMinutes: USAGE_RECORD_BUCKET_MINUTES,
+  })
   const [windowWidth, setWindowWidth] = useState<number>(() => (typeof window !== 'undefined' ? window.innerWidth : 1024))
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedData, setSelectedData] = useState<NodeChartDataPoint | null>(null)
@@ -467,7 +472,7 @@ export default function InboundUsageChart() {
               <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <TimeSelector selectedTime={selectedTime} setSelectedTime={handleTimeSelect} shortcuts={TRAFFIC_TIME_SELECTOR_SHORTCUTS} maxVisible={5} className="w-full sm:w-fit" />
                 <div className="flex w-full items-center gap-2 sm:w-auto">
-                  <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} cappedFrom={activeQueryRange.cappedFrom} className="min-w-0 flex-1 sm:w-[7rem] sm:flex-none" />
+                  <PeriodSelector value={periodOverride} onValueChange={setPeriodOverride} allowedPeriods={allowedPeriods} cappedFrom={activeQueryRange.cappedFrom} className="min-w-0 flex-1 sm:w-[7rem] sm:flex-none" />
                   <button
                     type="button"
                     aria-label="Custom Range"
