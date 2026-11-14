@@ -326,6 +326,7 @@ NAMED_BRANCH_RE = re.compile(
 )
 MOVED_TO_RE = re.compile(r"\bmoved\s+(?:it\s+)?(?:to|into)\s+`?([^`\s;,]*[^`\s;,.])`?", re.IGNORECASE)
 MISSING_LINE_RE = re.compile(r"\bmissing\s+`?([^`\s]+:[+-]\d+)`?\s+because\b([^;]*)", re.IGNORECASE)
+REVERSE_BLAME_RE = re.compile(r"([0-9a-f]{40}) (\d+) (\d+)(?: \d+)?")
 TEST_DIR_NAMES = frozenset({"tests", "test", "__tests__", "testdata", "e2e"})
 TEST_FILE_RE = re.compile(r"test_[^/]*\.py|[^/]*_test\.(?:py|go)|conftest\.py|[^/]*\.(?:test|spec)\.[cm]?[jt]sx?")
 SCOPED_PATH_SPLIT_RE = re.compile(r"\s*,\s*|\s+and\s+", re.IGNORECASE)
@@ -1763,16 +1764,40 @@ def later_change_blocks(old_ref, new_ref, path):
     ]
 
 
-def followed_line(old_ref, new_ref, path, number):
-    shift = 0
-    for old_at, old_count, _, new_count in change_counts(old_ref, new_ref, path):
-        if not old_count:
-            shift += new_count if old_at < number else 0
-        elif old_at <= number < old_at + old_count:
-            return None
-        elif old_at + old_count <= number:
-            shift += new_count - old_count
-    return number + shift
+@functools.lru_cache(maxsize=1024)
+def surviving_lines(fork_sha, ref, path):
+    target = resolve_commit(ref)
+    if target is None:
+        return None
+    if target == fork_sha:
+        content = head_blob(fork_sha, path)
+        return None if content is None else {number: number for number in range(1, len(content.splitlines()) + 1)}
+    result = subprocess.run(
+        ["git", "blame", "--ignore-revs-file", "", "--reverse", "--porcelain", f"{fork_sha}..{target}", "--", path],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    surviving = {}
+    for line in result.stdout.splitlines():
+        match = REVERSE_BLAME_RE.fullmatch(line)
+        if match and match.group(1) == target:
+            surviving[int(match.group(3))] = int(match.group(2))
+    return surviving
+
+
+def surviving_line(fork_sha, ref, path, number):
+    surviving = surviving_lines(fork_sha, ref, path)
+    return None if surviving is None else surviving.get(number)
+
+
+@functools.lru_cache(maxsize=1024)
+def commit_parents(sha):
+    return tuple(git("rev-list", "--parents", "-n", "1", sha).split()[1:])
 
 
 @functools.lru_cache(maxsize=256)
@@ -1799,18 +1824,19 @@ def missing_clauses(reason):
 def replaced_by(fork_sha, sha, head, path, number):
     if sha == fork_sha or on_upstream_ref(sha) or not (is_ancestor(fork_sha, sha) and is_ancestor(sha, head)):
         return False
-    before = followed_line(fork_sha, f"{sha}^", path, number)
-    return before is not None and any(
-        old_at <= before < old_at + old_count and new_count
-        for old_at, old_count, _, new_count in change_counts(f"{sha}^", sha, path)
-    )
+    for parent in commit_parents(sha):
+        at = surviving_line(fork_sha, parent, path, number) if is_ancestor(fork_sha, parent) else None
+        if at is not None and any(
+            old_at <= at < old_at + old_count and new_count
+            for old_at, old_count, _, new_count in change_counts(parent, sha, path)
+        ):
+            return True
+    return False
 
 
-def excepted_replacement(fork_sha, head, path, own_numbers, added, exceptions):
+def excepted_replacement(fork_sha, head, path, own_numbers, exceptions):
     clauses, used = exceptions
     idents = {number: f"{path}:+{number}" for number in own_numbers}
-    if not added:
-        return False
     for number, ident in idents.items():
         named = {sha for sha in map(resolve_commit, FORK_COMMIT_RE.findall(clauses.get(ident, ""))) if sha}
         if not any(replaced_by(fork_sha, sha, head, path, number) for sha in named):
@@ -1827,6 +1853,7 @@ def own_hunk_in_upstream_form(fork_sha, head, path, hunk, reference, here, dropp
     start = hunk["post_span"][0]
     span = frozenset(range(start, start + len(hunk["post"])))
     own = {start + k for k, (text, changed) in enumerate(hunk["post"]) if changed and normalise_line(path, text)}
+    lost = {number for number in own if surviving_line(fork_sha, head, path, number) is None}
     pairs = aligned_lines(here, upstream_now)
     kept = kept_line_numbers(path, content)
     replacements = {}
@@ -1838,13 +1865,17 @@ def own_hunk_in_upstream_form(fork_sha, head, path, hunk, reference, here, dropp
         upstream_form = (
             all(i in pairs for i in added) if added else upstream_drops_too(pairs, kept, anchor, len(upstream_now))
         )
-        if not upstream_form and not (
-            exceptions and excepted_replacement(fork_sha, head, path, removed & own, added, exceptions)
+        if (
+            removed & lost
+            and not upstream_form
+            and not (exceptions and excepted_replacement(fork_sha, head, path, removed & lost, exceptions))
         ):
             return False
         replacements[min(removed & span)] = tuple(here[i] for i in added)
         covered |= removed
-    if not covered:
+    if not covered or (
+        lost - covered and not (exceptions and excepted_replacement(fork_sha, head, path, lost - covered, exceptions))
+    ):
         return False
     side = []
     for k, entry in enumerate(hunk["post"]):
@@ -3298,7 +3329,7 @@ def security_design_problems(reason, head, upstream_sha, decision_covers):
         lost = [
             (idents, text)
             for idents, places, text in lines
-            if placed and absent and all(followed_line(sha, head, path, number) is None for sha, number in places)
+            if placed and absent and all(surviving_line(sha, head, path, number) is None for sha, number in places)
         ]
         if not placed:
             required = [(frozenset({hunk_ident(hunk)}), lines[0][2] if lines else f"-{pre[1][0]}" if pre else "")]

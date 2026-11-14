@@ -1249,3 +1249,88 @@ def test_a_strict_exception_excuses_only_the_carrier_line_it_names(tmp_path, cas
         assert message in result.stdout
     else:
         assert "Upstream parity gate OK" in result.stdout
+
+
+DELIVER = "def deliver(n):\n    finish(n)\n"
+DELIVER_FIXED = (
+    "def deliver(n):\n    if n.discord:\n        prepare(n)\n        post(n.hook)\n    else:\n"
+    "        body = payload(n)\n        prepare(n)\n        post(body)\n    finish(n)\n"
+)
+DELIVER_MERGED = (
+    "def deliver(n):\n    if n.discord:\n        body = payload(n)\n        prepare(n)\n        post(n.hook)\n"
+    "    else:\n        skip(n)\n    finish(n)\n"
+)
+DELIVER_STEPS = (
+    (
+        "logged",
+        DELIVER_FIXED.replace(
+            "        body = payload(n)\n        prepare(n)\n", "        body = payload(n)\n        log(n)\n"
+        ),
+    ),
+    ("merged", DELIVER_MERGED),
+    ("posted", DELIVER_MERGED.replace("        post(n.hook)\n", "        post(body)\n")),
+)
+STRICT_TRACKING_CASES = {
+    "per-commit-exceptions": ({4: "posted", 6: "merged", 7: "logged", 8: "merged"}, 0, None),
+    "cumulative-exceptions": (
+        {3: "merged", 4: "posted", 5: "merged"},
+        1,
+        "names missing `deliver.py:+3`, but that line is on refs/remotes/fork/main; the exception excuses nothing",
+    ),
+}
+
+
+def strict_restructure_world(tmp_path, case):
+    upstream = new_repo(tmp_path / "upstream")
+    base = commit(upstream, "base", {"deliver.py": DELIVER, "b.py": "three\nfour\n"})
+    fix = commit(
+        upstream,
+        "fix: prepare each delivery and check its scope",
+        {"deliver.py": DELIVER_FIXED, "b.py": "three\nCHECK_SCOPE\nfour\n"},
+    )
+    git(upstream, "tag", "v1.1.0")
+    fork = tmp_path / "fork"
+    git(tmp_path, "clone", "-q", str(upstream), str(fork))
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(fork, "config", key, value)
+    git(fork, "reset", "-q", "--hard", base)
+    port = commit(fork, "port the delivery checks", {"deliver.py": DELIVER_FIXED, "b.py": "three\nCHECK_SCOPE\nfour\n"})
+    made = {name: commit(fork, f"fork: {name} delivery", {"deliver.py": text}) for name, text in DELIVER_STEPS}
+    commit(fork, "fork feature", {"f.py": "fork\n"})
+    lines, _, _ = STRICT_TRACKING_CASES[case]
+    exception = "".join(
+        f" missing `deliver.py:+{line}` because {made[step]} reworks it;" for line, step in lines.items()
+    )
+    panel = new_repo(tmp_path / "panel")
+    forks = panel / "upstream-forks"
+    forks.mkdir()
+    (forks / "forks.toml").write_text(f"""
+[[repo]]
+name = "kit"
+mode = "ledger"
+fork = "Owner/kit"
+upstream = "Up/kit"
+fork_url = "{fork}"
+upstream_url = "{upstream}"
+ported_ref = "main"
+grandfathered_base = "{base}"
+ledger = "upstream-forks/kit.md"
+reason = "no tracker of its own"
+""")
+    (forks / "kit.md").write_text(
+        f"## Ported by design\n\n- `{fix}` ported in fork commit {port};{exception} security: yes, it checks tokens\n"
+    )
+    return forks / "forks.toml", fix
+
+
+@pytest.mark.parametrize("case", sorted(STRICT_TRACKING_CASES))
+def test_a_strict_hunk_line_is_lost_only_when_a_commit_on_its_history_removed_it(tmp_path, case):
+    _, code, message = STRICT_TRACKING_CASES[case]
+    config, fix = strict_restructure_world(tmp_path, case)
+    result = run(config, "--today", "2026-10-27")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but" in result.stdout
+        assert message in result.stdout
+    else:
+        assert "Upstream parity gate OK" in result.stdout
