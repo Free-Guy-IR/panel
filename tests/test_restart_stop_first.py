@@ -86,7 +86,6 @@ async def test_local_bulk_connect_passes_stop_first_to_each_node(monkeypatch: py
     core = object()
     operation = bare_operation()
     operation._get_core_users_map = AsyncMock(return_value=({2: core}, {2: []}))
-    # The fork re-reads every node in a fresh view and registers it before connecting.
     monkeypatch.setattr(node_operation_module, "get_node_by_id", AsyncMock(return_value=node))
     monkeypatch.setattr(NodeOperation, "_register_if_wanted", AsyncMock(return_value=True))
     monkeypatch.setattr(node_operation_module, "bulk_update_node_status", AsyncMock())
@@ -110,7 +109,6 @@ async def test_connect_node_passes_stop_first(monkeypatch: pytest.MonkeyPatch):
     )
 
     assert result["status"] == NodeStatus.connected
-    # The fork adds attach_users and held to the same call.
     assert start.await_args.kwargs["force_start"] is True
     assert start.await_args.kwargs["stop_first"] is False
 
