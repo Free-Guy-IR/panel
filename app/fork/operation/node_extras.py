@@ -20,7 +20,7 @@ from app.fork.operation.usage_guard import usage_aggregation_guard
 from app.models.admin import AdminDetails
 from app.models.core import CoreType
 from app.models.node import InboundUsageQuery, NodeListQuery
-from app.models.stats import InboundUsageStatsList
+from app.models.stats import USAGE_RECORD_GRANULARITY, InboundUsageStatsList
 from app.node import node_manager
 from app.operation.permissions import PermissionScope, _get_resource_action, _permission_level, get_allowed_group_ids
 from app.utils.logger import get_logger
@@ -449,7 +449,9 @@ class NodeExtraCoresMixin:
         query: InboundUsageQuery,
         admin: AdminDetails | None = None,
     ) -> InboundUsageStatsList:
-        start, end = await self.validate_dates(query.start, query.end, True, period=query.period)
+        start, end = await self.validate_dates(
+            query.start, query.end, True, period=query.period, granularity=USAGE_RECORD_GRANULARITY
+        )
         async with usage_aggregation_guard(("inbounds_usage", admin.id if admin else None)):
             return await fetch_inbounds_usage(
                 db,
