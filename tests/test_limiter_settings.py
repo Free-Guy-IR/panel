@@ -66,11 +66,11 @@ async def test_a_cycle_that_comes_round_too_early_stands_aside(monkeypatch):
         await job.record_connection_states()
         assert prune.await_count == 1, "the first cycle runs"
 
-        clock["t"] += 60  # the next tick, but only a minute later
+        clock["t"] += 60
         await job.record_connection_states()
         assert prune.await_count == 1, "a cycle inside the interval stands aside"
 
-        clock["t"] += 60  # now two minutes since the last check
+        clock["t"] += 60
         await job.record_connection_states()
         assert prune.await_count == 2, "the cycle at the interval runs"
 

@@ -150,9 +150,6 @@ async def activate_all_disabled_users(
     """
     Activate all disabled users or users under a specific admin.
 
-    Users whose expire date has passed become expired and users over their
-    data limit become limited instead of being revived to active.
-
     Args:
         db (AsyncSession): Database session.
         admin (Optional[Admin]): Admin to filter users by, if any.

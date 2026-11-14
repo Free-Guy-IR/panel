@@ -72,7 +72,6 @@ class SubscriptionExtrasMixin:
 
     @staticmethod
     async def build_openvpn_files(user: UsersResponseWithInbounds) -> list[dict]:
-        """Per-protocol .ovpn files for the subscription page's download buttons."""
         from app.subscription.share import generate_openvpn_files
 
         files = await generate_openvpn_files(user)
@@ -103,7 +102,6 @@ class SubscriptionExtrasMixin:
 
     @classmethod
     def _parse_ping_targets(cls, links: list[str]) -> dict[str, tuple[int, bool]]:
-        """Parse config links into {host: (port, udp_based)}, one entry per host, skipping non-pingable protocols."""
         targets: dict[str, tuple[int, bool]] = {}
         for raw in links:
             raw = raw.strip()
@@ -116,7 +114,6 @@ class SubscriptionExtrasMixin:
             udp = scheme in cls._PING_UDP_SCHEMES
             host, port = "", 443
             if scheme == "vmess":
-                # vmess payload is base64-encoded JSON: {"add": host, "port": port, ...}
                 try:
                     payload = raw[m.end() :].split("#", 1)[0].split("?", 1)[0].strip()
                     data = json.loads(base64.b64decode(payload + "=" * (-len(payload) % 4)))
@@ -129,7 +126,7 @@ class SubscriptionExtrasMixin:
                 if "@" in rest:
                     rest = rest.rsplit("@", 1)[1]
                 rest = rest.strip().rstrip("/")
-                if rest.startswith("["):  # IPv6 [addr]:port
+                if rest.startswith("["):
                     host, _, tail = rest.partition("]")
                     host = host[1:]
                     p = tail.lstrip(":") or "443"
@@ -150,11 +147,6 @@ class SubscriptionExtrasMixin:
 
     @staticmethod
     async def _tcp_ping(host: str, port: int, udp_based: bool = False, timeout: float = 3.0) -> int:
-        """TCP handshake latency in ms, or -1 when unreachable / timed out.
-
-        For UDP-based protocols (hysteria2/tuic) a fast TCP "connection refused" still
-        proves the host is alive (the kernel answered with RST), so it counts as reachable.
-        """
         loop = asyncio.get_running_loop()
         start = loop.time()
         writer = None
@@ -175,11 +167,6 @@ class SubscriptionExtrasMixin:
                     pass
 
     async def ping(self, db: AsyncSession, token: str) -> dict[str, int]:
-        """Server-side TCP latency/health of the user's config server hosts (no proxy core needed).
-
-        Returns {host: latency_ms} where latency_ms > 0 means reachable and -1 means down/timeout,
-        which the subscription page renders as a live per-server status dot + ping badge.
-        """
         db_user = await self.get_validated_sub(db, token=token)
         await self._enforce_ping_rate_limit(db_user.id)
         user = await self.validated_user(db_user)

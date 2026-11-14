@@ -61,7 +61,7 @@ async def test_a_user_the_job_loads_cold_is_restricted_and_can_be_pushed(db):
 
     user, group_id = await _stored_user(db)
     user_id = user.id
-    db.expunge_all()  # the job starts from a cold session: nothing is in memory
+    db.expunge_all()
     settings = ConnectionLimit(enforcement_enabled=True, persistence_cycles=3, punishment_steps=[-1])
     pushed = AsyncMock(side_effect=_what_update_user_reads)
 

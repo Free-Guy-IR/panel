@@ -2722,7 +2722,6 @@ def test_parallel_creates_respect_role_max_users(access_token, mode):
 
 
 def test_bulk_set_owner_credits_a_user_that_had_no_owner(access_token):
-    """A user whose traffic was counted against nobody starts counting against the admin that takes it."""
     taker = create_admin(access_token)
     user = create_user(access_token, payload={"username": unique_name("orphan_credit")})
 
@@ -2753,8 +2752,6 @@ def test_bulk_set_owner_credits_a_user_that_had_no_owner(access_token):
 
 
 def test_lock_admin_quota_row_does_not_commit_the_caller(access_token):
-    """create_user prepares proxy secrets and WireGuard addresses under a named lock and row locks before the
-    quota check, so a commit here would publish the caller's pending writes and release those locks."""
     admin = create_admin(access_token)
 
     async def _admin_id() -> int:

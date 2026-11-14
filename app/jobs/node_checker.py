@@ -118,7 +118,6 @@ async def _node_health_settings() -> NodeHealthSettings:
     try:
         return (await general_settings()).node_health
     except Exception as exc:
-        # A settings store that cannot be read must not stop the fleet being checked.
         logger.debug("Could not read the node health settings, using the defaults: %s", exc)
         return _DEFAULT_NODE_HEALTH
 

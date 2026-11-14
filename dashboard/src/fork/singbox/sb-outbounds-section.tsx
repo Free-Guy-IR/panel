@@ -19,7 +19,6 @@ function outboundServerLabel(o: WireRow): string {
 interface SectionProps {
   headerAddPulse?: SectionHeaderAddPulse
   headerAddEpoch?: number
-  /** When set, restrict to these outbound types (Balancers = selector/urltest). */
   onlyTypes?: readonly SingBoxOutboundType[]
   sectionId?: 'outbounds' | 'balancers'
 }
@@ -29,7 +28,6 @@ export function SbOutboundsSection({ headerAddPulse, headerAddEpoch, onlyTypes, 
   const { draft, updateSbDraft } = useSbDraft()
 
   const allOutbounds = useMemo(() => (draft?.outbounds ?? []) as unknown as WireRow[], [draft])
-  // Balancers view = only selector/urltest, but writes must map back into the shared outbounds array.
   const visibleIndexes = useMemo(
     () => allOutbounds.map((_, i) => i).filter(i => !onlyTypes || onlyTypes.includes(String(allOutbounds[i]!.type) as SingBoxOutboundType)),
     [allOutbounds, onlyTypes],
@@ -42,15 +40,12 @@ export function SbOutboundsSection({ headerAddPulse, headerAddEpoch, onlyTypes, 
         const all = [...((d.outbounds ?? []) as unknown as WireRow[])]
         const idxs = all.map((_o, i) => i).filter(i => !onlyTypes || onlyTypes.includes(String(all[i]!.type) as SingBoxOutboundType))
         if (nextVisible.length === idxs.length) {
-          // Edit / reorder of the visible slice: write each back in its original position so the
-          // rest of the outbounds array (and its order) is untouched.
           const out = [...all]
           idxs.forEach((origIdx, k) => {
             out[origIdx] = nextVisible[k]!
           })
           return { ...d, outbounds: out as never }
         }
-        // Add / remove: keep the non-visible outbounds, then the new visible slice.
         const nonVisible = all.filter((_, i) => !idxs.includes(i))
         return { ...d, outbounds: [...nonVisible, ...nextVisible] as never }
       })

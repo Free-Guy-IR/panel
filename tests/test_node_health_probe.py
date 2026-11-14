@@ -262,7 +262,6 @@ async def test_backoff_counts_from_when_the_check_gets_a_slot(checker):
     checker.monkeypatch.setattr(node_checker, "NODE_CHECK_SEM", slots)
     db_node, node = _db_node(), _fake_node()
 
-    # The fork takes the check slot one level up, in _bounded_health_check.
     await slots.acquire()
     check = asyncio.create_task(node_checker._bounded_health_check(db_node, node))
     await asyncio.sleep(0)

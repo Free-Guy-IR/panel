@@ -58,7 +58,7 @@ async def test_the_cleanup_commits_each_chunk_instead_of_holding_one_transaction
     deleted = await remove_expired_users(db, target="limited")
 
     assert sorted(deleted) == [f"user{n}" for n in range(5)]
-    assert commits[0] == 3  # 2 + 2 + 1, not one transaction for all five
+    assert commits[0] == 3
     assert (await db.scalar(select(func.count()).select_from(User))) == 0
 
 

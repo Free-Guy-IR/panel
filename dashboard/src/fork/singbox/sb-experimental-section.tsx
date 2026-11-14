@@ -4,7 +4,6 @@ import { SbSelectField, SbTextField, useSbDraft, type WireRow } from '@/fork/sin
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
-/** experimental.clash_api + experimental.cache_file — two toggle cards, mirroring the spec. */
 export function SbExperimentalSection() {
   const { t } = useTranslation()
   const { draft, updateSbDraft } = useSbDraft()

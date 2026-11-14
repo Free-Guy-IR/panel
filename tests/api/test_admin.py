@@ -724,7 +724,6 @@ def _await_login_notification(mock: AsyncMock) -> None:
 
 
 def test_failed_login_notification_never_carries_the_typed_password(monkeypatch):
-    """A failed login must report username/IP/result only — never the attempted password."""
     login_notification = AsyncMock()
     monkeypatch.setattr("app.notification.admin_login", login_notification)
 

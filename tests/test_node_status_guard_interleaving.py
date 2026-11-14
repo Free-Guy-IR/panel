@@ -76,7 +76,6 @@ async def test_overlapping_guarded_writers_move_the_node_once_and_lose_no_newer_
         assert observed.status is NodeStatus.connected
         await start.wait()
         async with recorder_db() as session:
-            # A read interleaved with the other writers' commits, in this writer's session.
             seen.append((await session.execute(select(Node.status).where(Node.id == node_id))).scalar_one())
             return await update_node_status(
                 session,
@@ -91,14 +90,11 @@ async def test_overlapping_guarded_writers_move_the_node_once_and_lose_no_newer_
     start.set()
     results = await asyncio.gather(*tasks)
 
-    # Every writer observed the same connected node, so all but the one that moves it
-    # are superseded. Without the guard each of them overwrites the one before it.
     accepted = [result for result in results if result is not None]
     assert 0 < len(accepted) < WRITERS, results
     status, message = await _row(recorder_db, node_id)
     assert status is NodeStatus.error
     assert message in {f"writer-{index}" for index in range(WRITERS)}
-    # A reader never sees the node move back, and never sees a status nobody wrote.
     assert set(seen) <= {NodeStatus.connected, NodeStatus.error}, seen
     assert seen == sorted(seen, key=(NodeStatus.connected, NodeStatus.error).index), seen
 

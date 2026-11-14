@@ -289,25 +289,6 @@ async def get_nodes_usage(
     node_id: int | None = None,
     group_by_node: bool = False,
 ) -> NodeUsageStatsList:
-    """
-    Retrieves usage data for all nodes within a specified time range.
-    Groups data by periods in the timezone of the start/end parameters.
-
-    Every row inside [start, end) is returned exactly once, so adjacent ranges are
-    additive. A bucket at either edge may cover only the part of its period that the
-    range covers (e.g. 14:00-15:00 reported from a start of 14:02:37).
-
-    Args:
-        db (AsyncSession): The database session.
-        start (datetime): The start time of the usage period (timezone-aware).
-        end (datetime): The end time of the usage period (timezone-aware).
-        period (Period): The time period for grouping (minute, hour, day, month).
-        node_id (Optional[int]): Filter by specific node ID.
-        group_by_node (bool): Whether to group results by node.
-
-    Returns:
-        NodeUsageStatsList: A NodeUsageStatsList contain list of NodeUsageResponse objects containing usage data.
-    """
     # Get database dialect for later use
     dialect = db.bind.dialect.name
 

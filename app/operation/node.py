@@ -492,9 +492,9 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         users = await resolve_users(users)
         check_fence(held)
         await drain_node_usage(pg_node, db_node.id)
-        # Starting WireGuard with thousands of peers makes the lifecycle RPC exceed its
-        # short timeout. Bring up the interface first, then apply peers through the
-        # node's bounded delta-sync path below.
+        # Starting WireGuard with thousands of peers makes the lifecycle RPC
+        # exceed its short timeout. Bring up the interface first, then apply
+        # peers through the node's bounded delta-sync path below.
         batch_wireguard_users = (
             backend_type == service.BackendType.WIREGUARD and len(users) >= WIREGUARD_BATCHED_START_THRESHOLD
         )
@@ -586,9 +586,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             db_node (Node): Node object from database.
             core: Pre-fetched core config for this node.
             users: Core users or a deferred snapshot loader, used only for Start.
-            extra_cores: Additional cores to run alongside the primary one.
-            force_start: Push a new Start RPC (and re-add running extra backends) even when
-                the node looks healthy, so a changed config actually reaches the daemon.
+            force_start: If True, push a new Start RPC even when the core is already running.
             stop_first: With force_start, stop the core before Start. False lets the node apply
                 a changed config to the running core when it can.
 
@@ -1018,7 +1016,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         Args:
             db (AsyncSession): Database session.
             nodes (list[Node]): List of nodes to connect.
-            force_start: Push a new Start RPC even to healthy nodes (config apply / restart).
+            force_start: Push a new Start RPC (admin restart / core apply).
             stop_first: With force_start, stop each core before Start.
         """
         await self._connect_bulk_impl(db, nodes, force_start=force_start, stop_first=stop_first)
@@ -1035,7 +1033,7 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
         Args:
             db (AsyncSession): Database session.
             node_id (int): ID of the node to connect.
-            force_start: Push a new Start RPC even when the node looks healthy.
+            force_start: Push a new Start RPC (admin restart / core apply).
             health_check: Defer automatic recovery status until probes confirm it.
         """
         if health_check:
@@ -1779,7 +1777,6 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             response = await node.update_node()
         except NodeAPIError as e:
             await self.raise_error(message=e.detail, code=_maintenance_error_status(e))
-        # The request's session was released before the RPC, so write in a fresh one.
         async with GetDB() as fresh:
             await self._mark_node_reconnecting_after_update(fresh, node_id, node)
         return response.json()

@@ -51,7 +51,6 @@ _NODE_IDS = itertools.count(60000 + random.randrange(0, 30000) * 10)
 
 @pytest.fixture(autouse=True)
 def _serve_node_health_settings(monkeypatch: pytest.MonkeyPatch):
-    """The health check reads its thresholds from the stored settings; react to one probe."""
     from app.jobs import node_checker as health_checker
 
     node_health = NodeHealthSettings.model_construct(

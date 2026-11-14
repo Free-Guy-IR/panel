@@ -548,7 +548,6 @@ class XrayConfiguration(BaseSubscription):
         )
 
     def _build_hysteria2(self, address: str, inbound: SubscriptionInboundData, settings: dict) -> tuple:
-        """Build Hysteria2 as the Xray-shaped hysteria outbound clients already accept"""
         return self._build_outbound(
             protocol_type="hysteria",
             address=address,

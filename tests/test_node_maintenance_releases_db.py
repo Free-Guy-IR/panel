@@ -125,8 +125,6 @@ async def test_local_maintenance_wait_holds_no_db_connection(bounded_db, monkeyp
         return bridge_node
 
     monkeypatch.setattr(node_operation_module.node_manager, "get_node", get_node)
-    # The post-update "connecting" write happens after the RPC, in its own session;
-    # this test is about the connection held while the RPC waits.
     monkeypatch.setattr(NodeOperation, "_mark_node_reconnecting_after_update", AsyncMock())
     operation = NodeOperation(OperatorType.API)
     operation._update_node_api_impl = operation._update_node_api_local

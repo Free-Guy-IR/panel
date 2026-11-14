@@ -62,7 +62,6 @@ class _NullDB:
 
 @pytest.fixture(autouse=True)
 def _serve_node_health_settings(monkeypatch: pytest.MonkeyPatch):
-    """The health check reads its thresholds from the stored settings; react to one probe."""
     node_health = NodeHealthSettings.model_construct(
         fail_threshold=1, recover_threshold=1, probe_timeout=5, max_backoff=60
     )
@@ -113,7 +112,6 @@ async def test_one_unreachable_node_does_not_stretch_the_fleet_health_round(monk
     monkeypatch.setattr(node_checker.node_manager, "get_nodes", AsyncMock(return_value={57: object(), 1: object()}))
     monkeypatch.setattr(node_checker, "process_node_health_check", fake_check)
     monkeypatch.setattr(node_checker, "NODE_CHECK_TIMEOUT", 3)
-    # A run now returns before the next tick instead of leaving every check unawaited.
     monkeypatch.setattr(node_checker.job_settings, "core_health_check_interval", 0.25)
     monkeypatch.setattr(node_checker, "runtime_settings", SimpleNamespace(role=SimpleNamespace(runs_node=True)))
 

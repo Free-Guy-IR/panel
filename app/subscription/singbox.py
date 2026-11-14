@@ -394,7 +394,6 @@ class SingBoxConfiguration(BaseSubscription):
         udp_hop = quic_params.get("udpHop") or {}
         hop_ports = udp_hop.get("ports")
         if hop_ports:
-            # sing-box server_ports wants START:END (colon); finalmask stores START-END (dash)
             config["server_ports"] = [str(hop_ports).replace("-", ":")]
         hop_iv = udp_hop.get("hopInterval") or udp_hop.get("interval")
         if hop_iv:

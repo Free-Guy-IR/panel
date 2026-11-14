@@ -63,7 +63,7 @@ export function CoreSectionTabsPlaceholder({
   className,
 }: {
   kind: CoreKind
-  /** Defaults: inbounds (xray/singbox) / interface (wg) / instances (openvpn) / settings (l2tp). */
+  /** Defaults: inbounds (xray) / interface (wg). */
   activeSectionId?: string
   className?: string
 }) {

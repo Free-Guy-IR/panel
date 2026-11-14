@@ -104,9 +104,6 @@ def test_true_permission_no_scope_check():
     enforce_scope(admin, "users", "read", target_admin_id=99)  # should not raise (True = no scope)
 
 
-# --- get_scope_admin_id ---
-
-
 def test_scope_admin_id_owner_gets_no_filter():
     admin = _make_admin(is_owner=True, admin_id=1)
     assert get_scope_admin_id(admin, "users", "read") is None

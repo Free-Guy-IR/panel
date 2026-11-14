@@ -1,11 +1,5 @@
 name: Undefined-name guard
 
-# Two production incidents came from names that existed in the code but were
-# never defined: a merge left `exempt_group_ids` behind after the parameter was
-# renamed (every restricted admin got a 500 on user creation), and a hand-ported
-# helper referenced `formatted_announce_url` in a function that never computed
-# it. Neither is caught by the image build, so check for them explicitly.
-
 on:
   push:
     branches: ['**']

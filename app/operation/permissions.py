@@ -138,9 +138,8 @@ def is_scope_all(admin: AdminDetails, resource: str, action: str) -> bool:
 
 def get_scope_admin_id(admin: AdminDetails, resource: str, action: str) -> int | None:
     """
-    Return admin.id if scope=OWN, None if scope=ALL.
+    Return admin.id if scope=OWN, else None.
     Pass as admin_id to CRUD queries so the DB enforces scope.
-    Raises PermissionDenied if the action is missing or explicitly disabled.
     """
     if admin.is_owner:
         return None

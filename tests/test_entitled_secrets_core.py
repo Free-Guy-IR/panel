@@ -63,7 +63,6 @@ def quiet_core(monkeypatch):
         synced.append(sorted(user.username for user in users))
 
     def _validated_core():
-        # node_facing() reads what nodes receive for a core.
         return SimpleNamespace(type=CoreType.xray, to_str=lambda: "{}", exclude_inbound_tags=[])
 
     async def get_core(core_id):

@@ -245,8 +245,6 @@ export default function CoreEditorPage() {
 
   useEffect(() => {
     if (isNew || !validId || !coreData || serverConfigJson === null) return
-    // xray/wg/singbox/openvpn/l2tp cores are understood here. Loading anything else
-    // would silently misparse it and re-save it as an xray core on the next save.
     if (!isSupportedCoreEditorKind(coreData.type)) {
       toast.error(t('coreEditor.unsupportedType.title', { defaultValue: 'Unsupported core type' }), {
         description: t('coreEditor.unsupportedType.description', {
@@ -681,8 +679,6 @@ export default function CoreEditorPage() {
 
     if (kind === 'singbox') {
       const section = activeSection as SbCoreSection
-      // Titles/button labels are plain strings (PageHeader t()'s them; unknown strings pass through)
-      // so the parity sections render correctly without adding i18n keys — matching the nav labels.
       return {
         inbounds: {
           title: 'coreEditor.section.inbounds',

@@ -58,12 +58,6 @@ def test_render_includes_connection_block_per_matching_instance():
 
 
 def test_one_file_per_protocol_each_carrying_every_remote_of_that_protocol():
-    """A direct and a tunnelled remote of the same protocol belong in ONE file.
-
-    This is what lets the subscription page offer exactly two downloads - a TCP
-    config and a UDP config - while each still fails over between the direct
-    server and the relay.
-    """
     conf = OpenVPNConfiguration()
     conf.components.append(_component(address="direct.example.com", port=1194, protocol="udp"))
     conf.components.append(_component(address="relay.example.com", port=3000, protocol="udp"))
@@ -99,7 +93,6 @@ def test_instances_from_a_foreign_pki_are_dropped():
 
 
 def test_tuning_is_handed_to_the_client_and_uses_the_tightest_value():
-    """A file must survive its most constrained remote, so the smallest wins."""
     conf = OpenVPNConfiguration()
     conf.components.append(_component(address="direct.example.com", protocol="udp", port=1194, tun_mtu=0, mssfix=1400))
     conf.components.append(_component(address="relay.example.com", protocol="udp", port=3000, tun_mtu=1300, fragment=1300, mssfix=1300))

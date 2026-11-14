@@ -207,8 +207,6 @@ export default function Cores({ cores, onDuplicateCore, onDeleteCore, canCreate 
   const handleRowEdit = (core: CoreResponse) => {
     if (!canUpdate) return
 
-    // The advanced visual editor understands xray/wg/singbox cores; anything else (e.g.
-    // l2tp) still routes to the raw-JSON modal instead of silently corrupting it.
     if (getCoresListUseConfigModal() || !isSupportedCoreEditorKind(core.type)) {
       openCoreConfigModalForEdit(core)
       return

@@ -502,7 +502,7 @@ def build_node_usage_upsert(dialect: str, upsert_param: dict):
         upsert_param: Parameter dict with keys: node_id, created_at, up, down
 
     Returns:
-        list: One (statement, params) pair for the dialect-specific upsert.
+        tuple: (statements_list, params_list) - For SQLite returns 2 statements, others return 1
     """
     dialect = sql_family(dialect)
     if dialect == "postgresql":
@@ -630,16 +630,6 @@ async def run_in_retried_transaction(operation, max_retries: int = DEADLOCK_MAX_
 
 
 async def safe_execute_many(statements: list[tuple], max_retries: int = DEADLOCK_MAX_RETRIES):
-    """
-    Execute multiple statements atomically in a single transaction.
-
-    Same deadlock/lock retry handling as safe_execute; on any failure the whole
-    batch rolls back so multi-table updates cannot be applied partially.
-
-    Args:
-        statements: List of (stmt, params) tuples; params may be None
-        max_retries (int, optional): Maximum number of retry attempts
-    """
     dialect = sql_family(await get_dialect())
     prepared = []
     for stmt, params in statements:
@@ -666,13 +656,10 @@ async def safe_execute(stmt, params=None, max_retries: int = DEADLOCK_MAX_RETRIE
     Safely execute database operations with deadlock and connection handling.
     Creates a fresh DB session for each retry attempt to release locks.
 
-    Reduced retries to prevent retry amplification under load.
-    Dropping some stats is better than crashing the system.
-
     Args:
         stmt: SQLAlchemy statement to execute
         params (list[dict], optional): Parameters for the statement
-        max_retries (int, optional): Maximum number of retry attempts
+        max_retries (int, optional): Maximum number of attempts including the first
     """
     await safe_execute_many([(stmt, params)], max_retries=max_retries)
 

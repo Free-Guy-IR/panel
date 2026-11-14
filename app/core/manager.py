@@ -195,12 +195,7 @@ class CoreManager:
             await self._reload_from_cache()
 
     async def _publish_invalidation(self, message: dict):
-        """Publish core update message via global router.
-
-        Retries transient failures: the router swallows publish errors by default,
-        and a silently lost invalidation leaves sibling workers serving stale cores
-        until their next restart, even though the KV snapshot was already updated.
-        """
+        """Publish core update message via global router."""
         last_exc: Exception | None = None
         for attempt in range(3):
             try:

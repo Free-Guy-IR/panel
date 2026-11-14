@@ -17,13 +17,11 @@ import { ChevronDown, Pencil, Plus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-/** A wire-shaped row (outbound / route rule / rule-set / dns server / dns rule). */
 export type WireRow = Record<string, unknown>
 
 export interface SbListSectionProps<T extends WireRow> {
   headerAddPulse?: SectionHeaderAddPulse
   headerAddEpoch?: number
-  /** Which nav section this is — the page-header "+ Add" pulse is keyed on it. */
   sectionId: SbCoreSection
   rows: readonly T[]
   onRowsChange: (rows: T[]) => void
@@ -33,26 +31,17 @@ export interface SbListSectionProps<T extends WireRow> {
   emptyLabel?: string
   minRowCount?: number
   minRowCountMessage?: string
-  /** Either a single default factory (single "+ Add" button) or a typed menu. */
   createRow: (type?: string) => T
   addTypes?: readonly string[]
   addTypeLabel?: (type: string) => string
-  /** Single "+ Add" toolbar button (used when there is no type menu and no page-header pulse). */
   singleAddLabel?: string
   reorder?: boolean
   dialogTitleAdd: string
   dialogTitleEdit: string
   dialogSize?: 'md' | 'lg' | 'xl'
-  /** Render the dialog body for `row`; call `patch` with a whole new row on any change. */
   renderBody: (row: T, patch: (next: T) => void) => React.ReactNode
 }
 
-/**
- * The shared list-shell + add/edit-dialog machine for every sing-box wire-object section.
- * Rows are plain JSON objects (exactly the sing-box wire shape); edits are live in edit mode
- * and buffered in add mode, mirroring the Xray sections. Persist validation is sing-box's own
- * (Monaco + save-time), so the Xray inline persist-validation is disabled here.
- */
 export function SbListSection<T extends WireRow>(props: SbListSectionProps<T>) {
   const { t } = useTranslation()
   const { rows, onRowsChange, columns, createRow, addTypes, sectionId, headerAddPulse, headerAddEpoch } = props
@@ -202,10 +191,6 @@ export function SbListSection<T extends WireRow>(props: SbListSectionProps<T>) {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Small field controls used by the section dialogs.
-// ---------------------------------------------------------------------------
-
 export function SbField({ label, hint, children, className }: { label: React.ReactNode; hint?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-1.5', className)}>
@@ -274,15 +259,10 @@ export function SbSwitchRow({ label, hint, checked, onChange }: { label: React.R
   )
 }
 
-/**
- * Advanced escape hatch: edits the whole wire object as raw JSON. Because every section stores
- * exactly the sing-box wire shape, this exposes any field the structured controls don't model.
- */
 export function SbRawJsonField<T extends WireRow>({ row, patch, label }: { row: T; patch: (next: T) => void; label?: React.ReactNode }) {
   const { t } = useTranslation()
   const [text, setText] = useState(() => JSON.stringify(row, null, 2))
   const [error, setError] = useState<string | null>(null)
-  // Re-sync when a different row is opened (structured edits also flow in).
   const rowKey = JSON.stringify(row)
   const lastRowKey = useRef(rowKey)
   useEffect(() => {
@@ -322,7 +302,6 @@ export function SbRawJsonField<T extends WireRow>({ row, patch, label }: { row: 
   )
 }
 
-/** All outbound tags in the draft (for selector/urltest member + route action pickers). */
 export function useSbOutboundTags(draft: SingBoxCoreDraft | null): string[] {
   return useMemo(() => {
     if (!draft) return []
@@ -330,7 +309,6 @@ export function useSbOutboundTags(draft: SingBoxCoreDraft | null): string[] {
   }, [draft])
 }
 
-/** Convenience: read the sb draft + a stable updateSbDraft-based setter for a wire-array path. */
 export function useSbDraft() {
   const draft = useCoreEditorStore(s => s.sbDraft)
   const updateSbDraft = useCoreEditorStore(s => s.updateSbDraft)

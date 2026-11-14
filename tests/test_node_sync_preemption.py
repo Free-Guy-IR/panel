@@ -105,8 +105,6 @@ async def _settle():
 
 @pytest.mark.asyncio
 async def test_remove_node_cancels_a_stuck_bulk_delivery(manager: NodeManager):
-    """Every push goes through the bridge's per-user queue (fork override b46a2cbc4), and a
-    stuck node makes it wait for its timeout. Removing the node must not queue behind it."""
     node = await manager.update_node(_make_node(1))
     node.gate = asyncio.Event()  # never released: the node is stuck
 
@@ -163,9 +161,6 @@ async def test_unchanged_reconnect_keeps_sync_but_connection_change_cancels_it(m
 @pytest.mark.asyncio
 @pytest.mark.parametrize("change", [{"name": "renamed"}, {"usage_coefficient": 2.0}])
 async def test_metadata_edit_keeps_bulk_deltas(manager: NodeManager, change: dict):
-    """A metadata-only edit must not drop pending deltas: nothing would re-send them once
-    such edits no longer restart the node. The fork keeps the live connection for a name or
-    coefficient change (32b4442a6), so the delivery in flight reaches that same object."""
     node = await manager.update_node(_make_node(1))
     node.gate = asyncio.Event()
     users = [object() for _ in range(4)]

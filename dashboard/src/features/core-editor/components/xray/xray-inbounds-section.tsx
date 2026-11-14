@@ -1586,7 +1586,6 @@ export function XrayInboundsSection({ headerAddPulse, headerAddEpoch }: XrayInbo
     const paddingBytesCurrent = getTransportMetaValue(xhttpExtra, 'xpaddingbytes')
     const hasPaddingBytes = paddingBytesCurrent !== undefined && String(paddingBytesCurrent).trim() !== '' && String(paddingBytesCurrent).trim() !== '0-0'
     if (hasPaddingBytes) return
-    /* xPaddingBytes auto-default removed (user-controlled) */
   }, [inboundTransportType, xPaddingObfsEnabled, xhttpExtra, xPaddingBytesKey, updateXhttpMeta])
 
   useEffect(() => {

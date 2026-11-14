@@ -273,10 +273,7 @@ async def test_metadata_edit_waits_for_batched_start(managed: NodeManager):
     assert await asyncio.wait_for(start, 1) is STARTED
     kept = await asyncio.wait_for(edit, 1)
 
-    # The fork keeps the live connection for a name or coefficient change (32b4442a6),
-    # so the whole peer set still lands on the object the start was given.
     assert kept is pg_node
     assert kept.name == "renamed"
     assert sum(_batches(pg_node)) == len(users)
-    # A metadata-only edit never stops the remote backend.
     assert ("stop",) not in pg_node.calls

@@ -86,12 +86,6 @@ async def get_inbounds_usage(
     inbound_tag: str | None = None,
     node_id: int | None = None,
 ) -> InboundUsageStatsList:
-    """Per-inbound traffic grouped into period buckets.
-
-    Deliberately the same shape and bucketing rules as get_nodes_usage - every row
-    in range is returned exactly once and edge buckets are kept - so both series can
-    be shown on the same axes without one being offset against the other.
-    """
     dialect = db.bind.dialect.name
 
     trunc_expr = _build_trunc_expression(db, period, NodeInboundUsage.created_at, start)

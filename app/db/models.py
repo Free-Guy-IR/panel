@@ -1144,12 +1144,6 @@ class TempKey(Base):
 
 
 def _register_fork_model_tables() -> None:
-    """Import fork model modules after IdMixin exists so their tables register.
-
-    Import the modules, not the class names. The class modules import IdMixin
-    from this file; a `from ... import Class` here would fail if those modules
-    were already mid-import.
-    """
     import app.fork.models.api_key_permissions as _fork_api_key_permissions
     import app.fork.models.connection as _fork_connection
     import app.fork.models.node_inbound_usage as _fork_inbound

@@ -41,7 +41,6 @@ export interface CoreEditorFormDialogProps {
   initialData?: unknown
   /** Function that returns the current dialog data to compare against `initialData`. */
   getCurrentData?: () => unknown
-  /** Called when the user confirms discarding unsaved edits, before the dialog closes. */
   onDiscard?: () => void
   /** Optional overrides for discard dialog texts. */
   discardTitle?: ReactNode

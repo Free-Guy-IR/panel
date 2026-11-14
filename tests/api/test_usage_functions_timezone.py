@@ -304,11 +304,6 @@ class TestGetNodesUsageTimezone:
 
     @pytest.mark.asyncio
     async def test_adjacent_unaligned_windows_are_additive(self):
-        """
-        DeepSeek's counterexample for item C3: [Jan 1 06:00, Jan 4 06:00) followed by
-        [Jan 4 06:00, Jan 7 06:00) must together return exactly what the single range
-        [Jan 1 06:00, Jan 7 06:00) returns, with the seam interval counted once.
-        """
         async with TestSession() as session:
             _admin_id, _user_id, node_id = await setup_test_data(session)
 
@@ -373,10 +368,6 @@ class TestGetNodesUsageTimezone:
 
     @pytest.mark.asyncio
     async def test_hour_period_keeps_the_partial_first_bucket(self):
-        """
-        Every row inside [start, end) is returned exactly once, even when start is not
-        hour-aligned, so adjacent ranges stay additive.
-        """
         async with TestSession() as session:
             _admin_id, _user_id, node_id = await setup_test_data(session)
 

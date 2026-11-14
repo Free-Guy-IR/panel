@@ -333,8 +333,6 @@ class NodeManager:
     async def _sync_users_to_node(self, node_id: int, node: PasarGuardNode | None, users: list[ProtoUser]):
         task = self._track_user_sync(node_id)
         try:
-            # A delivery queued before a lifecycle change must resolve the node it is
-            # delivered to, never continue on an instance that has been replaced.
             current_node = node
             if current_node is None:
                 lock = self._user_sync_locks.setdefault(node_id, asyncio.Lock())

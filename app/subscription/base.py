@@ -236,7 +236,6 @@ class BaseSubscription(ForkSubscriptionHelpers):
 
     @staticmethod
     def _hysteria_mbps(value) -> int | None:
-        """Integer Mbps from a finalmask brutal value like '50 mbps' (None if absent/unparsable)."""
         if value is None:
             return None
         try:

@@ -76,15 +76,6 @@ class OpenVPNConfiguration(BaseSubscription):
         self.components.append(safe_component)
 
     def _files(self) -> dict[str, str]:
-        """One .ovpn per L4 protocol, each carrying every remote that speaks it.
-
-        A user's OpenVPN access typically spans a direct instance and a
-        tunnelled one that reaches the same server through a relay. Both are
-        the same protocol, so they belong in ONE file as two <connection>
-        blocks - the client tries them in order and fails over on its own.
-        Splitting per protocol instead of per instance is what makes "one TCP
-        config, one UDP config" possible while still offering both routes.
-        """
         if not self.components:
             return {}
 
@@ -114,12 +105,6 @@ class OpenVPNConfiguration(BaseSubscription):
         ]
         dns_lines = [f"dhcp-option DNS {dns}" for dns in primary.get("dns_servers") or []]
 
-        # tun-mtu, fragment and mssfix are a contract between the two ends: a
-        # server running them against a client that is not will drop or refuse
-        # traffic outright. They are file-level directives, so the smallest
-        # value among this file's remotes wins - the file has to survive its
-        # most constrained path. fragment is UDP-only; OpenVPN rejects it on a
-        # TCP config, so it is emitted only when every remote here is UDP.
         tuning = []
         mtus = [c.get("tun_mtu") or 0 for c in components if (c.get("tun_mtu") or 0) > 0]
         if mtus:

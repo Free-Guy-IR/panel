@@ -677,7 +677,6 @@ async def get_users_simple(
         db: Database session.
         query: Structured lightweight user list filters.
         admin: Admin filter (for scope-based authorization).
-        allowed_group_ids: Restrict to users in these groups (None = no restriction).
 
     Returns:
         Tuple of (list of (id, username) tuples, total_count).

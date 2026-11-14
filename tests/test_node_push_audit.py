@@ -96,8 +96,6 @@ def test_the_full_snapshot_push_is_audited_before_it_reaches_the_node():
 
     from app.node import NodeManager
 
-    # sync_full now runs the snapshot in a tracked task so lifecycle operations can
-    # preempt it; the snapshot itself is _sync_full.
     source = inspect.getsource(NodeManager._sync_full)
 
     assert "record_user_push(node_id, len(users))" in source

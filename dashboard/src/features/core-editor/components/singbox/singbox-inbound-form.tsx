@@ -615,7 +615,6 @@ function AcmeFields({
   )
 }
 
-// ============================ Shadowsocks ============================
 function ShadowsocksSection({ inbound, issues, onChange }: { inbound: ShadowsocksInboundDraft; issues: SingBoxValidationIssue[]; onChange: DraftChange }) {
   const { t } = useTranslation()
   const set = <K extends keyof ShadowsocksInboundDraft>(key: K, value: ShadowsocksInboundDraft[K]) => onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)
@@ -873,7 +872,6 @@ function TlsSection({
   )
 }
 
-// ============================ Hysteria2 ============================
 function Hysteria2Sections({ inbound, issues, onChange, uid }: { inbound: HysteriaInboundDraft; issues: SingBoxValidationIssue[]; onChange: DraftChange; uid: string }) {
   const { t } = useTranslation()
   const set = <K extends keyof HysteriaInboundDraft>(key: K, value: HysteriaInboundDraft[K]) => onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)

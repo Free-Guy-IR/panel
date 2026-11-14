@@ -167,8 +167,6 @@ async def _write_states(db, observations) -> None:
             db.add(state)
             streak = 1
         else:
-            # A count that keeps coming back means more than one that
-            # appeared once, so the streak is what the UI leans on.
             streak = state.streak + 1 if state.verdict == obs.verdict else 1
 
         state.checked_at = now
