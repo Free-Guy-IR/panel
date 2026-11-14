@@ -460,23 +460,33 @@ async def test_expired_user_cleanup_locks_subnets_before_users(retention_db, mon
     await retention_db.commit()
 
     calls = []
-
-    async def record_lock(db, settings_list):
-        calls.append(("subnets", list(settings_list)))
-
+    original_lock = user_crud.lock_for_allocation_release
+    original_scalars = retention_db.scalars
     original_delete = user_crud._delete_locked_users
+
+    async def record_lock(db):
+        pools = await original_lock(db)
+        calls.append(("pools", pools))
+        return pools
+
+    async def record_user_rows(statement, *args, **kwargs):
+        if getattr(statement, "_for_update_arg", None) is not None:
+            calls.append(("user rows",))
+        return await original_scalars(statement, *args, **kwargs)
 
     async def record_delete(db, user_ids, *predicates, **kwargs):
         rows = await original_delete(db, user_ids, *predicates, **kwargs)
-        calls.append(("users", [row.username for row in rows]))
+        calls.append(("users", [row.username for row in rows], kwargs.get("pools")))
         return rows
 
-    monkeypatch.setattr(user_crud, "lock_users_subnets", record_lock)
+    monkeypatch.setattr(user_crud, "lock_for_allocation_release", record_lock)
+    monkeypatch.setattr(retention_db, "scalars", record_user_rows)
     monkeypatch.setattr(user_crud, "_delete_locked_users", record_delete)
 
     await autodelete_expired_users(retention_db, default_autodelete_days=1)
 
-    assert calls == [("subnets", [peer_settings]), ("users", ["expired-cleanup-wireguard"])]
+    assert [call[0] for call in calls] == ["pools", "user rows", "users"]
+    assert calls[2] == ("users", ["expired-cleanup-wireguard"], calls[0][1])
 
 
 @pytest.mark.asyncio
@@ -495,17 +505,21 @@ async def test_expired_user_cleanup_retries_when_peer_ip_moves(retention_db, mon
     retention_db.add(user)
     await retention_db.commit()
 
+    user_id = user.id
     locked = []
+    original_lock = user_crud.lock_for_allocation_release
 
-    async def move_after_first_lock(db, settings_list):
-        locked.append(list(settings_list))
+    async def move_after_first_lock(db):
+        pools = await original_lock(db)
+        locked.append(await db.scalar(select(User.proxy_settings).where(User.id == user_id)))
         if len(locked) == 1:
-            await db.execute(update(User).where(User.id == user.id).values(proxy_settings=new_settings))
+            await db.execute(update(User).where(User.id == user_id).values(proxy_settings=new_settings))
             await db.commit()
+        return pools
 
-    monkeypatch.setattr(user_crud, "lock_users_subnets", move_after_first_lock)
+    monkeypatch.setattr(user_crud, "lock_for_allocation_release", move_after_first_lock)
 
     deleted_users = await autodelete_expired_users(retention_db, default_autodelete_days=1)
 
-    assert locked == [[old_settings], [new_settings]]
+    assert locked == [old_settings, new_settings]
     assert [deleted.username for deleted in deleted_users] == ["expired-cleanup-moved-peer"]
