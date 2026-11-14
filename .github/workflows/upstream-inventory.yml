@@ -62,17 +62,12 @@ jobs:
 
       - name: Comment guard
         if: ${{ !cancelled() && steps.fetch.outcome == 'success' && (github.event_name == 'push' || github.event_name == 'pull_request') }}
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BEFORE: ${{ github.event.before }}
         run: |
-          if [ "$EVENT_NAME" = pull_request ]; then
-            base=$(git rev-parse HEAD^1)
-          else
-            base="$BEFORE"
-          fi
-          python scripts/comment_guard.py --base "$base" --head HEAD \
-            --fallback-base refs/remotes/origin/main \
+          grandfathered_base=$(cat .comment-guard-base)
+          [[ "$grandfathered_base" =~ ^[0-9a-f]{40}$ ]]
+          python scripts/comment_guard.py --head HEAD \
+            --trusted-branch refs/remotes/origin/main \
+            --grandfathered-base "$grandfathered_base" \
             --upstream refs/upstream-tags/v5.6.0 \
             --upstream refs/remotes/upstream/dev \
             --upstream refs/remotes/upstream/main \
