@@ -12,8 +12,6 @@ from app.operation.node import NodeOperation
 
 
 class _FreshDB:
-    """The fork releases the request session before the RPC and refreshes in a fresh one."""
-
     def __init__(self, db):
         self.db = db
 
