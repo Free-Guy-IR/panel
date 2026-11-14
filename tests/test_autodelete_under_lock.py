@@ -30,28 +30,28 @@ async def test_autodelete_does_not_delete_a_user_renewed_after_its_read(monkeypa
         await session.commit()
     renewed_id = user_ids[1]
 
-    real_load = user_crud.load_user_attrs
-    calls = {"n": 0}
-
-    async def load_then_admin_renews_second_user(user, **kwargs):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            async with recorder_db() as admin_session:
-                await admin_session.execute(
-                    update(User)
-                    .where(User.id == renewed_id)
-                    .values(
-                        status=UserStatus.active,
-                        expire=datetime.now(UTC) + timedelta(days=30),
-                        last_status_change=datetime.now(UTC),
-                    )
-                )
-                await admin_session.commit()
-        return await real_load(user, **kwargs)
-
-    monkeypatch.setattr(user_crud, "load_user_attrs", load_then_admin_renews_second_user)
-
     async with recorder_db() as db:
+        real_execute = db.execute
+        calls = {"n": 0}
+
+        async def read_candidates_then_admin_renews_second_user(statement, *args, **kwargs):
+            result = await real_execute(statement, *args, **kwargs)
+            calls["n"] += 1
+            if calls["n"] == 1:
+                async with recorder_db() as admin_session:
+                    await admin_session.execute(
+                        update(User)
+                        .where(User.id == renewed_id)
+                        .values(
+                            status=UserStatus.active,
+                            expire=datetime.now(UTC) + timedelta(days=30),
+                            last_status_change=datetime.now(UTC),
+                        )
+                    )
+                    await admin_session.commit()
+            return result
+
+        monkeypatch.setattr(db, "execute", read_candidates_then_admin_renews_second_user)
         deleted = await user_crud.autodelete_expired_users(db)
 
     async with recorder_db() as session:
