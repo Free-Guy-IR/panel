@@ -3456,6 +3456,42 @@ def test_a_carrier_line_a_merge_resolution_replaced_needs_the_merge_named(tmp_pa
         assert f"`{fix[:12]}` is ported by design as a security fix, but {NO_CARRIER}" in result.stdout
 
 
+GUARDED = "def run(u):\n    finish(u)\n"
+GUARDED_FIXED = "def run(u):\n    load(u)\n    check(u)\n    finish(u)\n"
+GUARDED_SWAPPED = "def run(u):\n    check(u)\n    load(u)\n    finish(u)\n    finish(u)\n"
+
+
+def swap_world(tmp_path, case):
+    path = tmp_path / f"swap-{case}"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "upstream base", {"run.py": GUARDED})
+    git(path, "tag", "v1.0")
+    fix = commit(path, "fix: check the user after loading it", {"run.py": GUARDED_FIXED})
+    git(path, "update-ref", "refs/remotes/upstream/dev", fix)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    carrier = commit(path, "fork: check the user", {"run.py": GUARDED_FIXED})
+    swapped = commit(path, "fork: check before loading, finish twice", {"run.py": GUARDED_SWAPPED})
+    line = {"blame-view-exception": 3, "forward-view-exception": 2}[case]
+    clause = f"missing `run.py:+{line}` because {swapped} moved the check before the load"
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the user in fork commit {carrier}; {clause}; security: yes\n"
+    )
+    return path, fix, text
+
+
+@pytest.mark.parametrize(("case", "code"), [("blame-view-exception", 0), ("forward-view-exception", 1)])
+def test_a_replacing_commit_is_read_in_the_direction_the_line_tracking_reads_it(tmp_path, case, code):
+    path, fix, text = swap_world(tmp_path, case)
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but {NO_CARRIER}" in result.stdout
+
+
 SVC_STRICT = SVC_FIXED.replace("    check(user)\n", "    check(user, strict=True)\n")
 TRAILER_FILES = {
     "test-only": {"extra_test.py": "def test_extra_caller():\n    assert checked(extra())\n"},
