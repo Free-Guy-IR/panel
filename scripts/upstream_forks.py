@@ -144,8 +144,7 @@ def check_ledger_repo(entry, root, workdir, today, write_snapshot):
     ]
     previous = Path.cwd()
     os.chdir(mirror)
-    upstream_inventory.normalised_file.cache_clear()
-    upstream_inventory.fork_line_changes.cache_clear()
+    upstream_inventory.clear_caches()
     try:
         print(
             f"\n=== {name}: {entry['upstream']} tracked against {entry['fork']} {entry['ported_ref']} "
@@ -178,6 +177,7 @@ def check_ledger_repo(entry, root, workdir, today, write_snapshot):
         )
     finally:
         os.chdir(previous)
+        upstream_inventory.clear_caches()
 
 
 def pending_verdict(entry, today, missing):

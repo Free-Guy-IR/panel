@@ -1,8 +1,12 @@
+import ast
+import functools
 import json
 import os
 import re
 import subprocess
 import sys
+import tomllib
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -1115,3 +1119,229 @@ def test_a_trailer_counts_only_when_its_carrier_brings_a_change_whose_context_up
         ) in result.stdout
     else:
         assert re.search(r"^  ported via cherry-pick -x trailer\s+1$", result.stdout, re.MULTILINE), result.stdout
+
+
+def tracker_section(stdout, name):
+    start = stdout.index(f"\n=== {name}: ")
+    end = stdout.find("\n=== ", start + 1)
+    return stdout[start : end if end != -1 else stdout.index("\nFork tracker coverage", start)]
+
+
+CROSS_SVC = "def handle(user):\n    load(user)\n    a(user)\n    return b(user)\n"
+CROSS_FIXED = CROSS_SVC.replace("    a(user)\n", "    check(user)\n    a(user)\n")
+CROSS_HARDENED = CROSS_FIXED.replace("    return b(user)\n", "    audit(user)\n    return b(user)\n")
+
+
+def cross_repo_project(tmp_path, name):
+    upstream = new_repo(tmp_path / f"{name}-upstream")
+    base = commit(upstream, f"{name} base", {"svc.py": CROSS_SVC})
+    git(upstream, "tag", "v1.0")
+    fix = commit(upstream, f"fix: check the {name} caller", {"svc.py": CROSS_FIXED})
+    hardened = commit(upstream, f"fix: audit the {name} caller", {"svc.py": CROSS_HARDENED})
+    git(upstream, "tag", "v1.1")
+    fork = new_repo(tmp_path / f"{name}-fork")
+    commit(fork, f"{name} fork root", {"svc.py": CROSS_SVC})
+    carrier = commit(fork, f"fork: check the {name} caller", {"svc.py": CROSS_FIXED, "fork.py": "fork\n"})
+    hardening = commit(fork, f"fork: audit the {name} caller", {"svc.py": CROSS_HARDENED})
+    return {
+        "upstream": upstream,
+        "fork": fork,
+        "base": base,
+        "fix": fix,
+        "hardened": hardened,
+        "carrier": carrier,
+        "hardening": hardening,
+    }
+
+
+def ledger_entry(name, fork, upstream, base):
+    return f"""
+[[repo]]
+name = "{name}"
+mode = "ledger"
+fork = "Owner/{name}"
+upstream = "Up/{name}"
+fork_url = "{fork}"
+upstream_url = "{upstream}"
+ported_ref = "main"
+grandfathered_base = "{base}"
+ledger = "upstream-forks/{name}.md"
+reason = "no tracker of its own"
+"""
+
+
+def cross_repo_map(tmp_path):
+    forks = new_repo(tmp_path / "panel") / "upstream-forks"
+    forks.mkdir()
+    projects = {name: cross_repo_project(tmp_path, name) for name in ("alpha", "beta")}
+    cited = projects["alpha"]["fix"]
+    for name, project in projects.items():
+        (forks / f"{name}.md").write_text(
+            "## Ported by design\n\n"
+            f"- `{project['fix']}` the fork checks the caller in fork commit {project['carrier']} security: yes\n"
+            f"- `{project['hardened']}` the fork audits the caller in fork commit {project['hardening']}, "
+            f"on top of {cited} security: yes\n"
+        )
+    (forks / "forks.toml").write_text(
+        "".join(ledger_entry(name, p["fork"], p["upstream"], p["base"]) for name, p in projects.items())
+    )
+    return forks / "forks.toml", cited
+
+
+def test_one_tracker_process_never_lends_a_repository_the_answers_of_the_one_before(tmp_path):
+    config, cited = cross_repo_map(tmp_path)
+    together = run(config, "--today", "2026-11-15")
+    for name, code in (("alpha", 0), ("beta", 1)):
+        alone = run(config, "--only", name, "--today", "2026-11-15")
+        assert alone.returncode == code, alone.stdout + alone.stderr
+        assert tracker_section(together.stdout, name) == tracker_section(alone.stdout, name)
+    assert f"names `{cited}`, which is not a commit in the fork or upstream history" in together.stdout
+    assert together.returncode == 1, together.stdout + together.stderr
+
+
+GUARDED_GO = "//go:build !riscv64\n\npackage guard\n\nfunc Check() {}\n"
+RISCV_RELEASE = (
+    "jobs:\n  build:\n    steps:\n      - uses: docker/build-push-action@v6\n        with:\n"
+    "          platforms: linux/amd64,linux/riscv64\n"
+)
+
+
+def git_environment(monkeypatch):
+    for key in [key for key in os.environ if key.startswith("GIT_")]:
+        monkeypatch.delenv(key)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+
+def test_each_repository_reads_its_own_shipped_arches_in_one_tracker_process(tmp_path, monkeypatch):
+    sys.path.insert(0, str(SCRIPT.parent))
+    import upstream_forks
+
+    inventory = upstream_forks.upstream_inventory
+    git_environment(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    trees = {
+        "alpha": {"go.mod": "module alpha\n\ngo 1.22\n", "main.go": "package main\n"},
+        "beta": {
+            "go.mod": "module beta\n\ngo 1.22\n",
+            "guard/check.go": GUARDED_GO,
+            ".github/workflows/release.yml": RISCV_RELEASE,
+        },
+    }
+    entries = []
+    for name, files in trees.items():
+        upstream = new_repo(tmp_path / f"{name}-upstream")
+        base = commit(upstream, f"{name} base", {"README": f"{name}\n"})
+        fork = new_repo(tmp_path / f"{name}-fork")
+        commit(fork, f"{name} fork", files)
+        entries.append(tomllib.loads(ledger_entry(name, fork, upstream, base))["repo"][0])
+    arches = {}
+
+    def gate(*args, **kwargs):
+        arches[Path.cwd().name] = inventory.shipped_linux_arches("refs/remotes/fork/main")
+        return 0
+
+    monkeypatch.setattr(inventory, "parity_gate", gate)
+    workdir = tmp_path / "mirrors"
+    workdir.mkdir()
+    for entry in entries:
+        assert upstream_forks.check_ledger_repo(entry, tmp_path, workdir, date(2026, 11, 15), False) == 0
+    assert "riscv64" not in arches["alpha.git"]
+    assert "riscv64" in arches["beta.git"]
+    assert inventory.go_build_excluded("guard/check.go", GUARDED_GO, 22, arches["beta.git"])
+
+
+INVENTORY = SCRIPT.parent / "upstream_inventory.py"
+CACHE_WRAPPERS = frozenset({"lru_cache", "cache", "cached_property"})
+MUTATING_METHODS = frozenset(
+    {"add", "append", "clear", "discard", "extend", "insert", "pop", "popitem", "remove", "setdefault", "update"}
+)
+
+
+def cache_reference(node, imported):
+    if isinstance(node, ast.Attribute):
+        return node.attr in CACHE_WRAPPERS and isinstance(node.value, ast.Name) and node.value.id == "functools"
+    return isinstance(node, ast.Name) and node.id in imported
+
+
+def gate_caches():
+    tree = ast.parse(INVENTORY.read_text())
+    imported = {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "functools"
+        for alias in node.names
+        if alias.name in CACHE_WRAPPERS
+    }
+    cached, owned = set(), set()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for decorator in node.decorator_list:
+                target = decorator.func if isinstance(decorator, ast.Call) else decorator
+                if cache_reference(target, imported):
+                    cached.add(node.name)
+                    owned.add(target)
+    stray = sorted(node.lineno for node in ast.walk(tree) if cache_reference(node, imported) and node not in owned)
+    return cached, stray, module_state_writes(tree)
+
+
+def written_name(node):
+    if isinstance(node, (ast.Subscript, ast.Attribute)) and isinstance(node.ctx, (ast.Store, ast.Del)):
+        target = node.value
+    elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in MUTATING_METHODS:
+        target = node.func.value
+    else:
+        return None
+    return target.id if isinstance(target, ast.Name) else None
+
+
+def module_state_writes(tree):
+    names = {
+        target.id
+        for node in tree.body
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+        if isinstance(target, ast.Name)
+    }
+    return sorted(
+        {
+            node.lineno
+            for function in ast.walk(tree)
+            if isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
+            for node in ast.walk(function)
+            if isinstance(node, ast.Global) or written_name(node) in names
+        }
+    )
+
+
+def test_the_tracker_empties_every_gate_cache_when_it_enters_and_when_it_leaves_a_repository(world, monkeypatch):
+    sys.path.insert(0, str(SCRIPT.parent))
+    import upstream_forks
+
+    inventory = upstream_forks.upstream_inventory
+    cached, stray, writes = gate_caches()
+    assert stray == []
+    assert writes == []
+    assert cached == {name for name, value in vars(inventory).items() if callable(getattr(value, "cache_clear", None))}
+    git_environment(monkeypatch)
+    monkeypatch.chdir(world["tmp"])
+    for name in cached:
+        probe = functools.lru_cache(maxsize=None)(lambda *args: args)
+        monkeypatch.setattr(inventory, name, probe)
+        probe("the previous repository")
+    entered = []
+
+    def gate(*args, **kwargs):
+        entered.append({name: getattr(inventory, name).cache_info().currsize for name in cached})
+        for name in cached:
+            getattr(inventory, name)("this repository")
+        return 0
+
+    monkeypatch.setattr(inventory, "parity_gate", gate)
+    workdir = world["tmp"] / "mirrors"
+    workdir.mkdir()
+    entry = tomllib.loads(ledger_map(world))["repo"][0]
+    assert upstream_forks.check_ledger_repo(entry, world["panel"], workdir, date(2026, 10, 1), False) == 0
+    left = {name: getattr(inventory, name).cache_info().currsize for name in cached}
+    assert entered == [dict.fromkeys(cached, 0)]
+    assert left == dict.fromkeys(cached, 0)
