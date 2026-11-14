@@ -390,6 +390,12 @@ def resolve_ref(ref):
     return git("rev-parse", "--verify", ref).strip()
 
 
+def clear_caches():
+    for value in list(globals().values()):
+        if callable(getattr(value, "cache_clear", None)):
+            value.cache_clear()
+
+
 def is_mechanical_path(path):
     name = path.rsplit("/", 1)[-1]
     return (
