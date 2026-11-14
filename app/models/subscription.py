@@ -329,7 +329,6 @@ class SubscriptionInboundData(BaseModel):
     # MASQUE DNS comes from the host or its inbound, not the user.
     masque_remote_dns: list[str] = Field(default_factory=list)
 
-    # OpenVPN specific
     openvpn_dns_servers: list[str] | None = Field(default=None)
 
     # Flow (from inbound, user can override)

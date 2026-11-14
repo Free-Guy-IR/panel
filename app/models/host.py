@@ -111,16 +111,6 @@ class NoiseSettings(BaseModel):
 
 
 def prune_blank_values(value: Any) -> Any:
-    """Recursively drop entries that carry no configured value.
-
-    Xray treats a present-but-blank masking field as a real one: an empty
-    maxSplit parses as 0 and the config is rejected outright. The dashboard
-    writes cleared inputs as empty strings, and exclude_none only removes
-    null, so those blanks otherwise reach the client verbatim.
-
-    Empty strings, lists and dicts all mean "not set" for these settings and
-    are dropped alongside None. Meaningful falsy values (0, False) are kept.
-    """
     if isinstance(value, dict):
         pruned = {}
         for key, item in value.items():
@@ -957,13 +947,6 @@ class WireGuardHostOverrides(BaseModel):
 
 
 class OpenVPNHostOverrides(BaseModel):
-    """Optional per-host DNS override for OpenVPN subscription output.
-
-    If unset (or empty), the CoreConfig instance's own dns_servers (set in
-    the OpenVPN core editor) is used instead - this only lets a specific
-    host push a different DNS than its core's default.
-    """
-
     dns_servers: list[str] | None = Field(default=None)
 
     @field_validator("dns_servers", mode="before")

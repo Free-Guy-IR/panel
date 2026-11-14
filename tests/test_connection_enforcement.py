@@ -1,11 +1,3 @@
-"""Escalation, and putting the user back afterwards.
-
-The steps are the same shape as PG-Limiter's: a warning, then disables of
-growing length, then one that only a person can lift. Which step applies comes
-from the violations already inside the window, so a user who behaves for long
-enough starts again from the beginning without anyone clearing anything.
-"""
-
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
@@ -32,9 +24,6 @@ OBSERVED = SimpleNamespace(
 )
 
 
-# --------------------------------------------------------------- the ladder --
-
-
 @pytest.mark.parametrize(
     "already, expected",
     [(0, (0, 0)), (1, (1, 10)), (2, (2, 30)), (3, (3, 60)), (4, (4, -1))],
@@ -44,15 +33,11 @@ def test_each_violation_moves_one_rung_up(already, expected):
 
 
 def test_past_the_end_the_last_rung_repeats():
-    """The list runs out before repeat offenders do."""
     assert step_for(99, STEPS) == (4, -1)
 
 
 def test_no_steps_configured_is_a_warning_and_nothing_else():
     assert step_for(3, []) == (0, 0)
-
-
-# ------------------------------------------------------------- against a db --
 
 
 @pytest_asyncio.fixture
@@ -142,7 +127,6 @@ async def test_the_last_step_leaves_nothing_to_restore_it(db):
 
 @pytest.mark.asyncio
 async def test_violations_outside_the_window_do_not_count(db):
-    """Behave for long enough and the ladder starts from the bottom again."""
     user = await _user(db)
     old = ConnectionRestriction(user_id=user.id, active=False, step_applied=3)
     old.created_at = datetime.now(UTC) - timedelta(hours=100)
@@ -151,9 +135,6 @@ async def test_violations_outside_the_window_do_not_count(db):
 
     assert await violations_in_window(db, user.id, 72) == 0
     assert await restrict(db, user, OBSERVED, ConnectionLimit(punishment_steps=STEPS)) is None
-
-
-# --------------------------------------------------------------- restoring --
 
 
 @pytest.mark.asyncio
@@ -190,7 +171,6 @@ async def test_a_restriction_still_running_is_left_alone(db):
 
 @pytest.mark.asyncio
 async def test_turning_enforcement_off_lets_everyone_go(db):
-    """Including the ones with no restore time, which is the whole point."""
     user = await _user(db)
     settings = ConnectionLimit(punishment_steps=[-1])
     await restrict(db, user, OBSERVED, settings)

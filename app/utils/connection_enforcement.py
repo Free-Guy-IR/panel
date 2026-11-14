@@ -1,20 +1,3 @@
-"""Act on a user the checking has judged, and put them back afterwards.
-
-Nothing here runs unless enforcement is turned on. The checking itself only
-ever records, and that stays true: this module is the only place a user's
-account is touched, and it is skipped entirely while the setting is off.
-
-The escalation follows the same shape as PG-Limiter's: a warning for the first
-violation, then disables of growing length, then one that only a person can
-lift. Which step applies comes from how many violations the user already has
-inside the window, so a user who behaves for long enough starts again from the
-beginning without anyone clearing anything.
-
-Restoring puts back exactly what was there. The status and groups are recorded
-on the restriction at the moment it is applied, because reconstructing them
-afterwards is guesswork once the user has been moved.
-"""
-
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 
@@ -37,19 +20,12 @@ USER_LOAD_OPTIONS = (
 
 logger = get_logger("connection-enforcement")
 
-# A step of 0 is a warning and touches nothing; -1 disables until a person
-# lifts it. Anything else is a disable of that many minutes.
 RELEASE_LOCK_BATCH_SIZE = 500
 WARNING_ONLY = 0
 UNTIL_LIFTED = -1
 
 
 def step_for(violations_in_window: int, steps: list[int]) -> tuple[int, int]:
-    """Which rung this violation lands on, and the disable it carries.
-
-    The list runs out before repeat offenders do, so the last rung repeats -
-    otherwise a user past the end would fall off it and be let go.
-    """
     if not steps:
         return 0, WARNING_ONLY
     index = min(violations_in_window, len(steps) - 1)
@@ -57,7 +33,6 @@ def step_for(violations_in_window: int, steps: list[int]) -> tuple[int, int]:
 
 
 async def violations_in_window(db: AsyncSession, user_id: int, window_hours: int) -> int:
-    """How many times this user has already been acted on, recently enough to count."""
     since = datetime.now(UTC) - timedelta(hours=window_hours)
     return (
         await db.scalar(
@@ -81,13 +56,6 @@ async def active_restriction(db: AsyncSession, user_id: int) -> ConnectionRestri
 async def restrict(
     db: AsyncSession, user: User, observation, settings: ConnectionLimit
 ) -> ConnectionRestriction | None:
-    """Record this violation and apply whatever step it lands on.
-
-    Returns the restriction when the user's account was actually changed, so
-    the caller knows to push that change out to the nodes. A warning changes
-    nothing and returns None, while still being written down - the count is
-    what carries the user to the next step.
-    """
     if await active_restriction(db, user.id) is not None:
         return None
 
@@ -185,11 +153,6 @@ async def forget_inactive_restrictions(db: AsyncSession, user_id: int) -> int:
 
 
 async def due_to_restore(db: AsyncSession, *, everyone: bool = False) -> list[tuple[ConnectionRestriction, User]]:
-    """Restrictions whose time is up - or all of them, when enforcement is off.
-
-    Turning enforcement off has to let people go. Leaving them disabled by a
-    feature that is no longer running is the one outcome nobody would expect.
-    """
     due = [ConnectionRestriction.active.is_(True)]
     if not everyone:
         due += [
@@ -231,7 +194,6 @@ def limiter_still_owns_status(restriction: ConnectionRestriction, user: User) ->
 
 
 def release(restriction: ConnectionRestriction, user: User) -> bool:
-    """Put back what was there before, and close the restriction."""
     restored = limiter_still_owns_status(restriction, user)
     if restored:
         try:
@@ -275,7 +237,6 @@ async def close_active_restriction(db: AsyncSession, user_id: int, reason: str) 
 
 
 async def forget_old(db: AsyncSession, retention_days: int) -> int:
-    """Drop history nobody is going to read, keeping anything still in force."""
     cutoff = datetime.now(UTC) - timedelta(days=retention_days)
     stale = sorted(
         restriction_id

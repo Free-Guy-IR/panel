@@ -18,7 +18,6 @@ import { hasPermission, isOwner } from '@/utils/rbac'
 const Statistics = () => {
   const { t } = useTranslation()
   const [selectedServer, setSelectedServer] = useState<string>('master')
-  // Three mutually exclusive views; a single mode avoids a both-on state.
   const [viewMode, setViewMode] = useState<string>('node')
   const showAllNodes = viewMode === 'allNodes'
   const showInbounds = viewMode === 'inbounds'

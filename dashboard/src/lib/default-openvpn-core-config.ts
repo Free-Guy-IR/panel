@@ -15,10 +15,6 @@ export const DEFAULT_OPENVPN_CORE_CONFIG: Record<string, unknown> = {
       verb: 3,
     },
   ],
-  // PKI (ca_cert/server_cert/server_key/tls_crypt_key) is generated server-side via
-  // generate_openvpn_pki() - it is not something you hand-write here. Use the "Generate PKI"
-  // action in the OpenVPN core editor (or POST /api/core/openvpn/generate-pki) to fill this
-  // section in; the panel rejects a save with any of these four fields empty.
   pki: {
     ca_cert: '',
     server_cert: '',

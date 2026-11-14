@@ -39,13 +39,6 @@ function openVPNConfigToDraftFromValid(c: OpenVPNCoreConfig): OpenVPNCoreDraft {
   }
 }
 
-/**
- * Loading an OpenVPN core always goes through the *strict* validator (same as sing-box's
- * `singBoxConfigToDraft`) rather than a lenient parse - any config that made it into the
- * database already passed `OpenVPNConfig._validate` server-side (including the pki presence
- * check), so a failure here means the stored config is unexpectedly malformed and the caller
- * should fall back to a fresh draft + surface the message as an import warning.
- */
 export function openVPNConfigToDraft(raw: unknown): { ok: true; draft: OpenVPNCoreDraft } | { ok: false; message: string } {
   const result = validateOpenVPNCoreConfig(raw)
   if (!result.ok) {
@@ -59,7 +52,6 @@ export function createNewOpenVPNDraft(): OpenVPNCoreDraft {
   return createDefaultOpenVPNCoreDraft()
 }
 
-/** For the "Add instance" action: guarantees a fresh default tag unique against the current draft. */
 export function createNewOpenVPNInstanceDraft(draft: OpenVPNCoreDraft): OpenVPNInstanceDraft {
   return createDefaultOpenVPNInstanceDraft(draft.instances.map(i => i.tag))
 }
@@ -79,7 +71,6 @@ function draftGenerationIssue(error: unknown): OpenVPNValidationIssue {
   }
 }
 
-/** Draft issues + core-kit validation in one step for saves (mirrors getSingBoxPersistConfig). */
 export function getOpenVPNPersistConfig(draft: OpenVPNCoreDraft) {
   const issues = validateOpenVPNCoreDraft(draft)
   if (issues.length > 0) {
@@ -98,7 +89,6 @@ export function getOpenVPNPersistConfig(draft: OpenVPNCoreDraft) {
   return { ok: true as const, config: r.config as Record<string, unknown> }
 }
 
-/** Maps the panel's POST /api/core/openvpn/generate-pki response onto the draft's camelCase pki shape. */
 export function applyGeneratedPkiToDraft(
   draft: OpenVPNCoreDraft,
   pki: { ca_cert: string; server_cert: string; server_key: string; tls_crypt_key: string },

@@ -137,7 +137,6 @@ export default function ConnectionLimitSettings() {
         },
       })
     } catch {
-      // Surfaced by the settings context.
     }
   }
 

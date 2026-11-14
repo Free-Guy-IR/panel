@@ -124,8 +124,6 @@ class InboundUsageStat(PeriodStartStat):
 
 
 class InboundUsageStatsList(StatList):
-    # Keyed by inbound tag rather than id: stats arrive from the node keyed by
-    # tag, and history stays readable after an inbound is renamed or removed.
     stats: dict[str, list[InboundUsageStat]]
 
 

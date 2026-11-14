@@ -1,10 +1,3 @@
-"""The HWID policy covers the chosen groups and nobody else.
-
-Empty is everyone, which is what every existing panel already has. With groups
-chosen, a user outside them is simply not covered - no registration, no header
-requirement, no limit - whoever their admin happens to be.
-"""
-
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -61,7 +54,6 @@ async def test_a_member_of_a_chosen_group_is_covered(db):
 
 @pytest.mark.asyncio
 async def test_everyone_else_is_not(db):
-    """The point of the feature: outside the groups, no policy at all."""
     group_id, users = await _setup(db)
     settings = HWIDSettings(enabled=True, apply_to_group_ids=[group_id])
     assert not await hwid_covers_user(db, users["outside"], settings)
@@ -76,7 +68,6 @@ async def test_membership_in_any_chosen_group_is_enough(db):
 
 @pytest.mark.asyncio
 async def test_older_settings_without_the_field_cover_everyone(db):
-    """Rows saved before the field existed must keep meaning what they meant."""
     _, users = await _setup(db)
     stored = HWIDSettings.model_validate({"enabled": True, "forced": False})
     assert await hwid_covers_user(db, users["outside"], stored)

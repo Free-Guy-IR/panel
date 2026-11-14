@@ -342,7 +342,6 @@ class StandardLinks(BaseSubscription):
         return f"hysteria2://{auth}@{address}:{inbound.port}?{urlparse.urlencode(payload, quote_via=urlparse.quote)}#{urlparse.quote(remark)}"
 
     def _build_hysteria2(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> str:
-        """Build Hysteria2 (sing-box core) link"""
         payload = {}
         obfs_password, quic_params = self._get_hysteria_data_from_finalmask(inbound.finalmask)
         if obfs_password:

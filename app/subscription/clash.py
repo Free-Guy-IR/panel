@@ -716,7 +716,6 @@ class ClashMetaConfiguration(ClashConfiguration):
         return self._normalize_and_remove_none_values(node)
 
     def _build_hysteria2(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> dict:
-        """Build Hysteria2 (native sing-box core) node for Clash Meta"""
         node = {
             "name": remark,
             "type": "hysteria2",

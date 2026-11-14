@@ -17,13 +17,6 @@ interface Props {
   onOpenChange: (open: boolean) => void
 }
 
-/**
- * Set one user's device allowance, or exempt them from checking.
- *
- * An empty limit means "use the default" rather than zero - zero would read as
- * "no devices allowed", which is not something anyone wants to set by leaving
- * a box blank.
- */
 export default function OverrideDialog({ userId, username, defaultLimit, open, onOpenChange }: Props) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()

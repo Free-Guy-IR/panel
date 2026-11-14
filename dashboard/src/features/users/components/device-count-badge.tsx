@@ -18,13 +18,6 @@ const toneFor = (verdict: string | undefined) => {
   }
 }
 
-/**
- * How many devices were last seen on one subscription.
- *
- * Nothing is shown for a user with no recent reading rather than a zero: the
- * job only looks at users who were recently online, so a zero would say
- * "nobody is connected" when it means "not measured".
- */
 export default function DeviceCountBadge({ userId }: { userId: number }) {
   const { t } = useTranslation()
   const { byUser, deviceLimit, enabled } = useDeviceCounts()

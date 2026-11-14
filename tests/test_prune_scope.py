@@ -1,11 +1,3 @@
-"""Changing who is checked has to change who the review list shows.
-
-A state row is only rewritten while its user is being checked, so a user who
-falls out of scope keeps their row with nothing left to update it. The review
-list would go on showing them - frozen at whatever their last check said - for
-as long as the row survives.
-"""
-
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
@@ -28,7 +20,6 @@ async def db():
 
 
 async def _seed(db) -> dict[str, int]:
-    """Two groups, one user in each, and a third the owner disabled."""
     admin = Admin(username="owner", hashed_password="x", role_id=1)
     db.add(admin)
     await db.flush()
@@ -68,15 +59,12 @@ async def test_narrowing_to_a_group_forgets_everyone_else(db):
 
 @pytest.mark.asyncio
 async def test_switching_groups_forgets_the_group_before(db):
-    """The reported case: pick another group, and the old one has to clear."""
     ids = await _seed(db)
 
     await prune_out_of_scope(db, ConnectionLimit(apply_to_group_ids=[ids["blue"]]))
     await db.commit()
     assert await _remaining(db) == {ids["in_blue"]}
 
-    # The scope moves to the other group, and the next cycle records the user
-    # it now covers. What must not survive is the user it no longer does.
     await prune_out_of_scope(db, ConnectionLimit(apply_to_group_ids=[ids["red"]]))
     db.add(UserConnectionState(user_id=ids["in_red"], devices=3, verdict="over_limit"))
     await db.commit()
@@ -91,7 +79,6 @@ async def test_covering_every_group_keeps_the_active_users(db):
     await prune_out_of_scope(db, ConnectionLimit())
     await db.commit()
 
-    # The disabled user goes either way: nothing will ever check them again.
     assert await _remaining(db) == {ids["in_blue"], ids["in_red"]}
 
 
@@ -109,10 +96,8 @@ async def test_an_exempt_user_is_forgotten_rather_than_left_frozen(db):
 
 @pytest.mark.asyncio
 async def test_a_covered_user_who_is_simply_offline_is_kept(db):
-    """Being offline is why a check is skipped, not a reason to forget them."""
     ids = await _seed(db)
 
-    # online_at is left unset for every seeded user, so all of them are offline.
     await prune_out_of_scope(db, ConnectionLimit())
     await db.commit()
 

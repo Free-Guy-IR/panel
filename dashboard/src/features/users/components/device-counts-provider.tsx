@@ -20,14 +20,6 @@ const DeviceCountsContext = createContext<DeviceCounts>({
 
 export const useDeviceCounts = () => useContext(DeviceCountsContext)
 
-/**
- * Fetches device counts for the rows currently on screen.
- *
- * Keyed on the ids the table is already showing, so a page costs one request
- * rather than one per row - which on a table this size is the difference
- * between usable and not. The numbers come from what the background job last
- * recorded; nothing here talks to a node.
- */
 export function DeviceCountsProvider({
   userIds,
   refetchInterval,
@@ -46,8 +38,6 @@ export function DeviceCountsProvider({
         enabled: ids.length > 0,
         refetchInterval,
         refetchOnWindowFocus: false,
-        // Keep the previous numbers visible while the next poll is in flight,
-        // so badges do not blink out on every refresh.
         placeholderData: previous => previous,
       },
     },

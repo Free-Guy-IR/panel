@@ -11,16 +11,6 @@ from app.models.core import CoreType
 from app.models.protocol import ProxyProtocol
 from app.utils.crypto import get_x25519_public_key
 
-# sing-box inbound `type` values this parser normalizes into the same
-# Xray-shaped per-inbound metadata the rest of the panel (hosts.py,
-# subscription models) already consumes.
-#
-# tuic is intentionally NOT enabled here yet - it is a real sing-box inbound
-# type, but it has no matching member in app/models/protocol.ProxyProtocol,
-# so `_protocols_from_inbounds_by_tag` could never resolve it and hosts.py
-# could never map a host onto it. Enabling it is a proto change (add
-# `tuic` to ProxyProtocol first); until then it stays a stub - see the
-# guarded note in `_read_inbound`.
 _SING_BOX_INBOUND_PROTOCOLS = ("vless", "vmess", "trojan", "shadowsocks", "hysteria2")
 
 
@@ -33,26 +23,6 @@ def _protocols_from_inbounds_by_tag(inbounds_by_tag: dict[str, dict]) -> frozens
 
 
 class SingBoxConfig(dict):
-    """AbstractCore implementation for sing-box.
-
-    Recognizes the ``vless``, ``vmess``, ``trojan``, ``shadowsocks`` and
-    ``hysteria2`` inbound types and normalizes each into the same generic
-    per-inbound metadata shape that XRayConfig emits (``protocol``,
-    ``network``, ``tls``, ``port``, ``sni``, ``host``, ``path``,
-    ``header_type``, ``flow``, ``encryption``, shadowsocks ``method``/
-    ``password``/``is_2022``, reality ``pbk``/``sids``/``spx``, ...), so the
-    protocol-agnostic hosts/subscription layers map hosts onto them unchanged.
-
-    Key schema differences vs Xray that this class bridges:
-      * protocol field is ``type`` (not ``protocol``); port is ``listen_port``.
-      * transport is nested under ``inbound["transport"]["type"]`` (ws/grpc/
-        http/httpupgrade/quic), not Xray's ``streamSettings.network``.
-      * TLS lives in ``inbound["tls"]`` and reality in ``inbound["tls"]["reality"]``.
-      * users live in an inbound-level ``users`` array (like Xray's
-        ``settings.clients``); they are injected into the live node
-        out-of-band at sync time, so the wire config ships ``users: []``.
-    """
-
     def __init__(
         self,
         config: dict | str | PosixPath | None = None,
@@ -76,9 +46,6 @@ class SingBoxConfig(dict):
         self._inbounds_by_tag: dict[str, dict] = {}
         self._protocols: frozenset[ProxyProtocol] = frozenset()
 
-        # Registry pattern mirroring XRayConfig.network_handlers: maps a
-        # sing-box transport `type` to the handler that fills network/path/
-        # host/header_type on the normalized metadata.
         self._transport_handlers = {
             "ws": self._handle_ws_transport,
             "grpc": self._handle_grpc_transport,
@@ -141,11 +108,6 @@ class SingBoxConfig(dict):
 
     def _read_inbound(self, inbound: dict):
         itype = inbound.get("type")
-        # tuic stub: `tuic` is a real sing-box inbound type but is deliberately
-        # left out of _SING_BOX_INBOUND_PROTOCOLS, so it falls through here and
-        # is skipped. Fully enabling it is a proto change - add a `tuic` member
-        # to app/models/protocol.ProxyProtocol first, otherwise its metadata can
-        # never resolve to a protocol and hosts.py can never map onto it.
         if itype not in _SING_BOX_INBOUND_PROTOCOLS:
             return
 
@@ -161,26 +123,14 @@ class SingBoxConfig(dict):
         self._inbounds.append(tag)
         self._inbounds_by_tag[tag] = metadata
 
-    # ------------------------------------------------------------------
-    # hysteria2 (unchanged behavior - finalmask/obfs/port_hopping folding)
-    # ------------------------------------------------------------------
     def _read_hysteria2_inbound(self, inbound: dict) -> dict:
         tag = inbound["tag"]
         tls = inbound.get("tls") or {}
         obfs = inbound.get("obfs")
         finalmask = None
         if isinstance(obfs, dict) and obfs.get("type") == "salamander" and obfs.get("password"):
-            # Shaped to match app.core.hosts._prepare_subscription_inbound_datas
-            # inbound_config.get("finalmask") fallback, and _get_hysteria_data_from_finalmasks
-            # expected input - this makes sing-box Salamander obfuscation flow through the
-            # exact same subscription-link pipeline xrays own hysteria obfs already uses,
-            # with no changes needed to hosts.py itself.
             finalmask = {"udp": [{"type": "salamander", "settings": {"password": obfs["password"]}}]}
 
-        # sing-box's hysteria2 inbound has no native port-hopping concept - the range below
-        # is informational only, advertised to clients via mports so hopping-aware clients
-        # can use it, and must be kept in sync with whatever DNAT/redirect rule (if any)
-        # actually forwards that range to this inbounds real listen_port on the node host.
         up_mbps = inbound.get("up_mbps")
         down_mbps = inbound.get("down_mbps")
         hop_ports = inbound.get("port_hopping_range")
@@ -204,16 +154,10 @@ class SingBoxConfig(dict):
             "finalmask": finalmask,
         }
 
-    # ------------------------------------------------------------------
-    # vless / vmess / trojan / shadowsocks
-    # ------------------------------------------------------------------
     def _read_generic_inbound(self, inbound: dict) -> dict:
         tag = inbound["tag"]
         itype = inbound["type"]
 
-        # Users are injected into the live node out-of-band at sync time (see
-        # app/node), keyed by inbound tag - exactly like XRayConfig zeroes
-        # settings.clients. The base wire config must ship no users.
         inbound["users"] = []
 
         settings = {
@@ -230,9 +174,6 @@ class SingBoxConfig(dict):
         }
 
         if itype == "vless":
-            # flow is a per-user field in sing-box (users[].flow); the panel
-            # injects it per user at sync time, so the inbound-level default
-            # stays empty. encryption is not an inbound-level concept here.
             settings["flow"] = ""
             settings["encryption"] = "none"
         elif itype == "shadowsocks":
@@ -251,7 +192,6 @@ class SingBoxConfig(dict):
         return settings
 
     def _handle_shadowsocks_settings(self, inbound: dict, settings: dict):
-        """Capture inbound-level shadowsocks method/password (mirrors xray)."""
         method = inbound.get("method", "")
         settings["method"] = method
         if method == "2022-blake3-chacha20-poly1305":
@@ -259,7 +199,6 @@ class SingBoxConfig(dict):
         if method.startswith("2022-blake3"):
             settings["is_2022"] = True
             password = inbound.get("password", "")
-            # sing-box 2022 server PSK is base64; validate like xray does.
             try:
                 base64.b64decode(password, validate=True)
                 settings["password"] = password
@@ -269,9 +208,6 @@ class SingBoxConfig(dict):
             settings["is_2022"] = False
         settings["header_type"] = "none"
 
-    # ------------------------------------------------------------------
-    # transport handlers (sing-box inbound["transport"] -> network/path/host)
-    # ------------------------------------------------------------------
     def _handle_ws_transport(self, transport: dict, settings: dict):
         settings["network"] = "ws"
         settings["path"] = transport.get("path", "") or ""
@@ -307,9 +243,6 @@ class SingBoxConfig(dict):
         settings["network"] = "quic"
         settings["header_type"] = ""
 
-    # ------------------------------------------------------------------
-    # TLS / Reality (sing-box inbound["tls"] -> sni/alpn/tls + reality pbk/sids)
-    # ------------------------------------------------------------------
     def _handle_tls_settings(self, tls: dict, settings: dict, inbound_tag: str):
         reality = tls.get("reality")
         is_reality = isinstance(reality, dict) and reality.get("enabled")
@@ -325,8 +258,6 @@ class SingBoxConfig(dict):
         if isinstance(alpn, list) and alpn:
             settings["alpn"] = list(alpn)
 
-        # utls.fingerprint is a client-side hint; sing-box inbounds rarely carry
-        # it, but honor it when present (hosts.py falls back to chrome/"" itself).
         utls = tls.get("utls")
         if isinstance(utls, dict) and utls.get("fingerprint"):
             settings["fp"] = utls["fingerprint"]
@@ -346,16 +277,8 @@ class SingBoxConfig(dict):
         except Exception as exc:
             raise ValueError(f"{inbound_tag}: invalid reality private_key") from exc
         settings["sids"] = list(reality.get("short_id") or [])
-        # spiderX is a client-side field; sing-box inbounds have none.
         settings["spx"] = ""
 
-    # Keys that exist only for the panels own subscription-link metadata
-    # (finalmask/quicParams sourcing) and are not part of sing-boxs actual
-    # schema - sing-box uses strict JSON decoding and errors out on any
-    # unrecognized inbound field, so these must never reach the wire config.
-    # NOTE: the multi-protocol metadata (network/tls/sni/alpn/pbk/sids/method/
-    # is_2022/...) all lives in `_inbounds_by_tag`, never on the inbound dict
-    # itself, so nothing new needs stripping here.
     _PANEL_ONLY_INBOUND_KEYS = ("port_hopping_range", "up_mbps", "down_mbps")
 
     def to_str(self, **json_kwargs) -> str:

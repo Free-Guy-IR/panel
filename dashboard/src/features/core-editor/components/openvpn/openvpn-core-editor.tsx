@@ -28,7 +28,6 @@ interface OpenVPNCoreEditorProps {
 
 const PKI_FIELD_ORDER = ['caCert', 'serverCert', 'serverKey', 'tlsCryptKey'] as const
 
-/** Core-level PKI status + generate/regenerate action. Unlike instances, there is exactly one of these per config. */
 function OpenVPNPkiSection({ draft }: { draft: OpenVPNCoreDraft }) {
   const { t } = useTranslation()
   const updateOvDraft = useCoreEditorStore(s => s.updateOvDraft)
@@ -160,7 +159,6 @@ function OpenVPNPkiSection({ draft }: { draft: OpenVPNCoreDraft }) {
   )
 }
 
-/** Top-level OpenVPN section: a searchable/reorderable table of instances (add/edit/delete), plus the core-level PKI status and the shared Advanced JSON tab. */
 export function OpenVPNCoreEditor({ headerAddPulse, headerAddEpoch }: OpenVPNCoreEditorProps) {
   const { t } = useTranslation()
   const section = useCoreEditorStore(s => s.activeSection) as OvCoreSection
@@ -183,7 +181,6 @@ export function OpenVPNCoreEditor({ headerAddPulse, headerAddEpoch }: OpenVPNCor
     setDialogOpen(true)
   }, [draft])
 
-  // Reacts to the page header's "+ Add" button, but only while the Instances section is active.
   useSectionHeaderAddPulseEffect(headerAddPulse, headerAddEpoch, 'instances', beginAddInstance)
 
   const beginEditInstance = useCallback(
@@ -208,8 +205,6 @@ export function OpenVPNCoreEditor({ headerAddPulse, headerAddEpoch }: OpenVPNCor
     [updateOvDraft],
   )
 
-  // Validated as if this row already replaced/joined the rest of the list, so tag/port
-  // uniqueness checks against the other rows are meaningful while the dialog is open.
   const dialogIssues = useMemo(() => {
     if (!draft || !draftInstance) return []
     const others = draft.instances.filter((_, i) => i !== editingIndex)

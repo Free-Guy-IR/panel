@@ -428,8 +428,6 @@ class Subscription(BaseModel):
 
 class HWIDSettings(BaseModel):
     enabled: bool = Field(default=True)
-    # Which groups the policy covers. Empty covers everyone; otherwise a user
-    # outside these groups is not covered at all, whoever their admin is.
     apply_to_group_ids: list[int] = Field(default_factory=list)
     forced: bool = Field(default=False)
     require_hwid_for_manual_sub: bool = Field(default=False)
@@ -487,93 +485,43 @@ class ConnectionLimitVerdict(str, Enum):
 
 
 class ConnectionLimit(BaseModel):
-    """Detection of one subscription being used by several people at once.
-
-    The panel reads each user's live IPs straight from the nodes, so this needs
-    no log parsing. What it mostly has to do is avoid mistaking one person for
-    several: a phone changing towers, a CDN presenting many edge addresses, a
-    tunnel presenting one address for everybody.
-    """
-
     enabled: bool = Field(default=False)
-    # Nothing is ever acted on while this is true; observations are only recorded.
     monitor_only: bool = Field(default=True)
 
     check_interval_seconds: int = Field(default=120, ge=30, le=3600)
-    # Only users seen this recently are worth asking the nodes about.
     online_window_seconds: int = Field(default=180, ge=60, le=1800)
-    # How long a reading still describes the user. Past this the row is
-    # dropped rather than shown as though it were current.
     state_max_age_hours: int = Field(default=6, ge=1, le=720)
 
-    # Which nodes to ask per user, based on where they carried traffic lately.
     node_window_minutes: int = Field(default=30, ge=5, le=1440)
-    # How far back to look for the apps and devices that fetched the
-    # subscription. Longer than the node window because an app keeps a
-    # configuration and runs without re-fetching for a while, so a shorter
-    # window loses the device that is plainly still in use.
     device_window_minutes: int = Field(default=180, ge=5, le=1440)
-    # Traffic a node must have carried before the user counts as being on it.
-    # A client trying every server leaves a handshake on each - kilobytes -
-    # while using one leaves megabytes. Zero counts every node it touched.
     node_min_traffic_kb: int = Field(default=1024, ge=0, le=1_048_576)
 
-    # Devices allowed on one subscription. Above this counts as over the limit.
     device_limit: int = Field(default=2, ge=1, le=50)
-    # Reaching this many is worth surfacing before the limit is exceeded.
     warn_at_devices: int = Field(default=2, ge=1, le=50)
-    # A verdict only counts once the pattern has held this many cycles.
     persistence_cycles: int = Field(default=3, ge=1, le=20)
-    # Act on users the checking judges, rather than only recording them. Off
-    # by default: everything above only observes until this is turned on.
     enforcement_enabled: bool = False
-    # The escalation, in minutes per step: a warning, then disables of growing
-    # length, then one that only a person can lift. The last step repeats for
-    # every violation past the end of the list.
     punishment_steps: list[int] = Field(default_factory=lambda: [0, 10, 30, 60, -1])
-    # How far back violations are counted when deciding which step to apply.
     violation_window_hours: int = Field(default=72, ge=1, le=8760)
-    # How long the history is kept before being forgotten entirely.
     violation_retention_days: int = Field(default=30, ge=1, le=3650)
 
-    # Treat a device that only fetched the subscription as a connected one.
-    # Off by default: holding the configuration is not the same as using it,
-    # and behind a CDN the fetch count is used regardless.
     count_fetched_devices: bool = False
 
-    # Two addresses seen further apart than this were probably not concurrent -
-    # more likely the same person after their address changed.
     concurrency_window_seconds: int = Field(default=90, ge=10, le=600)
 
-    # A mobile carrier hands one phone addresses from across a large pool, so a
-    # block that many different users are inside is a pool rather than a place.
-    # Its addresses then count as one, however many /24s they span. Zero users
-    # turns the detection off entirely.
     carrier_pool_prefix: int = Field(default=12, ge=8, le=24)
     carrier_pool_prefix_v6: int = Field(default=32, ge=16, le=64)
     carrier_pool_min_users: int = Field(default=10, ge=0, le=10000)
 
-    # Addresses are compared at this granularity so that a phone moving between
-    # towers inside one carrier block does not read as several people.
     ipv4_group_prefix: int = Field(default=24, ge=8, le=32)
     ipv6_group_prefix: int = Field(default=64, ge=16, le=128)
 
-    # An address currently attributed to more than this many users is shared
-    # infrastructure - a tunnel, a CDN edge, a NAT - and identifies nobody.
-    # Detected rather than configured, so it covers providers nobody listed.
     infrastructure_min_users: int = Field(default=4, ge=2, le=100)
 
-    # A user's addresses inside a CDN collapse to one source, because one
-    # person behind a CDN legitimately appears as several edge addresses.
-    # Cloudflare and Fastly ship as defaults; add others here.
     cdn_ranges: list[str] = Field(default_factory=list)
 
-    # Empty means every group and every admin.
     apply_to_group_ids: list[int] = Field(default_factory=list)
     apply_to_admin_ids: list[int] = Field(default_factory=list)
 
-    # Resolve the provider behind an address when a case is reviewed. Off by
-    # default: it sends customer addresses to a third-party service.
     resolve_isp: bool = Field(default=False)
 
     @field_validator("cdn_ranges")

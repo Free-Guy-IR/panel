@@ -19,7 +19,6 @@ export default defineConfig({
   build: {
     outDir: 'build',
     assetsDir: 'statics',
-    // Off meant every build's chunks piled up forever and shipped in the image.
     emptyOutDir: true,
     // Let the bundler preserve lazy import boundaries; manual vendor groups
     // pulled chart and dialog dependencies into the initial app shell.

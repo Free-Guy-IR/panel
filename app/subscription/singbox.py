@@ -380,7 +380,6 @@ class SingBoxConfiguration(BaseSubscription):
         return self._normalize_and_remove_none_values(config)
 
     def _build_hysteria2(self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict) -> dict:
-        """Build Hysteria2 (native sing-box core) outbound"""
         config = {
             "type": "hysteria2",
             "tag": remark,

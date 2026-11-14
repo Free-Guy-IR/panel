@@ -10,20 +10,11 @@ from config import job_settings, runtime_settings
 
 logger = get_logger("jobs")
 
-# Rows removed per statement, and the ceiling for one run. Small enough that
-# the usage job writing to this table every 30 seconds is not held up; the
-# existing backlog drains over several runs rather than in one long lock.
 DELETE_CHUNK = 5_000
 MAX_PER_RUN = 200_000
 
 
 async def cleanup_node_user_usages():
-    """Drop per-user, per-node usage history past the retention window.
-
-    Accounting is unaffected: users.used_traffic and admins.used_traffic are
-    separate running counters, not sums over this table. Only the per-node
-    breakdown for old periods goes away.
-    """
     retention_days = job_settings.node_user_usages_retention_days
     if retention_days <= 0:
         return
@@ -33,8 +24,6 @@ async def cleanup_node_user_usages():
 
     async with GetDB() as db:
         while deleted < MAX_PER_RUN:
-            # Select the ids first: a bare DELETE ... LIMIT is not portable
-            # across the three dialects this panel supports.
             ids = (
                 (
                     await db.execute(

@@ -1,15 +1,3 @@
-"""Record how many devices are on each subscription, on a schedule.
-
-Writes one row per user into user_connection_states, which is what the users
-list reads. Recomputing per row, or asking the nodes from a page request,
-would not survive a table of four thousand users.
-
-Acting on a user is a separate decision behind its own switch, off by default.
-With it off this job only ever observes, and anyone still restricted from when
-it was on is released - being left disabled by a feature that is no longer
-running is the one outcome nobody would expect.
-"""
-
 import asyncio
 import time
 from datetime import UTC, datetime
@@ -50,8 +38,6 @@ async def _seconds_since_last_check(db) -> float | None:
 user_operator = UserOperation(operator_type=OperatorType.SYSTEM)
 
 
-# Re-read each cycle rather than caching, so a settings change takes effect on
-# the next run instead of at the next restart.
 async def _current_settings() -> ConnectionLimit | None:
     async with GetDB() as db:
         row = await get_settings(db)
@@ -66,11 +52,6 @@ async def _current_settings() -> ConnectionLimit | None:
 
 
 async def _push_to_nodes(users) -> None:
-    """Make the account change real on the nodes, and tell whoever is listening.
-
-    The same path the panel takes when a user expires or runs out of data, so
-    a user restricted here is disconnected exactly as one who ran out would be.
-    """
     for user in users:
         try:
             updated = await user_operator.update_user(user)
@@ -108,7 +89,6 @@ async def _under_lock_retries(db, attempt, work: str):
 
 
 async def _release_due(db, settings) -> None:
-    """Let go of anyone whose time is up, or of everyone when enforcement is off."""
     everyone = not _enforcing(settings)
 
     async def attempt():
@@ -208,8 +188,6 @@ async def _persist_states(db, observations) -> None:
 async def record_connection_states():
     settings = await _current_settings()
 
-    # Ahead of every early return: a restriction that has expired must lift
-    # even on a cycle where nothing else is going to run.
     async with GetDB() as db:
         await _release_due(db, settings)
 
@@ -229,16 +207,12 @@ async def record_connection_states():
             return
 
     async with GetDB() as db:
-        # Before anything else, so that narrowing the scope takes effect even
-        # on a cycle that later runs out of time.
         forgotten = await prune_out_of_scope(db, settings)
         await db.commit()
         if forgotten:
             logger.info("forgot %d user(s) the settings no longer cover", forgotten)
 
         try:
-            # Belt and braces: collection has its own deadline, but a cycle
-            # that overruns anyway must not hold the slot against the next one.
             observations = await asyncio.wait_for(run_assessment(db, settings), timeout=120)
         except TimeoutError:
             _last_assessment = now
@@ -296,12 +270,6 @@ async def _reload_locked_users(db, user_ids) -> dict[int, User]:
 
 
 async def _enforce(db, observations, settings) -> None:
-    """Act on the users whose verdict has held long enough to be believed.
-
-    A single cycle proves nothing - an address changes, a phone switches from
-    wifi to mobile - so a user is only acted on once the same verdict has come
-    back persistence_cycles times running.
-    """
     over = [o for o in observations if o.verdict == "over_limit" and o.streak >= settings.persistence_cycles]
     if not over:
         return
@@ -333,8 +301,6 @@ async def _enforce(db, observations, settings) -> None:
 
 
 if runtime_settings.role.runs_scheduler:
-    # The interval is read from settings at each run rather than here, so the
-    # job is registered at a fixed tick and exits immediately when disabled.
     scheduler.add_job(
         record_connection_states,
         "interval",

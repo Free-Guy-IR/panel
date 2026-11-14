@@ -1,9 +1,3 @@
-"""The switch is the whole contract: off means nothing happens to anyone.
-
-These go through the job's own helpers rather than the engine underneath, so
-what is checked is the thing that actually runs on a schedule.
-"""
-
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
@@ -44,8 +38,6 @@ async def _user(db) -> User:
 
 
 class _Observation:
-    """Only what enforcement reads off an observation."""
-
     def __init__(self, user_id, streak, verdict="over_limit"):
         self.user_id = user_id
         self.streak = streak
@@ -58,7 +50,6 @@ class _Observation:
 
 @pytest.mark.asyncio
 async def test_a_verdict_that_has_not_held_long_enough_is_left_alone(db):
-    """One cycle proves nothing - an address changes, wifi becomes mobile."""
     from app.fork.jobs.connection_limiter import _enforce
 
     user = await _user(db)
@@ -102,8 +93,6 @@ async def test_a_user_within_the_limit_is_never_acted_on(db):
 
 @pytest.mark.asyncio
 async def test_turning_the_switch_off_releases_whoever_is_still_held(db):
-    """The one outcome nobody would expect is being left disabled by a feature
-    that is no longer running."""
     from app.fork.jobs.connection_limiter import _release_due
 
     user = await _user(db)

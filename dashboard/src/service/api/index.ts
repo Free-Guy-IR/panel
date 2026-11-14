@@ -971,13 +971,6 @@ export interface WireGuardHostOverrides {
   dns?: string[] | null;
 }
 
-/**
- * Optional per-host DNS override for OpenVPN subscription output.
- *
- * If unset (or empty), the CoreConfig instance's own dns_servers (set in
- * the OpenVPN core editor) is used instead - this only lets a specific
- * host push a different DNS than its core's default.
- */
 export interface OpenVPNHostOverrides {
   dns_servers?: string[] | null;
 }
@@ -1343,14 +1336,6 @@ export interface Conflict {
   detail?: string;
 }
 
-/**
- * Detection of one subscription being used by several people at once.
- *
- * The panel reads each user's live IPs straight from the nodes, so this needs
- * no log parsing. What it mostly has to do is avoid mistaking one person for
- * several: a phone changing towers, a CDN presenting many edge addresses, a
- * tunnel presenting one address for everybody.
- */
 export interface ConnectionLimit {
   enabled?: boolean;
   monitor_only?: boolean;
@@ -1457,9 +1442,6 @@ export type ConnectionStateResponseReasonsItem = { [key: string]: unknown } | st
 
 export type ConnectionStateResponseDetails = { [key: string]: unknown };
 
-/**
- * What the panel last observed about one subscription.
- */
 export interface ConnectionStateResponse {
   user_id: number;
   username?: string | null;
@@ -1487,9 +1469,6 @@ export interface ConnectionStatesResponse {
 
 export type ConnectionViolationResponseReasonsItem = { [key: string]: unknown } | string;
 
-/**
- * One time the limiter acted on a user, and what it did.
- */
 export interface ConnectionViolationResponse {
   id: number;
   user_id: number;
@@ -2390,14 +2369,6 @@ export interface NotificationSettingsInput {
   max_retries: number;
 }
 
-/**
- * A freshly generated OpenVPN PKI bundle (CA + server cert/key + tls-crypt static key).
- *
- * Returned by POST /api/core/openvpn/generate-pki - see app.core.openvpn.generate_openvpn_pki().
- * Stateless: generation does not read or write any core config, so this response is not tied
- * to a specific core_id and can be requested both while drafting a brand-new OpenVPN core
- * (before it has been created) and when regenerating PKI for an existing one.
- */
 export interface OpenVPNPKIResponse {
   ca_cert: string;
   server_cert: string;
@@ -2880,9 +2851,6 @@ export const UsageTable = {
   node_outbound_usages: 'node_outbound_usages',
 } as const;
 
-/**
- * A device allowance for one user, or an exemption from checking.
- */
 export interface UserConnectionLimitPayload {
   ip_limit?: number | null;
   exempt?: boolean;
@@ -3699,7 +3667,6 @@ export const getListConnectionStatesUrl = (params?: ListConnectionStatesParams,)
 }
 
 /**
- * Users ordered by how many devices were last seen on them.
  * @summary List Connection States
  */
 export const listConnectionStates = async (params?: ListConnectionStatesParams, options?: RequestInit): Promise<ConnectionStatesResponse> => {
@@ -3814,10 +3781,6 @@ export const getConnectionStatesForUsersUrl = (params?: ConnectionStatesForUsers
 }
 
 /**
- * States for the users on one page of the users table.
- *
- * Taking the ids the page is already showing keeps this to a single indexed
- * query, rather than a request per row.
  * @summary Connection States For Users
  */
 export const connectionStatesForUsers = async (params?: ConnectionStatesForUsersParams, options?: RequestInit): Promise<ConnectionStatesResponse> => {
@@ -3919,7 +3882,6 @@ export const getDefaultCdnRangesUrl = () => {
 }
 
 /**
- * The CDN ranges shipped by default, so the settings form can offer them.
  * @summary Default Cdn Ranges
  */
 export const defaultCdnRanges = async ( options?: RequestInit): Promise<string[]> => {
@@ -4028,7 +3990,6 @@ export const getListOverridesUrl = (params?: ListOverridesParams,) => {
 }
 
 /**
- * Users given their own allowance, or exempted from checking.
  * @summary List Overrides
  */
 export const listOverrides = async (params?: ListOverridesParams, options?: RequestInit): Promise<UserConnectionLimitsResponse> => {
@@ -4130,7 +4091,6 @@ export const getSetOverrideUrl = (userId: number,) => {
 }
 
 /**
- * Give one user their own allowance, or exempt them.
  * @summary Set Override
  */
 export const setOverride = async (userId: number,
@@ -4203,7 +4163,6 @@ export const getClearOverrideUrl = (userId: number,) => {
 }
 
 /**
- * Put a user back on the default allowance.
  * @summary Clear Override
  */
 export const clearOverride = async (userId: number, options?: RequestInit): Promise<void> => {
@@ -4275,11 +4234,6 @@ export const getResolveUserAddressesUrl = (userId: number,) => {
 }
 
 /**
- * Name the provider behind each address this user was last seen on.
- *
- * Resolved here rather than in the checking loop: the loop handles well over
- * a thousand users a minute and would turn into thousands of lookups, while
- * a review only needs the handful an admin is actually looking at.
  * @summary Resolve User Addresses
  */
 export const resolveUserAddresses = async (userId: number, options?: RequestInit): Promise<ResolvedAddressesResponse> => {
@@ -4388,7 +4342,6 @@ export const getListViolationsUrl = (params?: ListViolationsParams,) => {
 }
 
 /**
- * Every time the limiter acted on someone, most recent first.
  * @summary List Violations
  */
 export const listViolations = async (params?: ListViolationsParams, options?: RequestInit): Promise<ConnectionViolationsResponse> => {
@@ -4498,10 +4451,6 @@ export const getReleaseUserUrl = (userId: number,
 }
 
 /**
- * Lift whatever is in force on this user, and put back what was there.
- *
- * The one that matters for the last step, which has no time on it and would
- * otherwise stay until someone did this.
  * @summary Release User
  */
 export const releaseUser = async (userId: number,

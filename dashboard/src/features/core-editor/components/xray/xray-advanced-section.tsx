@@ -90,7 +90,7 @@ export function XrayAdvancedSection() {
   const [jsonValidation, setJsonValidation] = useState<JsonValidationState>({ isValid: true })
   useCoreDraftMonacoSync()
 
-  // Filtered tabs only make sense for the xray config. WireGuard/sing-box/OpenVPN have no inbounds/outbounds/routing.
+  // Filtered tabs only make sense for the xray config. WireGuard has no inbounds/outbounds/routing.
   const filterTabsAvailable = kind === 'xray'
   const effectiveTab: AdvancedTab = filterTabsAvailable ? activeTab : 'all'
 

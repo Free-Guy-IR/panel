@@ -1040,7 +1040,6 @@ class Settings(Base, IdMixin):
     hwid: Mapped[dict] = mapped_column(JSON())
     general: Mapped[dict] = mapped_column(JSON())
     cleanup: Mapped[dict] = mapped_column(JSON(), default_factory=dict)
-    # Nullable so existing rows need no backfill; the API substitutes defaults.
     connection_limit: Mapped[dict | None] = mapped_column(JSON(), default=None, nullable=True)
 
 

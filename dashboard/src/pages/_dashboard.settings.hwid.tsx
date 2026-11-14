@@ -259,9 +259,6 @@ export default function HwidSettings() {
           </section>
 
 
-          {/* A section like every other on this page: always shown, its control
-              disabled while HWID is off, rather than vanishing - which read as a
-              missing feature when the master toggle happened to be off. */}
           <section className="space-y-4">
             <div className="space-y-1.5">
               <h3 className="text-base font-semibold sm:text-lg">

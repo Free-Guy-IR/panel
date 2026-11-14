@@ -11,8 +11,6 @@ interface AllNodesLiveSectionProps {
   nodes: NodeSimple[]
 }
 
-// Each poll is an instantaneous sample, so polling faster than this makes
-// the totals jump around too quickly to read.
 const REFETCH_INTERVAL_MS = 5000
 
 function getNodeStatusDotColor(status: NodeStatus) {
@@ -58,8 +56,6 @@ export default function AllNodesLiveSection({ nodes }: AllNodesLiveSectionProps)
     }
   })
 
-  // Totals only count nodes that actually reported, so a failing node reads as
-  // missing rather than silently dragging the total down to look like a drop.
   const reporting = perNode.filter(entry => !entry.isLoading && !entry.hasError)
   const totalIncoming = reporting.reduce((sum, entry) => sum + entry.incoming, 0)
   const totalOutgoing = reporting.reduce((sum, entry) => sum + entry.outgoing, 0)
@@ -74,7 +70,6 @@ export default function AllNodesLiveSection({ nodes }: AllNodesLiveSectionProps)
 
   return (
     <div className="flex w-full flex-col gap-3 sm:gap-4">
-      {/* Combined totals across every reporting node */}
       <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
         {totalCards.map(({ key, label, icon: Icon, speed }, index) => (
           <div key={key} className="animate-fade-in h-full w-full" style={{ animationDuration: '600ms', animationDelay: `${150 + index * 100}ms` }}>
@@ -114,7 +109,6 @@ export default function AllNodesLiveSection({ nodes }: AllNodesLiveSectionProps)
         ))}
       </div>
 
-      {/* Section heading for the per-node cards */}
       <div className="animate-fade-in flex items-center justify-between gap-2 px-1" style={{ animationDuration: '600ms', animationDelay: '350ms' }}>
         <h3 className="truncate text-base font-semibold sm:text-lg">{t('statistics.perNodeLive', { defaultValue: 'Live traffic per node' })}</h3>
         <span className="text-muted-foreground shrink-0 text-xs sm:text-sm">
@@ -129,7 +123,6 @@ export default function AllNodesLiveSection({ nodes }: AllNodesLiveSectionProps)
           </CardContent>
         </Card>
       ) : (
-        /* Two cards per row from sm upwards, one per row on phones. */
         <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
           {perNode.map(({ node, isLoading, hasError, incoming, outgoing }, index) => {
             const up = formatMbpsPair(outgoing)

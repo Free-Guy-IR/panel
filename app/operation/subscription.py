@@ -414,8 +414,6 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         global_hwid_conf: HWIDSettings = await hwid_settings()
         effective_hwid_conf = resolve_effective_hwid_settings(global_hwid_conf, role_hwid_settings)
 
-        # Outside the chosen groups there is no policy to speak of: nothing is
-        # required, nothing is registered, nothing is capped.
         if not await hwid_covers_user(db, user_id, global_hwid_conf):
             return
 

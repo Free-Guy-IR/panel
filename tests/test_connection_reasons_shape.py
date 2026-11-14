@@ -1,13 +1,3 @@
-"""A page of connection states must survive rows written in either reason format.
-
-Reasons were once English sentences built in the backend and stored as they
-read; they are now codes the frontend renders in the panel's language. A row is
-only rewritten when its user is next seen online, so the table holds both
-shapes for as long as some users stay away - and the response model has to read
-both, or a single old row anywhere in a page fails validation and takes the
-whole request down with it.
-"""
-
 import pytest
 from pydantic import ValidationError
 
@@ -48,7 +38,6 @@ def test_a_state_reads_in_either_shape(reasons):
 
 
 def test_a_page_holding_both_shapes_is_returned():
-    """The list wrapper is what the endpoint returns, and where the failure showed."""
     page = ConnectionStatesResponse.model_validate(
         {
             "states": [_state(LEGACY), _state(STRUCTURED)],
@@ -63,7 +52,6 @@ def test_a_page_holding_both_shapes_is_returned():
 
 
 def test_a_reason_is_still_required_to_be_one_of_the_two():
-    """Reading both shapes is not the same as reading anything at all."""
     with pytest.raises(ValidationError):
         ConnectionStateResponse.model_validate(_state([{"code": "devices"}, 42]))
 

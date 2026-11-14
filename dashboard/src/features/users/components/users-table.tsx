@@ -1150,8 +1150,6 @@ const UsersTable = memo(() => {
   )
   const usersList = usersData?.users || []
   const visibleUserIds = useMemo(() => usersList.map(user => user.id), [usersList])
-  // Follow whatever cadence was chosen for the table itself; when that is off,
-  // still refresh occasionally so a badge is not left showing a stale count.
   const deviceRefreshMs = (() => {
     const seconds = getUsersAutoRefreshIntervalSeconds()
     return seconds > 0 ? seconds * 1000 : 120_000

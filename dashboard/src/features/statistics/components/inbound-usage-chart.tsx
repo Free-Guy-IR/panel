@@ -238,9 +238,6 @@ export default function InboundUsageChart() {
     error,
   } = useGetInboundsUsageStats(usageParams, {
     query: {
-      // The usage job writes every 30s into a 10-minute bucket, so the newest
-      // bar keeps growing until the bucket closes. Refetching on the job's own
-      // cadence keeps that bar live instead of frozen for minutes at a time.
       refetchInterval: 1000 * 30,
       refetchOnWindowFocus: true,
     },
@@ -248,8 +245,6 @@ export default function InboundUsageChart() {
 
   const statsByNode = useMemo(() => toStatsRecord<InboundUsageStat>(usageData?.stats), [usageData?.stats])
 
-  // Shape the inbound tags into the same {id, name} records the node list used,
-  // so every series/colour/pie path below carries over unchanged.
   const nodeList = useMemo(() => Object.keys(statsByNode).sort((a, b) => a.localeCompare(b)).map(tag => ({ id: tag, name: tag })), [statsByNode])
 
   const chartConfig = useMemo(() => {

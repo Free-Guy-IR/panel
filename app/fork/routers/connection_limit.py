@@ -60,7 +60,6 @@ def _visible_users(stmt, admin: AdminDetails, action: str):
 
 
 async def _settings(db: AsyncSession) -> ConnectionLimit:
-    """Stored settings, or the defaults when nothing has been saved yet."""
     row = await get_settings(db)
     stored = getattr(row, "connection_limit", None) if row is not None else None
     if not stored:
@@ -80,7 +79,6 @@ async def list_connection_states(
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("settings", "read")),
 ):
-    """Users ordered by how many devices were last seen on them."""
     settings = await _settings(db)
 
     stmt = _visible_users(
@@ -122,11 +120,6 @@ async def connection_states_for_users(
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("users", "read")),
 ):
-    """States for the users on one page of the users table.
-
-    Taking the ids the page is already showing keeps this to a single indexed
-    query, rather than a request per row.
-    """
     settings = await _settings(db)
     if not user_ids:
         return ConnectionStatesResponse(
@@ -164,7 +157,6 @@ async def connection_states_for_users(
 
 @router.get("/defaults/cdn-ranges", response_model=list[str])
 async def default_cdn_ranges(_: AdminDetails = Depends(require_permission("settings", "read"))):
-    """The CDN ranges shipped by default, so the settings form can offer them."""
     return DEFAULT_CDN_RANGES
 
 
@@ -175,7 +167,6 @@ async def list_overrides(
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("settings", "read")),
 ):
-    """Users given their own allowance, or exempted from checking."""
     settings = await _settings(db)
 
     stmt = _visible_users(
@@ -202,7 +193,6 @@ async def set_override(
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("settings", "update")),
 ):
-    """Give one user their own allowance, or exempt them."""
     user = (await db.execute(_visible_users(select(User).where(User.id == user_id), admin, "update"))).scalar()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -229,7 +219,6 @@ async def clear_override(
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("settings", "update")),
 ):
-    """Put a user back on the default allowance."""
     user_stmt = _visible_users(select(User.id).where(User.id == user_id), admin, "update")
     if (await db.execute(user_stmt)).scalar() is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -246,12 +235,6 @@ async def resolve_user_addresses(
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("users", "read")),
 ):
-    """Name the provider behind each address this user was last seen on.
-
-    Resolved here rather than in the checking loop: the loop handles well over
-    a thousand users a minute and would turn into thousands of lookups, while
-    a review only needs the handful an admin is actually looking at.
-    """
     settings = await _settings(db)
 
     user_stmt = _visible_users(select(User.id).where(User.id == user_id), admin, "read")
@@ -270,7 +253,6 @@ async def resolve_user_addresses(
                 seen.append(value)
 
     if not settings.resolve_isp:
-        # Still list what was seen; just without the provider names.
         return ResolvedAddressesResponse(addresses=[ResolvedAddress(address=a) for a in seen], enabled=False)
 
     resolved = await lookup_providers(seen)
@@ -294,7 +276,6 @@ async def list_violations(
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("settings", "read")),
 ):
-    """Every time the limiter acted on someone, most recent first."""
     settings = await _settings(db)
 
     stmt = _visible_users(
@@ -345,11 +326,6 @@ async def release_user(
     db: AsyncSession = Depends(get_db),
     admin: AdminDetails = Depends(require_permission("settings", "modify")),
 ):
-    """Lift whatever is in force on this user, and put back what was there.
-
-    The one that matters for the last step, which has no time on it and would
-    otherwise stay until someone did this.
-    """
     try:
         locked = (
             await db.execute(

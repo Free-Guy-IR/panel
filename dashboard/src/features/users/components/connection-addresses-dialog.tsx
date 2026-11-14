@@ -10,14 +10,6 @@ interface Props {
   onOpenChange: (open: boolean) => void
 }
 
-/**
- * The addresses a user was last seen on, each with the provider behind it.
- *
- * The lookup goes to a third-party service, so it runs only here - when an
- * admin opens one user's case - never in the checking loop over thousands of
- * users. When the lookup is switched off the addresses still show, just
- * without a provider name, and the dialog says why.
- */
 export default function ConnectionAddressesDialog({ userId, username, open, onOpenChange }: Props) {
   const { t } = useTranslation()
 

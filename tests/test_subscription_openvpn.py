@@ -32,11 +32,6 @@ def test_render_empty_without_components():
 
 
 def test_render_uses_inline_auth_user_pass():
-    # <auth-user-pass>...</auth-user-pass> is rejected by the classic
-    # openvpn2 CLI, but openvpn3 (OpenVPN Connect - what real, especially
-    # mobile, users actually import this file into) supports it and
-    # connects with zero credential prompts - verified with a live
-    # `openvpn3 session-start` against this exact renderer's output.
     conf = OpenVPNConfiguration()
     conf.components.append(_component(username="7", password="pw"))
     files = _unzip(conf.render())

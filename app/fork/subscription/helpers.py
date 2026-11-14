@@ -56,15 +56,6 @@ class ForkSubscriptionHelpers:
     def _build_openvpn_components(
         self, remark: str, address: str, inbound: SubscriptionInboundData, settings: dict
     ) -> dict | None:
-        """Build one <connection> block worth of data for an OpenVPN instance.
-
-        Unlike every proxy-style protocol here, OpenVPN has no share-link URI
-        at all - by design (see app/subscription/openvpn.py), this only ever
-        feeds the downloadable .ovpn file builder. Reads instance config
-        (cipher/auth/dns/PKI) from inbound.finalmask["openvpn"], the same
-        generic per-inbound extra-data channel Hysteria2 obfs/quicParams
-        already use, populated by app.core.openvpn.OpenVPNConfig._read_instance.
-        """
         user_id = settings.get("_user_id")
         password = settings.get("password")
         if user_id is None:
@@ -72,7 +63,7 @@ class ForkSubscriptionHelpers:
         if not password:
             self._note_unissued_secret("openvpn", user_id, inbound)
             return None
-        username = str(user_id)  # matches app.node.user._serialize_user_for_node's str(id) convention
+        username = str(user_id)
 
         finalmask = inbound.finalmask
         if finalmask is None:
@@ -80,10 +71,6 @@ class ForkSubscriptionHelpers:
         elif isinstance(finalmask, dict):
             finalmask_dict = finalmask
         else:
-            # FinalMask is a real Pydantic model (extra="allow"), not a plain
-            # dict - model_dump() is what surfaces the "openvpn" extra field
-            # OpenVPNConfig._read_instance attaches, alongside its normal
-            # tcp/udp/quicParams fields.
             finalmask_dict = finalmask.model_dump(by_alias=True, exclude_none=True)
         ovpn_data = finalmask_dict.get("openvpn", {})
         ca_cert = ovpn_data.get("ca_cert")
@@ -91,17 +78,13 @@ class ForkSubscriptionHelpers:
         if not ca_cert or not tls_crypt_key:
             return None
 
-        # Host-level DNS override (set on this specific Host's Network
-        # Settings) takes priority over the CoreConfig instance's own
-        # default dns_servers; falls back to the core default when the host
-        # has none set.
         dns_servers = inbound.openvpn_dns_servers if inbound.openvpn_dns_servers else ovpn_data.get("dns_servers", [])
 
         return {
             "remark": self._remark_validation(remark),
             "address": address,
             "port": inbound.port,
-            "protocol": inbound.network,  # udp/tcp, set as the L4 transport by OpenVPNConfig
+            "protocol": inbound.network,
             "tun_mtu": int(ovpn_data.get("tun_mtu") or 0),
             "fragment": int(ovpn_data.get("fragment") or 0),
             "mssfix": int(ovpn_data.get("mssfix") or 0),

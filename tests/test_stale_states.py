@@ -1,10 +1,3 @@
-"""A reading that no longer describes the user must not look current.
-
-Two things end a reading: its age, and a deploy. Both are tested here, and the
-age one has to hold the build boundary still to say anything - a fresh process
-invalidates everything before it, which is the point of it.
-"""
-
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
@@ -61,7 +54,6 @@ async def _remaining(db) -> set[int]:
 
 @pytest.mark.asyncio
 async def test_a_reading_from_hours_ago_is_dropped(db):
-    """Those rows were reached by whatever the logic was at the time."""
     fresh = await _user_with_state(db, "fresh", age_hours=0.1)
     old = await _user_with_state(db, "old", age_hours=9)
 
@@ -93,7 +85,6 @@ async def test_the_window_is_the_setting(db):
 
 
 async def _prune_since_an_older_build(db, settings):
-    """Prune with the build boundary out of the way, to test the age alone."""
     long_ago = datetime.now(UTC) - timedelta(days=365)
     with patch.object(limiter, "STARTED_AT", long_ago):
         return await prune_out_of_scope(db, settings)
@@ -101,7 +92,6 @@ async def _prune_since_an_older_build(db, settings):
 
 @pytest.mark.asyncio
 async def test_a_reading_this_build_did_not_make_is_dropped(db):
-    """A deploy changes how the count is reached, so what came before it goes."""
     await _user_with_state(db, "from-before", age_hours=0.5)
 
     with patch.object(limiter, "STARTED_AT", datetime.now(UTC) - timedelta(minutes=1)):

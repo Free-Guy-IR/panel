@@ -18,7 +18,6 @@ import { toast } from 'sonner'
 
 const PAGE_SIZE = 25
 
-/** Zero is a warning that changed nothing; below zero stays until a person lifts it. */
 const describeStep = (minutes: number, t: TFunction): string => {
   if (minutes === 0) return t('settings.connectionLimit.violations.warned', { defaultValue: 'Warned' })
   if (minutes < 0) return t('settings.connectionLimit.violations.untilLifted', { defaultValue: 'Until lifted' })

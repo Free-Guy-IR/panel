@@ -1,10 +1,3 @@
-"""Resetting or deleting a hardware id clears the user's device-review row.
-
-The row is only rewritten while the user is being checked, so without this the
-review keeps showing the devices that were just cleared - and for a user
-outside the connection-limit scope, keeps showing them for good.
-"""
-
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
@@ -53,7 +46,6 @@ async def test_clearing_devices_removes_the_review_row(db):
 
 @pytest.mark.asyncio
 async def test_clearing_when_there_is_no_row_is_harmless(db):
-    """A user the limiter never checked has no row; clearing must not error."""
     admin = Admin(username="o2", hashed_password="x", role_id=1)
     db.add(admin)
     await db.flush()
@@ -61,7 +53,7 @@ async def test_clearing_when_there_is_no_row_is_harmless(db):
     db.add(user)
     await db.commit()
 
-    await _clear_connection_state(db, user.id)  # no raise
+    await _clear_connection_state(db, user.id)
 
     assert not await _has_state(db, user.id)
 

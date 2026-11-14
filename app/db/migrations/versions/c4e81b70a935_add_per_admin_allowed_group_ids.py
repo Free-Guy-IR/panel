@@ -18,8 +18,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # NULL means unrestricted, so every existing admin keeps access to every
-    # group and nothing changes until the field is set deliberately.
     with op.batch_alter_table("admins", schema=None) as batch_op:
         batch_op.add_column(
             sa.Column("allowed_group_ids", sa.JSON().with_variant(JSONB(none_as_null=True), "postgresql"), nullable=True)

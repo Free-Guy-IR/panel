@@ -33,7 +33,6 @@ interface SingBoxInboundFormProps {
   onChange: (updater: (draft: SingBoxInboundDraft) => SingBoxInboundDraft) => void
 }
 
-// Radix Select forbids an empty-string item value, so "unset" states use these sentinels.
 const TLS_VERSION_DEFAULT = '__default'
 const MASQ_SIMPLE = '__simple'
 const ACME_PROVIDER_DEFAULT = '__default'
@@ -53,14 +52,11 @@ const NOTE_CLASS = 'text-muted-foreground rounded-md border border-dashed px-3 p
 const HINT_CLASS = 'text-muted-foreground text-[11px]'
 const ERROR_CLASS = 'text-destructive text-[0.8rem] font-medium'
 
-// Protocols this editor can create. hysteria2 keeps its dedicated full form; the rest share the
-// stream (transport + TLS/REALITY) sections below, matching the Xray inbound editor's layout.
 const PROTOCOLS: readonly SingBoxProtocol[] = ['vless', 'vmess', 'trojan', 'shadowsocks', 'tuic', 'hysteria2']
 const SHADOWSOCKS_METHODS = ['2022-blake3-aes-128-gcm', '2022-blake3-aes-256-gcm', 'aes-256-gcm', 'chacha20-ietf-poly1305']
 const TUIC_CONGESTION = ['cubic', 'bbr', 'new_reno']
 const TRANSPORTS: readonly SingBoxTransportType[] = ['', 'ws', 'grpc', 'http', 'httpupgrade']
 
-/** The stream protocols that carry a V2Ray transport + full TLS/REALITY block (like Xray vless/vmess/trojan). */
 type StreamDraft = Extract<SingBoxInboundDraft, { protocol: 'vless' | 'vmess' | 'trojan' }>
 
 type TlsIdentitySlice = Pick<TlsDraftFields, 'tlsServerName' | 'tlsAlpn'>
@@ -180,8 +176,6 @@ export function SingBoxInboundForm({ inbound, issues, onChange }: SingBoxInbound
 
   const changeProtocol = (protocol: SingBoxProtocol) => {
     if (protocol === inbound.protocol) return
-    // Rebuild the draft for the new protocol, preserving the shared listen identity so the user
-    // doesn't lose the tag/port they already set (mirrors the Xray editor's protocol switch).
     onChange(d => rebuildForProtocol(d, protocol))
   }
 
@@ -254,7 +248,6 @@ export function SingBoxInboundForm({ inbound, issues, onChange }: SingBoxInbound
   )
 }
 
-/** Rebuilds a draft when the protocol changes, keeping tag/listen/listenPort. */
 function rebuildForProtocol(prev: SingBoxInboundDraft, protocol: SingBoxProtocol): SingBoxInboundDraft {
   const base = { tag: prev.tag, listen: prev.listen, listenPort: prev.listenPort }
   const carriedTls: Partial<TlsDraftFields> =
@@ -275,7 +268,6 @@ function rebuildForProtocol(prev: SingBoxInboundDraft, protocol: SingBoxProtocol
   return { ...defaultDraftForProtocol(protocol), ...base, ...carriedTls } as SingBoxInboundDraft
 }
 
-/** Local mirror of the kit's per-protocol default drafts (kept here so the form has no store dep). */
 function defaultDraftForProtocol(protocol: SingBoxProtocol): SingBoxInboundDraft {
   const tls: TlsDraftFields = {
     tlsEnabled: true,
@@ -660,7 +652,6 @@ function ShadowsocksSection({ inbound, issues, onChange }: { inbound: Shadowsock
   )
 }
 
-// ============================ TUIC ============================
 function TuicSection({ inbound, onChange }: { inbound: TuicInboundDraft; onChange: DraftChange }) {
   const { t } = useTranslation()
   const set = <K extends keyof TuicInboundDraft>(key: K, value: TuicInboundDraft[K]) => onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)
@@ -687,7 +678,6 @@ function TuicSection({ inbound, onChange }: { inbound: TuicInboundDraft; onChang
   )
 }
 
-// ============================ Transport (V2Ray) ============================
 function TransportSection({ inbound, onChange }: { inbound: StreamDraft; onChange: DraftChange }) {
   const { t } = useTranslation()
   const set = <K extends keyof StreamDraft>(key: K, value: StreamDraft[K]) => onChange(d => ({ ...d, [key]: value }) as SingBoxInboundDraft)
@@ -735,7 +725,6 @@ function TransportSection({ inbound, onChange }: { inbound: StreamDraft; onChang
   )
 }
 
-// ============================ TLS + REALITY (shared) ============================
 function TlsSection({
   inbound,
   issues,
@@ -835,7 +824,6 @@ function TlsSection({
             )}
           </div>
 
-          {/* Certificate + uTLS (hidden when REALITY owns the handshake) */}
           {!inbound.realityEnabled && (
             <>
               <TlsVersionFields fields={inbound} onChange={onChange} />

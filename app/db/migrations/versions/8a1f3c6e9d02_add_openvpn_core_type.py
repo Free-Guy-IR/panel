@@ -22,14 +22,8 @@ def upgrade() -> None:
     if bind.engine.name == "postgresql":
         op.execute("ALTER TYPE coretype ADD VALUE IF NOT EXISTS 'openvpn'")
     elif bind.engine.name == "sqlite":
-        # SQLite has no native ENUM/ALTER COLUMN TYPE support - sa.Enum is
-        # stored as an unconstrained VARCHAR there (used by the test suite),
-        # so there is no DB-level constraint to update at all.
         pass
     else:
-        # MySQL/others: sa.Enum renders as a native ENUM(...) column, so the
-        # allowed value list must be altered explicitly - adding a Python-side
-        # CoreType member alone does not change the DB constraint.
         core_type = sa.Enum("xray", "wg", "mtproto", "singbox", "openvpn", name="coretype")
         op.alter_column(
             "core_configs",

@@ -150,9 +150,6 @@ def _serialize_user_for_node(
     if ProxyProtocol.openvpn in allowed_protocols:
         proxy_kwargs["openvpn_username"] = str(id)
         proxy_kwargs["openvpn_password"] = user_settings.get("openvpn", {}).get("password")
-        # hwid_limit is reused here as a concurrent-connection cap (0/None = unlimited) -
-        # OpenVPN has no device-fingerprint concept, so this is a different semantic
-        # than hwid_limit's original meaning for Xray (distinct devices ever seen).
         proxy_kwargs["openvpn_max_concurrent_connections"] = node_connection_cap(hwid_limit)
     if ProxyProtocol.tuic in allowed_protocols:
         tuic_settings = user_settings.get("tuic", {})

@@ -176,7 +176,6 @@ export default function BulkFlow({ operationType }: BulkFlowProps) {
             // Allow proceeding even if no targets selected - will apply to all users
             return true
           case 'l2tp':
-            // Allow proceeding even if no targets selected - will apply to all eligible users
             return true
           default:
             return false

@@ -20,7 +20,6 @@ import type {
 } from '@pasarguard/singbox-config-kit'
 import { validateCoreConfig } from '@pasarguard/core-kit'
 
-/** Same certMode inference used by the Xray inbound TLS certificate toggle: content wins if either field/value is present. */
 function stringOrLines(value: unknown): string {
   if (Array.isArray(value)) return value.map(v => String(v)).join('\n')
   if (typeof value === 'string') return value
@@ -39,7 +38,6 @@ function str(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
-/** Reads a sing-box tls object into the shared TLS draft fields (used by vless/vmess/trojan/tuic). */
 function tlsToDraftFields(rawTls: unknown): TlsDraftFields {
   const tls = asRecord(rawTls) ?? {}
   const reality = asRecord(tls.reality)
@@ -88,7 +86,6 @@ function tlsToDraftFields(rawTls: unknown): TlsDraftFields {
   }
 }
 
-/** Reads a sing-box transport object into the shared transport draft fields. */
 function transportToDraftFields(rawTransport: unknown): TransportDraftFields {
   const tr = asRecord(rawTransport)
   if (!tr || typeof tr.type !== 'string') {
@@ -256,12 +253,10 @@ export function createNewSingBoxDraft(): SingBoxCoreDraft {
   return createDefaultSingBoxCoreDraft()
 }
 
-/** For the "Add inbound" button: guarantees a fresh default tag unique against the current draft. */
 export function createNewHysteria2InboundDraft(draft: SingBoxCoreDraft): HysteriaInboundDraft {
   return createDefaultHysteria2InboundDraft(draft.inbounds.map(i => i.tag))
 }
 
-/** Generic "Add inbound" for any protocol, unique against the current draft's tags. */
 export function createNewInboundDraft(draft: SingBoxCoreDraft, protocol: SingBoxProtocol): SingBoxInboundDraft {
   return createDefaultInboundDraft(protocol, draft.inbounds.map(i => i.tag))
 }

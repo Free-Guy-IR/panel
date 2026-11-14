@@ -1,12 +1,3 @@
-"""Working down the server list is one person, not one person per server.
-
-Connect, the speed is poor, move on: that can leave real traffic on three
-nodes inside one ten-minute bucket, and the bucket cannot tell it from three
-devices. The nodes can - a node stops reporting someone who has left it - so
-two nodes have to be holding the user at the same moment, and both have to
-have carried real traffic.
-"""
-
 from types import SimpleNamespace
 
 import pytest
@@ -20,9 +11,6 @@ MB = 1024 * 1024
 
 
 def _assess(seen_by_node, used, bucket_traffic=None, addresses=("5.115.21.4",), sustained=True, **overrides):
-    """sustained=True stands in for the overlap having already held several
-    checks - a real second device. sustained=False is the first check of an
-    overlap, which is where a node switch shows up."""
     activity = NodeActivity(
         touched=set(used),
         used=set(used),
@@ -44,7 +32,6 @@ def _assess(seen_by_node, used, bucket_traffic=None, addresses=("5.115.21.4",), 
         ConnectionLimit(cdn_ranges=[], **overrides),
         device_limit=None,
         prior_node_streak=0,
-        # Enough prior overlap that this check crosses the persistence bar.
         prior_at_once_streak=5 if sustained else 0,
     )
 
@@ -54,7 +41,6 @@ def _reason(obs, code):
 
 
 def test_someone_working_down_the_server_list_is_one_device():
-    """Real traffic on three nodes in one bucket, but only the last still has them."""
     obs = _assess(
         seen_by_node={21: NOW - 600, 23: NOW - 300, 30: NOW},
         used={21, 23, 30},
@@ -76,9 +62,6 @@ def test_two_nodes_held_across_several_checks_is_two_devices():
 
 
 def test_a_first_overlap_is_a_node_switch_not_a_second_device():
-    """The reported case: one person downloads, the speed is poor, they move to
-    another node. The old node lingers, so two are seen at once for a moment -
-    but it does not hold, so it is not counted."""
     obs = _assess(
         seen_by_node={16: NOW - 3, 40: NOW},
         used={16, 40},
@@ -92,14 +75,12 @@ def test_a_first_overlap_is_a_node_switch_not_a_second_device():
 
 
 def test_a_node_that_was_only_tried_does_not_count_even_while_still_reported():
-    """Reported now, but it never carried anything worth calling use."""
     obs = _assess(seen_by_node={21: NOW, 23: NOW}, used={21}, bucket_traffic={21: 40 * MB})
     assert obs.devices == 1
     assert _reason(obs, "nodes_at_once") is None
 
 
 def test_the_window_is_the_concurrency_setting():
-    """Just outside it, the earlier node is the same person a moment ago."""
     inside = _assess(seen_by_node={21: NOW - 80, 23: NOW}, used={21, 23},
                      bucket_traffic={21: 10 * MB, 23: 10 * MB})
     outside = _assess(seen_by_node={21: NOW - 100, 23: NOW}, used={21, 23},
@@ -136,8 +117,6 @@ def test_fewer_than_two_nodes_is_never_a_reason_to_count_anyone(nodes):
 
 
 def test_a_connected_node_below_the_threshold_is_shown_not_hidden():
-    """The node a user is on always appears in the evidence, even when it is
-    under the counting threshold - shown with a mark, not counted."""
     from app.utils.connection_limiter import NodeActivity, assess
     activity = NodeActivity(touched={21}, used=set(), concurrent=0, concurrent_nodes={}, traffic={21: 96_000})
     obs = assess(
@@ -158,5 +137,4 @@ def test_a_connected_node_below_the_threshold_is_shown_not_hidden():
     assert nt is not None
     assert nt["count"] == 1 and nt["counted"] == 0
     assert any("141.94.92.71" in it and "*" in it for it in nt["items"])
-    # It is shown but contributes nothing to the device count.
     assert obs.devices == 0

@@ -29,10 +29,6 @@ def _protocols_from_inbounds_by_tag(inbounds_by_tag: dict[str, dict]) -> frozens
 
 
 def _generate_tls_crypt_key() -> str:
-    """Generate an OpenVPN static key (tls-crypt), matching the exact format
-    `openvpn --genkey secret` produces: 256 random bytes, hex-encoded as 16
-    lines of 32 hex characters each, wrapped in the standard armor.
-    """
     raw = os.urandom(256)
     hex_str = raw.hex()
     lines = [hex_str[i : i + 32] for i in range(0, len(hex_str), 32)]
@@ -41,22 +37,6 @@ def _generate_tls_crypt_key() -> str:
 
 
 def generate_openvpn_pki(common_name: str = "PasarGuard-OpenVPN-CA") -> dict[str, str]:
-    """Generate a self-signed CA + server certificate/key + tls-crypt static
-    key for an OpenVPN CoreConfig.
-
-    Unlike Hysteria2's TLS certificate (which faces the public internet and
-    benefits from being a real, publicly-trusted certificate for anti-DPI
-    blending), OpenVPN's CA never needs public trust - it is embedded
-    directly in every user's downloaded .ovpn file (verify-client-cert none
-    means clients never present their own certificate, but they DO validate
-    the server's certificate against this same embedded CA). A self-signed
-    internal CA is the standard, expected setup for this reason - this
-    mirrors what easy-rsa produces for a typical OpenVPN deployment.
-
-    Generated once per CoreConfig and stored inline as PEM/armored text in
-    CoreConfig.config["pki"] - the same "generate once, store inline" pattern
-    already used for the Hysteria2 TLS certificate in app/core/singbox.py.
-    """
     now = datetime.now(UTC)
 
     ca_key = ec.generate_private_key(ec.SECP384R1())
@@ -132,30 +112,6 @@ def generate_openvpn_pki(common_name: str = "PasarGuard-OpenVPN-CA") -> dict[str
 
 
 class OpenVPNConfig(dict):
-    """AbstractCore implementation for OpenVPN.
-
-    Unlike Xray/sing-box (per-connection proxy cores with one process and
-    many inbounds), OpenVPN has no single-process multi-listener mode - each
-    configured "instance" (a protocol+port combination, e.g. UDP/1194 and
-    TCP/443) is rendered and run as its own independent `openvpn` subprocess
-    by the node's backend/openvpn Go package. What XRayConfig/SingBoxConfig
-    call "inbounds" this class calls "instances" internally, but exposes
-    through the same AbstractCore `inbounds`/`inbounds_by_tag` properties so
-    the rest of the panel (Host <-> inbound_tag resolution, subscription
-    building) works unmodified - each instance tag is just another inbound
-    tag from that code's point of view.
-
-    PKI (CA + server cert/key + tls-crypt static key) is server-side only -
-    OpenVPN is configured with `verify-client-cert none` +
-    `management-client-auth`, so there are no per-user client certificates,
-    only a username/password per user (see app/models/proxy.py
-    OpenVPNSettings). PKI is generated once via generate_openvpn_pki() and
-    must already be present in the config dict by the time this class
-    validates it - construction here is side-effect-free, matching how
-    SingBoxConfig expects an already-provisioned TLS certificate rather than
-    generating one itself.
-    """
-
     def __init__(
         self,
         config: dict | str | PosixPath | None = None,
@@ -257,15 +213,10 @@ class OpenVPNConfig(dict):
         metadata = {
             "tag": tag,
             "protocol": "openvpn",
-            "network": instance["protocol"],  # udp/tcp - the actual L4 transport
+            "network": instance["protocol"],
             "tls": "tls",
             "port": instance.get("port"),
             "sni": "",
-            # Generic per-inbound extra-data channel (same mechanism Hysteria2
-            # obfs/quicParams already use via app.core.hosts) - carries
-            # everything _build_openvpn_components (app/subscription/base.py)
-            # needs to render a self-contained .ovpn <connection> block that a
-            # bare host/port/proto alone can't express.
             "finalmask": {
                 "openvpn": {
                     "cipher": instance.get("cipher", "AES-256-GCM"),

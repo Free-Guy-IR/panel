@@ -217,7 +217,6 @@ class JobSettings(EnvSettings):
     cleanup_node_user_usages_interval: int = Field(
         default=3600, validation_alias="JOB_CLEANUP_NODE_USER_USAGES_INTERVAL"
     )
-    # Days of per-user, per-node usage history to keep. 0 disables the cleanup.
     node_user_usages_retention_days: int = Field(default=30, validation_alias="NODE_USER_USAGES_RETENTION_DAYS")
     cleanup_node_stats_interval: int = Field(default=3600, validation_alias="JOB_CLEANUP_NODE_STATS_INTERVAL")
     node_stats_retention_days: int = Field(default=14, validation_alias="NODE_STATS_RETENTION_DAYS")

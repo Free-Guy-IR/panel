@@ -159,10 +159,6 @@ export default function ConnectionLimitReview() {
                       </TableCell>
 
                       <TableCell className="hidden max-w-md align-top md:table-cell">
-                        {/* Every line starts at the same edge as the rest of the panel. The
-                            addresses and hardware ids inside read left-to-right whatever the
-                            language, and so do the sentences on rows written before reasons
-                            were structured - bdi keeps each one from dragging its line around. */}
                         <ul className="space-y-0.5" dir={dir}>
                           {((state.reasons ?? []) as ConnectionReason[]).slice(1).map((reason, index) => (
                             <li key={index} className="text-muted-foreground text-xs leading-relaxed">

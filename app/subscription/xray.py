@@ -807,8 +807,6 @@ class XrayConfiguration(BaseSubscription):
                 finalmask = FinalMask.model_validate(finalmask)
             if isinstance(finalmask, (FinalMask, dict)):
                 finalmask = dump_fork_final_mask_for_xray(finalmask)
-            # Blank optional fields must be dropped rather than emitted: Xray
-            # reads a present-but-empty value as 0 and rejects the whole config.
             finalmask = restore_doh_tls_configs(prune_blank_values(finalmask))
             if finalmask:
                 stream_settings["finalmask"] = finalmask
