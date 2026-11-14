@@ -1827,8 +1827,8 @@ def replaced_by(fork_sha, sha, head, path, number):
     for parent in commit_parents(sha):
         at = surviving_line(fork_sha, parent, path, number) if is_ancestor(fork_sha, parent) else None
         if at is not None and any(
-            old_at <= at < old_at + old_count and new_count
-            for old_at, old_count, _, new_count in change_counts(parent, sha, path)
+            new_at <= at < new_at + new_count and old_count
+            for _, old_count, new_at, new_count in change_counts(sha, parent, path)
         ):
             return True
     return False
