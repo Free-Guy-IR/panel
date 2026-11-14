@@ -4399,3 +4399,51 @@ def test_a_security_line_the_release_moved_is_not_upstream_form_where_the_fork_d
     assert result.returncode == code, result.stdout + result.stderr
     if code:
         assert f"`{fix[:12]}` is ported by design as a security fix, but" in result.stdout
+
+
+SUPERSEDED_LIB = "def a(user):\n    return user\n\n\ndef b(user):\n    return user\n"
+SUPERSEDED_LIB_CHECKING = SUPERSEDED_LIB.replace("def a(user):\n", "def a(user):\n    check(user)\n")
+
+
+def dev_superseded_world(tmp_path, case, released):
+    path = tmp_path / f"superseding-{case}-{'released' if released else 'dev'}"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "upstream base", {"svc.py": MOVED_SVC, "lib.py": SUPERSEDED_LIB})
+    git(path, "tag", "v1.0")
+    git(path, "update-ref", "refs/upstream-tags/v1.0", "v1.0")
+    fix = commit(path, "fix: check the caller before handling", {"svc.py": MOVED_SVC_FIXED})
+    git(path, "update-ref", "refs/upstream-tags/v1.1", fix)
+    git(path, "update-ref", "refs/remotes/upstream/main", fix)
+    later = commit(
+        path, "refactor: move the caller check into a()", {"svc.py": MOVED_SVC, "lib.py": SUPERSEDED_LIB_CHECKING}
+    )
+    git(path, "update-ref", "refs/remotes/upstream/dev", later)
+    if released:
+        git(path, "update-ref", "refs/upstream-tags/v1.2", later)
+        git(path, "update-ref", "refs/remotes/upstream/main", later)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    carrier = commit(path, "fork: check the caller before handling", {"svc.py": MOVED_SVC_FIXED, "fork.py": "fork\n"})
+    files = {"svc.py": MOVED_SVC}
+    if case == "full-pick":
+        files["lib.py"] = SUPERSEDED_LIB_CHECKING
+    move = commit(path, f"refactor: move the caller check into a()\n\n(cherry picked from commit {later})", files)
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the caller in fork commit {carrier}, and {move} takes "
+        "upstream's later move of the check security: yes\n"
+    )
+    return path, fix, text
+
+
+@pytest.mark.parametrize(
+    ("case", "released", "code"),
+    [("svc-half-only", False, 1), ("full-pick", False, 1), ("svc-half-only", True, 1), ("full-pick", True, 0)],
+)
+def test_only_a_released_later_upstream_change_supersedes_a_security_fix(tmp_path, case, released, code):
+    path, fix, text = dev_superseded_world(tmp_path, case, released)
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0", *CALLER_RELEASE_ARGS)
+    assert result.returncode == code, result.stdout + result.stderr
+    assert (f"`{fix[:12]}` is ported by design as a security fix, but" in result.stdout) is not released
