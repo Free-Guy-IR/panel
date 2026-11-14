@@ -419,7 +419,6 @@ async def test_rejected_create_does_not_warn(operation):
     duplicate = IntegrityError("INSERT", {}, Exception("duplicate"))
     operation.monkeypatch.setattr(node_operation, "create_node", AsyncMock(side_effect=duplicate))
 
-    # The fork answers a refused write after checking that every core it named exists.
     cores = MagicMock()
     cores.scalars.return_value.all.return_value = [1]
     db = SimpleNamespace(rollback=AsyncMock(), execute=AsyncMock(return_value=cores))

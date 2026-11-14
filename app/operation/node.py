@@ -1825,7 +1825,6 @@ class NodeOperation(NodeExtraCoresMixin, BaseOperation):
             response = await node.update_node()
         except NodeAPIError as e:
             await self.raise_error(message=e.detail, code=_maintenance_error_status(e))
-        # The request's session was released before the RPC, so write in a fresh one.
         async with GetDB() as fresh:
             await self._mark_node_reconnecting_after_update(fresh, node_id, node)
         return response.json()
