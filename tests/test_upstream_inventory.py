@@ -3058,8 +3058,8 @@ SVC_FIXED = SVC.replace("from lib import a, b\n", "from lib import a, b, check\n
 SVC_LATER = SVC_FIXED.replace("from lib import a, b, check\n", "from lib import (\n    a,\n    b,\n    check,\n)\n")
 
 
-def superseded_world(tmp_path, case):
-    path = tmp_path / f"superseded-{case}"
+def superseded_world(tmp_path, case, released=True):
+    path = tmp_path / f"superseded-{case}-{released}"
     path.mkdir()
     git(path, "init", "-q", "-b", "up")
     for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
@@ -3069,6 +3069,8 @@ def superseded_world(tmp_path, case):
     fix = commit(path, "fix: check the caller before handling", {"svc.py": SVC_FIXED})
     later = commit(path, "style: wrap the lib import", {"svc.py": SVC_LATER})
     git(path, "update-ref", "refs/remotes/upstream/dev", later)
+    if released:
+        git(path, "update-ref", "refs/upstream-tags/v1.1", later)
     git(path, "checkout", "-q", "--orphan", "main", "v1.0")
     git(path, "commit", "-q", "-m", "fork root")
     fork_import = "from lib import check, a, b\n" if case == "fork-form-restored" else "from lib import a, b, check\n"
@@ -3123,8 +3125,8 @@ SVC_SKIPPING = SVC.replace("    a(user)\n", "    check(user)\n    skip_legacy(us
 SVC_UNSKIPPED = SVC_SKIPPING.replace("    skip_legacy(user)\n", "")
 
 
-def dropped_line_world(tmp_path, case):
-    path = tmp_path / f"dropped-line-{case}"
+def dropped_line_world(tmp_path, case, released=True):
+    path = tmp_path / f"dropped-line-{case}-{released}"
     path.mkdir()
     git(path, "init", "-q", "-b", "up")
     for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
@@ -3136,6 +3138,8 @@ def dropped_line_world(tmp_path, case):
     if case == "upstream-drops-it-too":
         tip = commit(path, "fix: legacy callers are gone", {"svc.py": SVC_UNSKIPPED})
     git(path, "update-ref", "refs/remotes/upstream/dev", tip)
+    if released:
+        git(path, "update-ref", "refs/upstream-tags/v1.1", tip)
     git(path, "checkout", "-q", "--orphan", "main", "v1.0")
     git(path, "commit", "-q", "-m", "fork root")
     carrier = commit(
@@ -3419,6 +3423,419 @@ def test_a_carrier_line_dropped_as_upstream_dropped_it_still_carries_a_security_
         assert f"`{fix[:12]}` is ported by design as a security fix, but its reason names no fork commit on main" in (
             result.stdout
         )
+
+
+CALLER_LIB = "def a(user):\n    return user\n\n\ndef b(user):\n    return user\n"
+CALLER_LIB_FIXED = CALLER_LIB + "\n\ndef check(user):\n    if not user.ok:\n        raise PermissionError(user)\n"
+CALLER_ROUTE = "from lib import a, b\n\n\ndef route(user):\n    a(user)\n    return b(user)\n"
+CALLER_SVC = "from lib import a, b\n\n\ndef handle(user):\n    a(user)\n    return b(user)\n"
+
+
+def caller_checked(text):
+    return text.replace("from lib import a, b\n", "from lib import a, b, check\n").replace(
+        "    a(user)\n", "    check(user)\n    a(user)\n"
+    )
+
+
+CALLER_SVC_CHECKED = caller_checked(CALLER_SVC)
+CALLER_SVC_UNCHECKED = CALLER_SVC_CHECKED.replace("    check(user)\n", "")
+CALLER_SVC_LOGGED = CALLER_SVC.replace("    a(user)\n", "    log(user)\n    a(user)\n")
+CALLER_SVC_AUDITED = CALLER_SVC_CHECKED.replace("    a(user)\n", "    a(user, audit=True)\n")
+CALLER_TEST = "def test_handle(user):\n    handle(user)\n    assert done(user)\n"
+CALLER_TEST_FIXED = CALLER_TEST.replace("    assert done(user)\n", "    assert done(user)\n    assert checked(user)\n")
+CALLER_GUARD = "def check(user):\n    if not user.ok:\n        raise PermissionError(user)\n"
+CALLER_RELEASE_ARGS = (
+    "--track",
+    "refs/upstream-tags/*",
+    "--release-ref",
+    "refs/remotes/upstream/main",
+    "--release-ref",
+    "refs/remotes/upstream/dev",
+    "--release-ref",
+    "refs/upstream-tags/*",
+    "--release-scope-ref",
+    "refs/remotes/upstream/main",
+    "--release-scope-ref",
+    "refs/upstream-tags/*",
+)
+
+
+def caller_repo(tmp_path, name, files):
+    path = tmp_path / name
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "upstream base", files)
+    git(path, "tag", "v1.0")
+    return path
+
+
+def caller_fork(path):
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+
+
+def stamped(path, message, files, hour):
+    for rel, text in files.items():
+        (path / rel).write_text(text)
+    git(path, "add", *files)
+    moment = f"@{1_700_000_000 + hour * 3600} +0000"
+    subprocess.run(
+        ["git", "commit", "-q", "-m", message],
+        cwd=path,
+        env=ENV | {"GIT_AUTHOR_DATE": moment, "GIT_COMMITTER_DATE": moment},
+        capture_output=True,
+        check=True,
+    )
+    return git(path, "rev-parse", "HEAD")
+
+
+def design_failure(fix):
+    return f"`{fix[:12]}` is ported by design as a security fix, but {NO_CARRIER}"
+
+
+def fork_only_line_world(tmp_path, case):
+    path = caller_repo(
+        tmp_path, f"fork-only-line-{case}", {"lib.py": CALLER_LIB, "router.py": CALLER_ROUTE, "svc.py": CALLER_SVC}
+    )
+    fix = commit(
+        path,
+        "fix: check the caller in the router",
+        {"lib.py": CALLER_LIB_FIXED, "router.py": caller_checked(CALLER_ROUTE)},
+    )
+    tip = fix
+    if case == "replaced-by-a-released-upstream-line":
+        tip = commit(path, "feat: log the handled caller", {"svc.py": CALLER_SVC_LOGGED})
+    git(path, "update-ref", "refs/remotes/upstream/dev", tip)
+    git(path, "update-ref", "refs/upstream-tags/v1.1", tip)
+    caller_fork(path)
+    carrier = commit(
+        path,
+        "fork: check the caller in the service",
+        {"lib.py": CALLER_LIB_FIXED, "svc.py": CALLER_SVC_CHECKED, "fork.py": "fork\n"},
+    )
+    if case == "dropped":
+        commit(path, "fork: tidy the service", {"svc.py": CALLER_SVC_UNCHECKED})
+    elif case == "replaced-by-a-released-upstream-line":
+        commit(
+            path,
+            "fork: log the handled caller",
+            {"svc.py": CALLER_SVC_CHECKED.replace("    check(user)\n", "    log(user)\n")},
+        )
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the caller in the service, not in the router, "
+        f"in fork commit {carrier} security: yes\n"
+    )
+    if tip != fix:
+        text += f"\n## Waived\n\n- `{tip}` logs the caller, decided on its own security: no\n"
+    return path, fix, text
+
+
+@pytest.mark.parametrize(
+    ("case", "code"),
+    [("kept", 0), ("dropped", 1), ("replaced-by-a-released-upstream-line", 1)],
+)
+def test_a_fork_only_carrier_line_upstream_never_had_at_the_fix_cannot_take_upstreams_form(tmp_path, case, code):
+    path, fix, text = fork_only_line_world(tmp_path, case)
+    if case != "kept":
+        assert "check(user)" not in (path / "svc.py").read_text()
+        assert "check(user)" not in (path / "router.py").read_text()
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert design_failure(fix) in result.stdout
+    else:
+        assert tally(result.stdout, "ported by design (ledger)") == 1
+
+
+def neighbour_world(tmp_path, case):
+    path = caller_repo(tmp_path, f"neighbour-{case}", {"svc.py": CALLER_SVC})
+    fix = commit(path, "fix: check the caller before handling", {"svc.py": CALLER_SVC_CHECKED})
+    later = commit(path, "feat: audit the handled caller", {"svc.py": CALLER_SVC_AUDITED})
+    git(path, "update-ref", "refs/remotes/upstream/dev", later)
+    git(path, "update-ref", "refs/upstream-tags/v1.1", later)
+    caller_fork(path)
+    carrier = commit(
+        path, "fork: check the caller before handling", {"svc.py": CALLER_SVC_CHECKED, "fork.py": "fork\n"}
+    )
+    final = {
+        "check-kept": CALLER_SVC_AUDITED,
+        "check-lost": CALLER_SVC_AUDITED.replace("    check(user)\n", ""),
+        "check-replaced-by-own-line": CALLER_SVC_CHECKED.replace("    check(user)\n", "    log(user)\n"),
+    }[case]
+    audit = commit(path, "fork: audit the handled caller", {"svc.py": final})
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the caller itself in fork commit {carrier} security: yes\n"
+        f"- `{later}` the fork audits the caller in fork commit {audit} security: no\n"
+    )
+    return path, fix, text
+
+
+@pytest.mark.parametrize(
+    ("case", "code"),
+    [("check-kept", 0), ("check-lost", 1), ("check-replaced-by-own-line", 1)],
+)
+def test_a_carrier_line_counts_as_upstreams_form_only_when_upstream_has_nothing_else_at_that_spot(tmp_path, case, code):
+    path, fix, text = neighbour_world(tmp_path, case)
+    if case == "check-lost":
+        assert "check(user)" not in (path / "svc.py").read_text()
+        assert "    check(user)\n" in git(path, "show", "refs/upstream-tags/v1.1:svc.py")
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert design_failure(fix) in result.stdout
+
+
+def release_world(tmp_path, where, dropped, same_patch=True):
+    path = caller_repo(tmp_path, f"release-{where}-{dropped}-{same_patch}", {"svc.py": CALLER_SVC})
+    git(path, "update-ref", "refs/upstream-tags/v1.0", "v1.0")
+    fix = stamped(path, "fix: check the caller before handling", {"svc.py": CALLER_SVC_CHECKED}, 1)
+    git(path, "update-ref", "refs/upstream-tags/v1.1", fix)
+    git(path, "update-ref", "refs/remotes/upstream/main", fix)
+    git(path, "update-ref", "refs/remotes/upstream/dev", fix)
+    if where != "none":
+        git(path, "checkout", "-q", "-b", "wip", fix)
+        moved = stamped(path, "wip: move the caller check", {"svc.py": CALLER_SVC_UNCHECKED}, 2)
+        target = {
+            "dev": "refs/remotes/upstream/dev",
+            "feature-x": "refs/remotes/upstream/feature-x",
+            "pre-release": "refs/upstream-tags/v1.2-rc.1",
+            "final-release": "refs/upstream-tags/v1.2",
+        }[where]
+        git(path, "update-ref", target, moved)
+        if where == "final-release":
+            git(path, "update-ref", "refs/remotes/upstream/main", moved)
+            git(path, "update-ref", "refs/remotes/upstream/dev", moved)
+        git(path, "checkout", "-q", "up")
+    caller_fork(path)
+    carrier = commit(
+        path, "fork: check the caller before handling", {"svc.py": CALLER_SVC_CHECKED, "fork.py": "fork\n"}
+    )
+    if dropped:
+        extra = {} if same_patch else {"fork.py": "fork\nhandled\n"}
+        commit(path, "fork: handle without the check", {"svc.py": CALLER_SVC_UNCHECKED, **extra})
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the caller itself in fork commit {carrier} security: yes\n"
+    )
+    if where in ("pre-release", "final-release"):
+        text += f"\n## Waived\n\n- `{moved}` moves the caller check, decided on its own security: no\n"
+    return path, fix, text
+
+
+@pytest.mark.parametrize(
+    ("where", "dropped", "same_patch", "code"),
+    [
+        ("dev", True, True, 1),
+        ("dev", True, False, 1),
+        ("feature-x", True, True, 1),
+        ("feature-x", True, False, 1),
+        ("pre-release", True, False, 1),
+        ("none", True, False, 1),
+        ("final-release", True, False, 0),
+        ("dev", False, False, 0),
+    ],
+)
+def test_upstreams_form_of_a_released_security_line_is_read_from_the_newest_final_release_that_has_the_fix(
+    tmp_path, where, dropped, same_patch, code
+):
+    path, fix, text = release_world(tmp_path, where, dropped, same_patch)
+    if dropped:
+        assert "check(user)" not in (path / "svc.py").read_text()
+        assert "    check(user)\n" in git(path, "show", "refs/upstream-tags/v1.1:svc.py")
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0", *CALLER_RELEASE_ARGS)
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert design_failure(fix) in result.stdout
+    else:
+        assert tally(result.stdout, "ported by design (ledger)") == 1
+
+
+def clause_path_world(tmp_path, case):
+    path = caller_repo(
+        tmp_path, f"clause-path-{case}", {"lib.py": CALLER_LIB, "svc.py": CALLER_SVC, "check_test.py": CALLER_TEST}
+    )
+    fix = commit(
+        path,
+        "fix: check the caller before handling",
+        {"lib.py": CALLER_LIB_FIXED, "svc.py": CALLER_SVC_CHECKED, "check_test.py": CALLER_TEST_FIXED},
+    )
+    git(path, "update-ref", "refs/remotes/upstream/dev", fix)
+    caller_fork(path)
+    guarded = CALLER_SVC.replace("from lib import a, b\n", "from lib import a, b\nfrom guard import check\n").replace(
+        "    a(user)\n", "    check(user)\n    a(user)\n"
+    )
+    carrier = commit(
+        path,
+        "fork: check the caller with the fork guard",
+        {"guard.py": CALLER_GUARD, "svc.py": guarded, "check_test.py": CALLER_TEST_FIXED},
+    )
+    rewrite = None
+    if case in ("clause-and-gutted", "clause-only"):
+        rewrite = commit(
+            path,
+            "fork: pin the strict check in the test",
+            {"check_test.py": CALLER_TEST_FIXED.replace("checked(user)", "checked(user, strict=True)")},
+        )
+    if case in ("clause-and-gutted", "gutted-no-clause"):
+        commit(path, "fork: simplify the guard", {"guard.py": "def check(user):\n    return None\n"})
+    clause = f"; missing `check_test.py:+4` because {rewrite} pins the strict check" if rewrite else ""
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the caller with its own guard in fork commit {carrier}"
+        f"{clause} security: yes\n"
+    )
+    return path, fix, text
+
+
+@pytest.mark.parametrize(
+    ("case", "code"),
+    [("clause-only", 0), ("clause-and-gutted", 1), ("gutted-no-clause", 1)],
+)
+def test_a_path_named_only_in_a_missing_clause_does_not_narrow_the_carriers_checked_files(tmp_path, case, code):
+    path, fix, text = clause_path_world(tmp_path, case)
+    if case != "clause-only":
+        assert "raise PermissionError" not in (path / "guard.py").read_text()
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert design_failure(fix) in result.stdout
+
+
+CALLER_SVC_STRICT = CALLER_SVC_CHECKED.replace("    check(user)\n", "    check(user, strict=True)\n")
+CALLER_SVC_STRICT_NOTED = CALLER_SVC_CHECKED.replace(
+    "    check(user)\n", "    check(user, strict=True)\n    note(user)\n"
+)
+STALE_CLAUSE_CASES = {
+    "clause-current": (CALLER_SVC_STRICT, None, "rewrite", 0),
+    "later-loss": (CALLER_SVC_STRICT, CALLER_SVC_CHECKED.replace("    check(user)\n", "    log(user)\n"), "rewrite", 1),
+    "later-loss-named": (
+        CALLER_SVC_STRICT,
+        CALLER_SVC_CHECKED.replace("    check(user)\n", "    log(user)\n"),
+        "both",
+        0,
+    ),
+    "partial-rewrite": (
+        CALLER_SVC_STRICT_NOTED,
+        CALLER_SVC_CHECKED.replace("    check(user)\n", "    log(user)\n    note(user)\n"),
+        "rewrite",
+        1,
+    ),
+    "later-deletion": (
+        CALLER_SVC_STRICT_NOTED,
+        CALLER_SVC_CHECKED.replace("    check(user)\n", "    note(user)\n"),
+        "both",
+        1,
+    ),
+    "later-insertion": (
+        CALLER_SVC_STRICT,
+        CALLER_SVC_STRICT.replace("    a(user)\n", "    audit(user)\n    a(user)\n"),
+        "rewrite",
+        0,
+    ),
+    "chain-named": (
+        CALLER_SVC_STRICT,
+        CALLER_SVC_CHECKED.replace("    check(user)\n", "    check(user, strict=True, audit=True)\n"),
+        "both",
+        0,
+    ),
+    "chain-half-named": (
+        CALLER_SVC_STRICT,
+        CALLER_SVC_CHECKED.replace("    check(user)\n", "    check(user, strict=True, audit=True)\n"),
+        "rewrite",
+        1,
+    ),
+    "no-clause": (CALLER_SVC_STRICT, None, "none", 1),
+}
+
+
+def stale_clause_world(tmp_path, case):
+    rewritten, final, named, _ = STALE_CLAUSE_CASES[case]
+    path = caller_repo(tmp_path, f"stale-clause-{case}", {"svc.py": CALLER_SVC})
+    fix = commit(path, "fix: check the caller before handling", {"svc.py": CALLER_SVC_CHECKED})
+    git(path, "update-ref", "refs/remotes/upstream/dev", fix)
+    caller_fork(path)
+    carrier = commit(
+        path, "fork: check the caller before handling", {"svc.py": CALLER_SVC_CHECKED, "fork.py": "fork\n"}
+    )
+    rewrite = commit(path, "fork: make the caller check strict", {"svc.py": rewritten})
+    later = commit(path, "fork: rework the caller check", {"svc.py": final}) if final else None
+    commits = {"rewrite": rewrite, "both": f"{rewrite} and {later}"}.get(named)
+    clause = f"; missing `svc.py:+5` because {commits} rework the caller check" if commits else ""
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the caller itself in fork commit {carrier}"
+        f"{clause} security: yes\n"
+    )
+    return path, fix, text
+
+
+@pytest.mark.parametrize("case", sorted(STALE_CLAUSE_CASES))
+def test_a_missing_clause_excuses_a_line_only_while_the_commits_it_names_wrote_its_current_version(tmp_path, case):
+    code = STALE_CLAUSE_CASES[case][3]
+    path, fix, text = stale_clause_world(tmp_path, case)
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert design_failure(fix) in result.stdout
+    else:
+        assert tally(result.stdout, "ported by design (ledger)") == 1
+
+
+def traced(text):
+    return text.replace("def handle(user):\n", "def handle(user):\n    trace(user)\n")
+
+
+def fork_neighbour_world(tmp_path, case):
+    released = CALLER_SVC_STRICT if case == "release-form-beside-a-fork-line" else CALLER_SVC_AUDITED
+    path = caller_repo(tmp_path, f"fork-neighbour-{case}", {"svc.py": CALLER_SVC})
+    fix = commit(path, "fix: check the caller before handling", {"svc.py": CALLER_SVC_CHECKED})
+    later = commit(path, "feat: rework the handled caller", {"svc.py": released})
+    git(path, "update-ref", "refs/remotes/upstream/dev", later)
+    git(path, "update-ref", "refs/upstream-tags/v1.1", later)
+    caller_fork(path)
+    commit(path, "fork: trace the caller", {"svc.py": traced(CALLER_SVC)})
+    carrier = commit(
+        path, "fork: check the caller before handling", {"svc.py": traced(CALLER_SVC_CHECKED), "fork.py": "fork\n"}
+    )
+    final = released if case == "release-form-beside-a-fork-line" else released.replace("    check(user)\n", "")
+    rework = commit(path, "fork: take the reworked caller", {"svc.py": traced(final)})
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the caller itself in fork commit {carrier} security: yes\n"
+        f"- `{later}` the fork reworks the caller in fork commit {rework} security: no\n"
+    )
+    return path, fix, text
+
+
+@pytest.mark.parametrize(
+    ("case", "code"),
+    [("release-form-beside-a-fork-line", 0), ("check-lost-beside-a-fork-line", 1)],
+)
+def test_a_fork_only_line_beside_the_replacement_does_not_hide_what_the_release_has_there(tmp_path, case, code):
+    path, fix, text = fork_neighbour_world(tmp_path, case)
+    assert "    trace(user)\n" in (path / "svc.py").read_text()
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert design_failure(fix) in result.stdout
+    else:
+        assert tally(result.stdout, "ported by design (ledger)") == 2
+
+
+UNRELEASED_FORM_WORLDS = {"superseded": superseded_world, "dropped-line": dropped_line_world}
+
+
+@pytest.mark.parametrize(
+    ("world", "case"),
+    [
+        ("superseded", "upstream-later-form"),
+        ("superseded", "fork-form-restored"),
+        ("dropped-line", "upstream-drops-it-too"),
+    ],
+)
+def test_an_upstream_form_no_final_release_carries_does_not_excuse_a_carrier_line(tmp_path, world, case):
+    path, fix, text = UNRELEASED_FORM_WORLDS[world](tmp_path, case, released=False)
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert design_failure(fix) in result.stdout
 
 
 @pytest.mark.parametrize(
