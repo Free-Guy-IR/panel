@@ -176,7 +176,8 @@ class UserExtrasMixin:
     ) -> list[CommittedAccess]:
         try:
             await acquire_proxy_secrets_lock(db)
-            await lock_users_proxy_settings(db, [db_user])
+            if not await lock_users_proxy_settings(db, [db_user]):
+                await self.raise_error(message="User not found", code=404, db=db)
             return await committed_access(db, db_user.id, groups)
         except (DBAPIError, NamedLockMissing) as exc:
             await self._raise_if_lock_unavailable(db, exc)

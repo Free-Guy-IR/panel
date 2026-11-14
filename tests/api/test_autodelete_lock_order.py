@@ -141,6 +141,35 @@ def test_an_admin_bulk_delete_during_the_autodelete_job_waits_for_it_instead_of_
         _drop_world(access_token, core, group, (expiring, other))
 
 
+def test_an_admin_renewing_a_user_the_autodelete_job_holds_waits_for_it_instead_of_deadlocking(
+    access_token, monkeypatch
+):
+    if ":memory:" in DATABASE_URL:
+        pytest.skip("needs a database that separate connections share")
+    core, group, expiring, other = _wireguard_world(access_token, "10.49.2")
+    renewed_until = (datetime.now(UTC) + timedelta(days=30)).isoformat()
+    try:
+
+        async def renew_the_expiring_user(racing_client, headers):
+            return await racing_client.put(
+                f"/api/user/by-id/{expiring['id']}",
+                headers=headers,
+                json={"expire": renewed_until, "status": "active"},
+            )
+
+        deleted, outcome, stored, waiting = _race_the_autodelete_job(
+            monkeypatch, access_token, expiring, other, renew_the_expiring_user
+        )
+
+        assert waiting is True, "the renewal finished before the job's batch let it go"
+        assert not isinstance(outcome, BaseException), f"the renewal raised {outcome!r}"
+        assert outcome.status_code == status.HTTP_404_NOT_FOUND, f"{outcome.status_code} {outcome.text}"
+        assert deleted == [expiring["id"]]
+        assert stored == {other["id"]: UserStatus.active}
+    finally:
+        _drop_world(access_token, core, group, (expiring, other))
+
+
 def test_an_admin_activating_the_next_plan_of_a_user_the_autodelete_job_holds_waits_for_it_instead_of_deadlocking(
     access_token, monkeypatch
 ):
