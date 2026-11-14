@@ -1891,6 +1891,8 @@ def own_hunk_in_upstream_form(
     span = frozenset(range(start, start + len(hunk["post"])))
     own = {start + k for k, (text, changed) in enumerate(hunk["post"]) if changed and normalise_line(path, text)}
     pairs = aligned_lines(here, upstream_now)
+    matched = set(pairs.values())
+    release_only = {text for index, text in enumerate(upstream_now) if index not in matched}
     kept = kept_line_numbers(path, content)
     replacements = {}
     covered = set()
@@ -1901,8 +1903,11 @@ def own_hunk_in_upstream_form(
         added = sorted(normalised_positions(head, path, added_numbers))
         replacement = tuple(here[i] for i in added)
         between = upstream_between(pairs, kept, anchor, added, len(upstream_now))
-        upstream_form = upstream_now[between[0] : between[1]] == replacement and upstream_had_lines(
-            fork_sha, upstream_sha, path, lost
+        lost_texts = {normalise_line(path, hunk["post"][number - start][0]) for number in lost}
+        upstream_form = (
+            upstream_now[between[0] : between[1]] == replacement
+            and upstream_had_lines(fork_sha, upstream_sha, path, lost)
+            and not lost_texts & release_only
         )
         if not upstream_form and not (
             exceptions and excepted_replacement(fork_sha, head, path, lost, added, exceptions)
