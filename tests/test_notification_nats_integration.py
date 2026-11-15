@@ -169,7 +169,9 @@ async def test_a_destination_that_never_stops_answering_429_leaves_room_for_the_
         async with asyncio.timeout(20):
             while len(seen["333"]) < 20:
                 await asyncio.sleep(0.05)
-        stored = await _stored(queue)
+        async with asyncio.timeout(20):
+            while (stored := await _stored(queue)) > SHARE:
+                await asyncio.sleep(0.05)
 
     assert stored == SHARE
     assert seen["333"] == [f"healthy {number}" for number in range(20)]
