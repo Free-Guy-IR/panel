@@ -24,7 +24,7 @@ from app.operation import OperatorType, admin as admin_operation
 from app.operation.admin import AdminOperation
 from tests.a1_bridge_harness import isolate_node_manager
 from tests.test_merge_interleavings_status_admin import _give_inbound
-from tests.test_recorder_harness import recorder_db_fixture, seed_users_and_nodes  # noqa: F401
+from tests.test_recorder_harness import file_backed_database_url, recorder_database, seed_users_and_nodes
 
 OWNER = AdminDetails(id=None, username="owner", role=AdminRoleData(id=1, name="owner", is_owner=True))
 BOUND = 30
@@ -53,6 +53,12 @@ class Receiver:
                 self.chunked, Cardinality.STREAM_UNARY, service.UsersChunk, service.Empty
             )
         }
+
+
+@pytest.fixture(name="recorder_db")
+async def recorder_db_fixture(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    async with recorder_database(monkeypatch, file_backed_database_url(tmp_path)) as session_factory:
+        yield session_factory
 
 
 @pytest.fixture(name="node")
