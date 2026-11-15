@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 from collections import defaultdict
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -27,6 +29,21 @@ def _database_url() -> str:
     if os.getenv("TEST_FROM", "local").lower() == "local":
         return "sqlite+aiosqlite:///:memory:"
     return database_settings.url
+
+
+def file_backed_database_url(directory: Path) -> str:
+    url = _database_url()
+    return f"sqlite+aiosqlite:///{directory / 'recorder.db'}" if url.startswith("sqlite") else url
+
+
+def _recorder_engine(url: str):
+    if not url.startswith("sqlite"):
+        return create_async_engine(url, poolclass=NullPool)
+    if ":memory:" in url:
+        return create_async_engine(url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    engine = create_async_engine(url, connect_args={"check_same_thread": False})
+    event.listen(engine.sync_engine, "connect", base._set_sqlite_pragmas)
+    return engine
 
 
 async def _set_sqlite_foreign_keys(engine, enabled: bool) -> None:
@@ -75,21 +92,18 @@ async def restore_seeded_rows(engine, seeded: dict[str, list[dict]]) -> None:
                 )
 
 
-@pytest.fixture(name="recorder_db")
-async def recorder_db_fixture(monkeypatch: pytest.MonkeyPatch):
-    url = _database_url()
+@contextlib.asynccontextmanager
+async def recorder_database(monkeypatch: pytest.MonkeyPatch, url: str):
     is_sqlite = url.startswith("sqlite")
+    scratch_file = is_sqlite and ":memory:" not in url
     json_column = base.Base.metadata.tables["users"].c.proxy_settings
     json_default = json_column.server_default
     if url.startswith("mysql"):
         json_column.server_default = None
 
-    if is_sqlite:
-        engine = create_async_engine(url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    else:
-        engine = create_async_engine(url, poolclass=NullPool)
+    engine = _recorder_engine(url)
 
-    seeded = None if ":memory:" in url else await snapshot_seeded_rows(engine)
+    seeded = None if is_sqlite else await snapshot_seeded_rows(engine)
     async with engine.begin() as conn:
         await conn.run_sync(drop_migration_owned_tables)
         await conn.run_sync(base.Base.metadata.drop_all)
@@ -148,16 +162,23 @@ async def recorder_db_fixture(monkeypatch: pytest.MonkeyPatch):
     yield session_factory
 
     record_usages._usage_coefficient_cache.clear()
-    if is_sqlite:
-        await _set_sqlite_foreign_keys(engine, False)
-    async with engine.begin() as conn:
-        await conn.run_sync(drop_migration_owned_tables)
-        await conn.run_sync(base.Base.metadata.drop_all)
-        await conn.run_sync(base.Base.metadata.create_all)
-    if seeded is not None:
-        await restore_seeded_rows(engine, seeded)
+    if not scratch_file:
+        if is_sqlite:
+            await _set_sqlite_foreign_keys(engine, False)
+        async with engine.begin() as conn:
+            await conn.run_sync(drop_migration_owned_tables)
+            await conn.run_sync(base.Base.metadata.drop_all)
+            await conn.run_sync(base.Base.metadata.create_all)
+        if seeded is not None:
+            await restore_seeded_rows(engine, seeded)
     await engine.dispose()
     json_column.server_default = json_default
+
+
+@pytest.fixture(name="recorder_db")
+async def recorder_db_fixture(monkeypatch: pytest.MonkeyPatch):
+    async with recorder_database(monkeypatch, _database_url()) as session_factory:
+        yield session_factory
 
 
 async def seed_users_and_nodes(session_factory, user_count: int, node_count: int) -> tuple[int, list[int], list[int]]:
