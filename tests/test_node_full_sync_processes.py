@@ -31,6 +31,8 @@ class Receiver:
         self.users: dict[str, list[str]] = {}
         self.events: list[tuple[str, list[str]]] = []
         self.delta_landed = asyncio.Event()
+        self.replies = asyncio.Event()
+        self.replies.set()
         self.delay_prefix = "slow-"
         self.delay_seconds = 1.0
 
@@ -60,6 +62,7 @@ class Receiver:
             self.users[user.email] = list(user.inbounds)
         self.events.append(("delta", [f"{user.email}={list(user.inbounds)}" for user in users]))
         self.delta_landed.set()
+        await self.replies.wait()
         await stream.send_message(service.Empty())
 
 
@@ -203,6 +206,7 @@ async def test_worker_process_that_dies_after_sending_and_before_acking_is_recov
     node_id = "crash-" + uuid4().hex[:6]
     async with receiver_server() as (receiver, port):
         receiver.delay_seconds = 0.3
+        receiver.replies.clear()
         writer = NatsUserSyncStore(jetstream.kv)
         local = NatsUserSyncStore(jetstream.kv)
         node = make_local_node(local, node_id, port, "parent")
@@ -217,6 +221,7 @@ async def test_worker_process_that_dies_after_sending_and_before_acking_is_recov
             worker.stdin.write(b"die\n")
             await worker.stdin.drain()
             await asyncio.wait_for(worker.wait(), 10)
+            receiver.replies.set()
             assert worker.returncode == 1
             # The dead worker's claim is still on record; a full sync must wait it out
             # rather than retire the entry the crashed delivery never acknowledged.
