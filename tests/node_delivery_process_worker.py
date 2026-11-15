@@ -47,6 +47,7 @@ async def main():
     node._client = service_grpc.NodeServiceStub(node.channel)
     node._sync_poll_interval = 0.05
     node._worker_idle_timeout = 0.5
+    waking = asyncio.create_task(wake_like_the_node_health_check(node))
     try:
         await node.connect("0.5.4", "26.3.27")
         print("READY", flush=True)
@@ -59,11 +60,18 @@ async def main():
         await asyncio.sleep(float(seconds))
         print(json.dumps({"worker": worker_id, "progress": node._worker_progress}), flush=True)
     finally:
+        waking.cancel()
         await node.disconnect()
         node.channel.close()
         await node._json_client.close()
         await store.close()
         await nc.close()
+
+
+async def wake_like_the_node_health_check(node):
+    while True:
+        await asyncio.sleep(0.1)
+        await node.wake_sync_worker()
 
 
 async def current_state(kv, node_id, emails):
