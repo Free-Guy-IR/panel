@@ -1,11 +1,11 @@
 import uuid
 from datetime import UTC, datetime as dt
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Admin, AdminStatus, APIKey, APIKeyStatus
+from app.db.models import API_KEY_REQUEST_COUNT_CEILING, Admin, AdminStatus, APIKey, APIKeyStatus
 from app.models.api_key import APIKeyCreate
 from app.utils.crypto import api_key_lookup_id, hash_api_key, verify_api_key
 
@@ -106,6 +106,19 @@ async def get_api_keys(
     return rows, total
 
 
+async def _is_unlimited_key_at_count_ceiling(db: AsyncSession, key_id: int) -> bool:
+    stmt = (
+        select(APIKey.id)
+        .where(
+            APIKey.id == key_id,
+            APIKey.max_requests.is_(None),
+            APIKey.request_count >= API_KEY_REQUEST_COUNT_CEILING,
+        )
+        .with_for_update()
+    )
+    return (await db.execute(stmt)).scalar_one_or_none() is not None
+
+
 async def increment_api_key_usage(db: AsyncSession, key_id: int) -> int | None:
     """Atomically increment request_count only when below max_requests.
 
@@ -125,7 +138,7 @@ async def increment_api_key_usage(db: AsyncSession, key_id: int) -> int | None:
         .where(
             APIKey.id == key_id,
             or_(
-                APIKey.max_requests.is_(None),
+                and_(APIKey.max_requests.is_(None), APIKey.request_count < API_KEY_REQUEST_COUNT_CEILING),
                 APIKey.request_count < APIKey.max_requests,
             ),
         )
@@ -134,6 +147,9 @@ async def increment_api_key_usage(db: AsyncSession, key_id: int) -> int | None:
     result = await db.execute(stmt)
     if result.rowcount == 0:
         # Either the key doesn't exist or it has already hit its limit.
+        if await _is_unlimited_key_at_count_ceiling(db, key_id):
+            await db.commit()
+            return API_KEY_REQUEST_COUNT_CEILING
         await db.rollback()
         return None
 

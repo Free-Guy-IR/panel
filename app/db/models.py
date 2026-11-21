@@ -1073,6 +1073,9 @@ class APIKeyStatus(str, Enum):
     disabled = "disabled"
 
 
+API_KEY_REQUEST_COUNT_CEILING = 2_147_483_647
+
+
 class APIKey(Base, CreatedAtUTCMixin):
     __tablename__ = "api_keys"
     __table_args__ = (
