@@ -19,6 +19,8 @@ from app.operation.node import NodeOperation
 
 NODE_ID = 987_654
 REMOVAL_PATHS = ["local", "nats_worker", "sibling_sync"]
+REMOVALS_THAT_LET_CONNECTS_FINISH = ["local", "sibling_sync"]
+WITHDRAW_SECONDS = 1.0
 
 
 def reused_node():
@@ -100,7 +102,7 @@ async def test_no_connect_lock_outlives_its_last_user_after_a_removal(path, remo
     assert NODE_ID not in node_extras._CONNECT_LOCKS
 
 
-@pytest.mark.parametrize("path", REMOVAL_PATHS)
+@pytest.mark.parametrize("path", REMOVALS_THAT_LET_CONNECTS_FINISH)
 async def test_a_removal_between_a_held_connect_and_its_waiters_never_runs_two_connects_of_one_id_at_once(
     path, removal, monkeypatch
 ):
@@ -150,3 +152,57 @@ async def test_a_removal_between_a_held_connect_and_its_waiters_never_runs_two_c
     assert overlaps == [1, 1, 1]
     assert locks_seen[0] is not None
     assert all(lock is locks_seen[0] for lock in locks_seen)
+
+
+async def test_a_nats_worker_removal_withdraws_the_held_connect_and_its_waiter_and_lets_a_later_connect_run(
+    removal, monkeypatch
+):
+    running = 0
+    overlaps: list[int] = []
+    finished: list[str] = []
+    holding = asyncio.Event()
+    release = asyncio.Event()
+
+    async def inner(db_node, core, *args):
+        nonlocal running
+        running += 1
+        overlaps.append(running)
+        try:
+            if core == "holder":
+                holding.set()
+                await release.wait()
+            else:
+                await asyncio.sleep(0)
+        finally:
+            running -= 1
+        finished.append(core)
+
+    monkeypatch.setattr(NodeOperation, "_connect_node_inner", staticmethod(inner))
+
+    def connect(name: str) -> asyncio.Task:
+        return asyncio.create_task(
+            with_connect_snapshot(connect_snapshot(), NodeOperation.connect_node(reused_node(), name, []))
+        )
+
+    holder = connect("holder")
+    await asyncio.wait_for(holding.wait(), 5)
+    waiter = connect("waiter")
+    await asyncio.sleep(0)
+
+    removing = asyncio.create_task(removal("nats_worker"))
+    try:
+        removed, _ = await asyncio.wait([removing], timeout=WITHDRAW_SECONDS)
+        withdrawn, _ = await asyncio.wait([holder, waiter], timeout=WITHDRAW_SECONDS)
+        gc.collect()
+        late = connect("after-removal")
+        for _ in range(5):
+            await asyncio.sleep(0)
+    finally:
+        release.set()
+    await asyncio.wait_for(asyncio.gather(removing, holder, waiter, late), 5)
+
+    assert removing in removed, "the NATS worker's remove_node waited behind the removed node's held connect"
+    assert withdrawn == {holder, waiter}, "the removed node's held connect and its waiter kept running"
+    assert holder.result() is None and waiter.result() is None
+    assert finished == ["after-removal"]
+    assert max(overlaps) == 1

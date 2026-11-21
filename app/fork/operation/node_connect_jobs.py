@@ -1,5 +1,6 @@
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from app.fork.operation.node_extras import _connect_lock
 
@@ -68,3 +69,13 @@ def readmit_connects(node_id: int) -> None:
         _retiring[node_id] = holders
     else:
         _retiring.pop(node_id, None)
+
+
+@asynccontextmanager
+async def retiring_node(node_id: int) -> AsyncIterator[bool]:
+    try:
+        withdrew = await withdraw_connects(node_id)
+        async with _connect_lock(node_id):
+            yield withdrew
+    finally:
+        readmit_connects(node_id)

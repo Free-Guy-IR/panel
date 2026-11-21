@@ -13,6 +13,7 @@ from app.db import GetDB
 from app.db.crud.node import get_node_by_id, get_nodes
 from app.db.models import NodeStatus
 from app.fork.node_error_status import carried_http_error_status
+from app.fork.operation.node_connect_jobs import retiring_node
 from app.fork.operation.node_extras import forget_connect_pushes
 from app.fork.operation.node_messages import describe_error, scrub_credentials
 from app.models.node import NodeCoreUpdate, NodeGeoFilesUpdate, NodeListQuery
@@ -168,8 +169,9 @@ class NodeWorkerService(BaseRpcService):
         node_id = data.get("node_id")
         if not node_id:
             return
-        await node_manager.remove_node(node_id)
-        forget_connect_pushes(node_id)
+        async with retiring_node(node_id):
+            await node_manager.remove_node(node_id)
+            forget_connect_pushes(node_id)
 
     async def _connect_node(self, data: dict):
         node_id = data.get("node_id")
