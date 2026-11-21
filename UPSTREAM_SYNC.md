@@ -476,6 +476,8 @@ days after the id's date. Only the entries it lists that name the id with `owner
   `9708b0cd4be7624af7c2defa38cbf4e22e774949`
   `da158b5729e4747891cbb577904253f557ca4583`
   until: 2026-11-26
+- `2026-11-21-main-bridge-rollout-pin` main decided on 2026-11-21 (UTC), under the owner's standing delegation, in its brief to the forks-ledger agent: the production rollout of CP1 and CP2 is gated on bridge 0.10.0, because the rollout checklist pins bridge fork tag v0.10.0 (rev 5b21adc6b961) and its release-image artifact check (gate G3) expects the installed bridge to name that commit, so the panel pin stays at that rev through the rollout while upstream node_bridge_py v0.11.0 to v0.11.2 is ported on the fork bridge branch port/bridge-v0.11.2. upstream-bridge-waiver.toml rests on this record, and so do the security rows of the Port queue of upstream-forks/node_bridge_py.md, which records the same decision; the bridge version gate fails after the date. It covers pasarguard-node-bridge@0.11.2
+  until: 2026-11-28
 
 ## Port queue
 
