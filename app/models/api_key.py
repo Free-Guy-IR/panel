@@ -3,7 +3,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.db.models import APIKeyStatus
+from app.db.models import API_KEY_REQUEST_COUNT_CEILING, APIKeyStatus
 from app.models.admin_role import RolePermissions
 from app.utils.helpers import fix_datetime_timezone
 
@@ -36,6 +36,7 @@ class APIKeyBase(BaseModel):
 
 class APIKeyCreate(APIKeyBase):
     admin_id: int | None = Field(default=None, ge=1)
+    max_requests: int | None = Field(default=None, ge=1, le=API_KEY_REQUEST_COUNT_CEILING)
 
     @field_validator("expire_date", mode="before")
     @classmethod
@@ -55,7 +56,7 @@ class APIKeyUpdate(BaseModel):
     permissions: RolePermissions | None = None
     inherit_permissions: bool | None = Field(default=None, json_schema_extra=_not_nullable)
     expire_date: dt | None = None
-    max_requests: int | None = Field(default=None, ge=1)
+    max_requests: int | None = Field(default=None, ge=1, le=API_KEY_REQUEST_COUNT_CEILING)
     delete_on_limit: bool = Field(default=False)
     status: APIKeyStatus | None = Field(default=None, json_schema_extra=_not_nullable)
 

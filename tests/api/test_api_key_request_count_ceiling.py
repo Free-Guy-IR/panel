@@ -49,6 +49,15 @@ def _request_count(key_id: int) -> int | None:
     return asyncio.run(_get())
 
 
+def _max_requests(key_id: int) -> int | None:
+    async def _get() -> int | None:
+        async with TestSession() as session:
+            result = await session.execute(select(APIKey.max_requests).where(APIKey.id == key_id))
+            return result.scalar_one_or_none()
+
+    return asyncio.run(_get())
+
+
 def test_an_unlimited_key_keeps_authenticating_at_the_request_count_ceiling(access_token):
     admin = create_admin(access_token, role_id=2)
     try:
@@ -143,5 +152,28 @@ def test_a_key_limited_at_the_ceiling_is_deleted_by_its_last_request(access_toke
 
         after_delete = client.get("/api/admin", headers={"X-Api-Key": raw_key})
         assert after_delete.status_code == status.HTTP_401_UNAUTHORIZED
+    finally:
+        delete_admin(access_token, admin["username"])
+
+
+def test_max_requests_above_the_column_range_is_refused_before_it_reaches_the_database(access_token):
+    admin = create_admin(access_token, role_id=2)
+    try:
+        admin_token = _login(admin["username"], admin["password"])
+        created_too_large = client.post(
+            "/api/api_key",
+            headers=auth_headers(admin_token),
+            json={"name": unique_name("api_key"), "max_requests": INT32_MAX + 1},
+        )
+        assert created_too_large.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+        _, key_id = _create_key(admin_token, max_requests=INT32_MAX)
+        patched_too_large = client.patch(
+            f"/api/api_key/{key_id}",
+            headers=auth_headers(admin_token),
+            json={"max_requests": INT32_MAX + 1},
+        )
+        assert patched_too_large.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+        assert _max_requests(key_id) == INT32_MAX
     finally:
         delete_admin(access_token, admin["username"])
