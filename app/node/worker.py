@@ -163,7 +163,7 @@ class NodeWorkerService(BaseRpcService):
         async with GetDB() as db:
             db_node = await get_node_by_id(db, node_id, load_usage_logs=False)
         if db_node:
-            await node_manager.update_node(db_node)
+            await NodeOperation._register_if_wanted(db_node)
 
     async def _remove_node(self, data: dict):
         node_id = data.get("node_id")
