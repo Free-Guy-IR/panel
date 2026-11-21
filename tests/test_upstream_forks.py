@@ -1345,3 +1345,83 @@ def test_the_tracker_empties_every_gate_cache_when_it_enters_and_when_it_leaves_
     left = {name: getattr(inventory, name).cache_info().currsize for name in cached}
     assert entered == [dict.fromkeys(cached, 0)]
     assert left == dict.fromkeys(cached, 0)
+
+
+
+LATER_SVC = "def handle(user):\n    load(user)\n    a(user)\n    return b(user)\n"
+LATER_SVC_FIXED = LATER_SVC.replace("    a(user)\n", "    check(user)\n    a(user)\n")
+LATER_LIB = "def a(user):\n    return user\n\n\ndef b(user):\n    return user\n"
+LATER_LIB_CHECKING = LATER_LIB.replace("def a(user):\n", "def a(user):\n    check(user)\n")
+
+
+def dated_commit(repo, message, files, stamp):
+    for rel, text in files.items():
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text(text)
+    git(repo, "add", *files)
+    when = f"@{stamp} +0000"
+    subprocess.run(
+        ["git", "commit", "-q", "-m", message],
+        cwd=repo,
+        env=ENV | {"GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when},
+        capture_output=True,
+        check=True,
+    )
+    return git(repo, "rev-parse", "HEAD")
+
+
+def later_move_world(tmp_path, case, released):
+    upstream = new_repo(tmp_path / "upstream")
+    base = dated_commit(upstream, "base", {"svc.py": LATER_SVC, "lib.py": LATER_LIB}, 1_700_000_000)
+    git(upstream, "tag", "v1.0")
+    fix = dated_commit(upstream, "fix: check the caller before handling", {"svc.py": LATER_SVC_FIXED}, 1_700_003_600)
+    git(upstream, "tag", "v1.1")
+    git(upstream, "checkout", "-q", "-b", "feature")
+    later = dated_commit(
+        upstream,
+        "refactor: move the caller check into a()",
+        {"svc.py": LATER_SVC, "lib.py": LATER_LIB_CHECKING},
+        1_700_007_200,
+    )
+    if released:
+        git(upstream, "tag", "v1.2")
+    git(upstream, "checkout", "-q", "main")
+    notes = dated_commit(upstream, "docs: describe the handler", {"notes.md": "handler\n"}, 1_700_010_800)
+    fork = new_repo(tmp_path / "fork")
+    commit(fork, "fork root", {"svc.py": LATER_SVC, "lib.py": LATER_LIB})
+    carrier = commit(
+        fork,
+        f"fix: check the caller before handling\n\n(cherry picked from commit {fix})",
+        {"svc.py": LATER_SVC_FIXED, "fork.py": "fork\n"},
+    )
+    files = {"svc.py": LATER_SVC}
+    if case == "full-pick":
+        files["lib.py"] = LATER_LIB_CHECKING
+    commit(fork, f"refactor: move the caller check into a()\n\n(cherry picked from commit {later})", files)
+    commit(fork, f"docs: describe the handler\n\n(cherry picked from commit {notes})", {"notes.md": "handler\n"})
+    forks = new_repo(tmp_path / "panel") / "upstream-forks"
+    forks.mkdir()
+    (forks / "forks.toml").write_text(ledger_entry("kit", fork, upstream, base))
+    held = (
+        ""
+        if released
+        else f"\n## Held for an upstream release\n\n- `{later}` moves the caller check into a() security: no\n"
+    )
+    (forks / "kit.md").write_text(
+        f"## Ported by design\n\n- `{fix}` the fork checks the caller in fork commit {carrier} security: yes\n{held}"
+    )
+    return forks / "forks.toml", fix, fork
+
+
+@pytest.mark.parametrize(
+    ("case", "released", "code"),
+    [("svc-half-only", False, 1), ("full-pick", False, 1), ("svc-half-only", True, 1), ("full-pick", True, 0)],
+)
+def test_a_tracked_security_fix_is_superseded_only_by_a_released_later_upstream_change(tmp_path, case, released, code):
+    config, fix, fork = later_move_world(tmp_path, case, released)
+    head_files = {path: git(fork, "show", f"main:{path}") for path in ("svc.py", "lib.py")}
+    assert "check(user)" not in head_files["svc.py"]
+    assert ("check(user)" in head_files["lib.py"]) is (case == "full-pick")
+    result = run(config, "--today", "2026-11-15")
+    assert result.returncode == code, result.stdout + result.stderr
+    assert (f"`{fix[:12]}` {NOT_CARRIED}" in result.stdout) is not released, result.stdout
