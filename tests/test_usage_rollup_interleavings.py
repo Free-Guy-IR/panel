@@ -15,8 +15,9 @@ from sqlalchemy.sql.dml import Delete, Insert, Update
 from sqlalchemy.sql.elements import TextClause
 
 from app.db import base
-from app.db.crud import bulk as bulk_crud, user as user_crud
-from app.db.models import Admin, AdminRole, Node, NodeUserUsage, User, UserStatus
+from app.db.crud import bulk as bulk_crud, node as node_crud, user as user_crud
+from app.db.models import Admin, AdminRole, Node, NodeOutboundUsage, NodeUsage, NodeUserUsage, User, UserStatus
+from app.fork.crud import node as fork_node_crud
 from app.fork.migration_guards import drop_migration_owned_tables
 from app.jobs import usage_rollup
 from app.models.proxy import ProxyTable
@@ -25,6 +26,7 @@ from config import database_settings
 from tests.test_recorder_harness import restore_seeded_rows, snapshot_seeded_rows
 
 SERVER = os.getenv("TEST_FROM", "local").lower() != "local"
+server_database_only = pytest.mark.skipif(not SERVER, reason="needs a server database with row locks and deadlocks")
 SETTINGS = CleanupSettings(usage_rollup_hourly_after_days=2)
 TRAFFIC = (100, 7, 3)
 SLOTS = 6
@@ -89,7 +91,7 @@ async def world(tmp_path):
     json_column.server_default = json_default
 
 
-async def _seed(world, *, users: int = 2, expired_first: bool = False) -> tuple[list[int], int]:
+async def _seed(world, *, users: int = 2, expired_first: bool = False, table=NodeUserUsage) -> tuple[list[int], int]:
     tag = uuid4().hex[:10]
     async with world.factory() as db:
         role = AdminRole(name=f"rollup-{tag}", is_owner=True, permissions={}, limits={}, features={}, access={})
@@ -124,13 +126,21 @@ async def _seed(world, *, users: int = 2, expired_first: bool = False) -> tuple[
 
     bucket = _bucket()
     stamps = [bucket + timedelta(minutes=10 * slot) for slot in range(SLOTS)]
-    values = [
-        {"created_at": stamp, "user_id": user_id, "node_id": node_id, "used_traffic": TRAFFIC[index]}
-        for stamp in stamps
-        for index, user_id in enumerate(user_ids)
-    ]
+    if table is NodeUserUsage:
+        values = [
+            {"created_at": stamp, "user_id": user_id, "node_id": node_id, "used_traffic": TRAFFIC[index]}
+            for stamp in stamps
+            for index, user_id in enumerate(user_ids)
+        ]
+    elif table is NodeUsage:
+        values = [{"created_at": stamp, "node_id": node_id, "uplink": 5, "downlink": 1} for stamp in stamps]
+    else:
+        values = [
+            {"created_at": stamp, "node_id": node_id, "outbound_tag": "direct", "uplink": 5, "downlink": 1}
+            for stamp in stamps
+        ]
     async with world.factory() as db:
-        await db.execute(insert(NodeUserUsage), values)
+        await db.execute(insert(table), values)
         await db.commit()
     return user_ids, node_id
 
@@ -372,3 +382,34 @@ async def test_the_rollup_write_and_a_user_writer_neither_deadlock_nor_lose_work
     assert charts[user_ids[0]] == [], charts
     expected = set(user_ids) if partner == "reset" else {user_ids[1]}
     assert await _existing(world, user_ids) == expected
+
+
+async def _delete_node(world, node_id: int) -> str:
+    async with world.factory() as db:
+        db_node = (await db.execute(select(Node).where(Node.id == node_id))).scalar_one()
+        await node_crud.remove_node(db, db_node)
+    return "node deleted"
+
+
+@server_database_only
+@pytest.mark.asyncio
+@pytest.mark.parametrize("model", [NodeUserUsage, NodeUsage, NodeOutboundUsage], ids=lambda model: model.__tablename__)
+async def test_the_rollup_write_and_a_node_delete_neither_deadlock_nor_lose_work(world, monkeypatch, model):
+    monkeypatch.setattr(fork_node_crud, "NODE_DELETE_ATTEMPTS", 1)
+    _, node_id = await _seed(world, users=1, table=model)
+    pause = Pause(_inserts_into(model))
+    rollup_task = asyncio.create_task(_rollup(world, pause=pause))
+    deleter = None
+    try:
+        await asyncio.wait_for(pause.reached.wait(), WAIT_LIMIT)
+        deleter = asyncio.create_task(_delete_node(world, node_id))
+        await _waits_on_a_lock(world, deleter)
+    finally:
+        results = await _settle(pause, rollup_task, *([deleter] if deleter else []))
+
+    assert not _failures(results), results
+    async with world.factory() as db:
+        assert (await db.execute(select(Node.id).where(Node.id == node_id))).first() is None
+        stamps = (await db.execute(select(model.created_at, model.node_id))).all()
+    expected = [] if model is NodeOutboundUsage else [(_bucket(), None)]
+    assert [(_utc(created_at), owner) for created_at, owner in stamps] == expected

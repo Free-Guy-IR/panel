@@ -8,7 +8,7 @@ from sqlalchemy import delete, func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.base import begin_immediate_if_sqlite
-from app.db.models import NodeOutboundUsage, NodeUsage, NodeUserUsage, User
+from app.db.models import Node, NodeOutboundUsage, NodeUsage, NodeUserUsage, User
 from app.models.settings import CleanupSettings
 from app.utils.logger import get_logger
 
@@ -94,6 +94,18 @@ async def _lock_users(db: AsyncSession, user_ids) -> None:
     await db.execute(select(User.id).where(User.id.in_(user_ids)).order_by(User.id).with_for_update(read=True))
 
 
+async def _lock_nodes(db: AsyncSession, model, in_bucket) -> None:
+    node_ids = sorted(
+        node_id
+        for node_id in (await db.execute(select(model.node_id).where(*in_bucket).distinct())).scalars()
+        if node_id is not None
+    )
+    if node_ids:
+        await db.execute(
+            select(Node.id).where(Node.id.in_(node_ids)).order_by(Node.id).with_for_update(read=True, key_share=True)
+        )
+
+
 async def _merge_bucket(
     db: AsyncSession, model, keys, values, start: datetime, end: datetime, user_ids=None
 ) -> tuple[int, int]:
@@ -106,6 +118,7 @@ async def _merge_bucket(
     await begin_immediate_if_sqlite(db)
     if user_ids is not None:
         await _lock_users(db, user_ids)
+    await _lock_nodes(db, model, in_bucket)
     key_columns = [getattr(model, key) for key in keys]
     rows = (
         await db.execute(
