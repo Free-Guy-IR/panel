@@ -100,7 +100,9 @@ class FakeJetStream:
         if self._bytes(stream) + len(payload) > stream.max_bytes:
             raise ServiceUnavailableError(code=503, err_code=10077, description="maximum bytes exceeded")
         stream.last_seq += 1
-        stream.msgs[stream.last_seq] = RawStreamMsg(subject=subject, seq=stream.last_seq, data=payload)
+        stream.msgs[stream.last_seq] = RawStreamMsg(
+            subject=subject, seq=stream.last_seq, data=payload, headers=dict(headers) or None
+        )
         self.events.append(("publish", subject, payload))
         return SimpleNamespace(stream=name, seq=stream.last_seq)
 
@@ -131,9 +133,10 @@ class FakeJetStream:
 
 
 class FakeMessage:
-    def __init__(self, consumer, seq, data):
+    def __init__(self, consumer, seq, data, headers=None):
         self.consumer = consumer
         self.data = data
+        self.headers = headers
         self.metadata = SimpleNamespace(sequence=SimpleNamespace(stream=seq))
         self.acked = False
         self.naks = []
@@ -167,7 +170,7 @@ class FakeConsumer:
         for seq in sorted(stream.msgs):
             if seq not in self.in_flight and self.available_at.get(seq, 0) <= now:
                 self.in_flight.add(seq)
-                message = FakeMessage(self, seq, stream.msgs[seq].data)
+                message = FakeMessage(self, seq, stream.msgs[seq].data, stream.msgs[seq].headers)
                 self.messages.append(message)
                 return [message]
         raise nats_errors.TimeoutError
@@ -436,7 +439,11 @@ async def test_nats_retry_checkpoint_is_written_and_read_back_on_redelivery(cloc
     assert not delivery.message.acked
     checkpoints = list(queue._js.streams[RETRY_STREAM].msgs.values())
     assert [checkpoint.subject for checkpoint in checkpoints] == [CHECKPOINT_1]
-    assert json.loads(checkpoints[0].data) == {"data": {"id": 1, "tries": 1, "pending": ["b"]}, "completed": False}
+    assert json.loads(checkpoints[0].data) == {
+        "data": {"id": 1, "tries": 1, "pending": ["b"]},
+        "completed": False,
+        "message": delivery.message.headers["Nats-Msg-Id"],
+    }
     # Records are fixed size, so a retry never needs more journal capacity.
     sizes = {len(event[2]) for event in queue._js.events if event[:2] == ("publish", CHECKPOINT_1)}
     assert len(sizes) == 1
@@ -460,7 +467,10 @@ async def test_nats_completed_checkpoint_is_acked_without_redelivery(clock):
     """A crash between recording completion and acking must not resend the notification."""
     queue = make_nats_queue(clock)
     await queue.enqueue({"id": 1})
-    await queue._js.publish(CHECKPOINT_1, json.dumps({"data": {"id": 1}, "completed": True}).encode())
+    message_id = queue._js.streams[STREAM].msgs[1].headers["Nats-Msg-Id"]
+    await queue._js.publish(
+        CHECKPOINT_1, json.dumps({"data": {"id": 1}, "completed": True, "message": message_id}).encode()
+    )
 
     assert await queue.dequeue(timeout=0.01) is None
     assert queue._consumer.messages[0].acked

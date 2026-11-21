@@ -27,10 +27,26 @@ RETRY_METADATA_RESERVE = 128
 # JetStream "store failed" error. With DiscardPolicy.NEW a stream at its limits
 # rejects a publish with this code and "maximum messages/bytes exceeded".
 JS_STREAM_STORE_FAILED = 10077
+JS_MESSAGE_DELETE_FAILED = 10057
+JS_SEQUENCE_NOT_FOUND = 10043
 
 
 def is_stream_full_error(error: APIError) -> bool:
     return error.err_code == JS_STREAM_STORE_FAILED and "maximum" in (error.description or "")
+
+
+def _message_identity(message) -> str:
+    return (message.headers or {}).get("Nats-Msg-Id") or message.metadata.timestamp.isoformat()
+
+
+def _retry_state(checkpoint: RawStreamMsg, identity: str) -> dict | None:
+    try:
+        state = json.loads(checkpoint.data)
+    except ValueError, TypeError:
+        return None
+    if isinstance(state, dict) and state.get("message") == identity:
+        return state
+    return None
 
 
 class NotificationDelivery:
@@ -122,7 +138,7 @@ class NatsNotificationDelivery(NotificationDelivery):
                 logger.exception("Could not remove completed notification retry state")
 
     async def _save_checkpoint(self, item: dict, completed: bool = False):
-        data = json.dumps({"data": item, "completed": completed}).encode()
+        data = json.dumps({"data": item, "completed": completed, "message": _message_identity(self.message)}).encode()
         revision = self.checkpoint.seq if self.checkpoint is not None else 0
         size = len(self.checkpoint.data) if self.checkpoint is not None else len(data) + RETRY_METADATA_RESERVE
         if len(data) > size:
@@ -325,9 +341,20 @@ class NatsNotificationQueue(NotificationQueue):
             self._prune_sequence = checkpoint.seq + 1
             original_sequence = int(checkpoint.subject.rsplit(".", 1)[1])
             try:
-                await self._js.get_msg(self.STREAM_NAME, seq=original_sequence)
+                original = await self._js.get_msg(self.STREAM_NAME, seq=original_sequence)
             except NotFoundError:
-                await self._js.delete_msg(self.RETRY_STREAM, checkpoint.seq)
+                await self._delete_retry_state(checkpoint.seq)
+                continue
+            message_id = (original.headers or {}).get("Nats-Msg-Id")
+            if message_id and _retry_state(checkpoint, message_id) is None:
+                await self._delete_retry_state(checkpoint.seq)
+
+    async def _delete_retry_state(self, seq: int):
+        try:
+            await self._js.delete_msg(self.RETRY_STREAM, seq)
+        except APIError as error:
+            if error.err_code not in (JS_MESSAGE_DELETE_FAILED, JS_SEQUENCE_NOT_FOUND):
+                raise
 
     async def _publish(self, data: bytes, message_id: str):
         if not self._js:
@@ -376,12 +403,15 @@ class NatsNotificationQueue(NotificationQueue):
             except NotFoundError:
                 pass
             if checkpoint is not None:
-                state = json.loads(checkpoint.data)
-                delivery = NatsNotificationDelivery(self, message, state["data"], checkpoint)
-                if state["completed"]:
-                    await delivery.ack()
-                    return None
-                return delivery
+                state = _retry_state(checkpoint, _message_identity(message))
+                if state is None:
+                    await self._delete_retry_state(checkpoint.seq)
+                else:
+                    delivery = NatsNotificationDelivery(self, message, state["data"], checkpoint)
+                    if state["completed"]:
+                        await delivery.ack()
+                        return None
+                    return delivery
             return NatsNotificationDelivery(self, message, data)
         except BaseException:
             await message.nak(delay=1)
