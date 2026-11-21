@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
@@ -25,7 +24,7 @@ from app.models.settings import CleanupSettings
 from config import database_settings
 from tests.test_recorder_harness import restore_seeded_rows, snapshot_seeded_rows
 
-SERVER = os.getenv("TEST_FROM", "local").lower() != "local"
+SERVER = not database_settings.is_sqlite
 server_database_only = pytest.mark.skipif(not SERVER, reason="needs a server database with row locks and deadlocks")
 SETTINGS = CleanupSettings(usage_rollup_hourly_after_days=2)
 TRAFFIC = (100, 7, 3)
