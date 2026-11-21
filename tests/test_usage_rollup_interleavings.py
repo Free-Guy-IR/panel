@@ -341,6 +341,20 @@ async def test_a_chart_reset_inside_the_rollup_read_window_is_not_undone(world, 
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("partner", ["remove", "autodelete"])
+async def test_a_user_delete_inside_the_rollup_read_window_neither_fails_the_rollup_nor_loses_work(world, partner):
+    user_ids, _ = await _seed(world, users=2, expired_first=partner == "autodelete")
+
+    results = await _run_rollup_with_partner_in_window(world, partner, user_ids[0], _deletes_from(NodeUserUsage))
+
+    assert not _failures(results), results
+    if partner == "autodelete":
+        await _partner(world, partner, user_ids[0])
+    assert await _existing(world, user_ids) == {user_ids[1]}
+    assert await _charts(world, user_ids) == {user_ids[0]: [], user_ids[1]: [(_bucket(), TRAFFIC[1] * SLOTS)]}
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("partner", ["reset", "reset_all"])
 async def test_a_chart_reset_in_flight_when_the_rollup_reads_is_not_undone(world, partner):
     user_ids, _ = await _seed(world, users=2)
