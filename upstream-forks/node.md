@@ -49,6 +49,19 @@ decision 2026-11-07-main-node-own-form any more, so that record is gone. The nod
 corrected in the same pass (fork commit e681e38): its 36dc7a4 waiver and its docs/upstream-parity.md rows for
 #105, #121 and #122.
 
+Re-checked on 2026-11-22 (tracker mirror fetch and `git ls-remote` the same day) against fork main
+226911fe1b1704d16668560f641fc950f7114932, upstream main and tag v0.5.7 739eab94a934 (still the newest tag, and the
+newest release in the GitHub releases list, published 2026-11-03) and upstream dev
+3fa41478012f1f4d264dc69bf2f25f8addfbc6b4. Upstream dev gained two commits past aa1c3ebe3081, aba2d8108e1e (#138) and
+3fa41478012f, both in no tag and held below until a release contains them; chunck, debug, pr-61 and the two dependabot
+branches are unchanged. The tracker lists 33ab5fb30683 (#58) among the commits whose change is not all on fork main,
+with the removal of the old func (c *Config) ToBytes() read as removed by no carrier; that line is a report its entry
+under Ported by design covers, not an error. On fork main 226911fe1b17, backend/xray/config.go:619 still has
+func (c *Config) ToBytes(), which marshals c.snapshot() (config.go:601) and which backend/xray/core.go:225 calls to
+write the core config: 797adcf08920 rewrote it and did not remove it, upstream #58 itself removes the old body and adds
+a new ToBytes in the same file, and upstream v0.5.7 (config.go:548) and dev (config.go:550) still have it. No fork
+commit after d2fb3d4c760f touches backend/xray/config.go, so that entry stands as written.
+
 Re-checked on 2026-11-07 (mirror fetch and `git ls-remote` the same day) against fork main
 d941e21d9d41b64aff87383a75673090e70b64c2, upstream main and tag v0.5.7 739eab94a934 (still the newest tag) and upstream
 dev 9ccd2638c7feb65e62c5350fba38b94809554b50. Upstream dev has two commits past v0.5.7, 689f2665e215 (#120) and
@@ -125,6 +138,9 @@ upstream tag: the three PR #61 commits are on the unmerged branch pr-61 only and
 as long as it stays unmerged. The two dependabot bumps held here until then, 03f66e9b4817 (#122) and 68e84193ace5
 (#121), are released in v0.5.7 and are owed in the port queue now.
 Re-checked on 2026-11-10: the newest node release is still v0.5.7 (2026-11-03). `4b0bc4f6940c` left the port queue - the fork's workflows now pin `docker/login-action@v4.7.0` in four places, so that bump is ported. One new upstream commit is held below, `a35be6e8be91`, the next bump of the same action.
+Re-checked on 2026-11-22: the newest node release is still v0.5.7 (2026-11-03). Two new upstream dev commits are held
+below, `aba2d8108e1e` (#138) and `3fa41478012f`, the node side of the TLS work whose PasarGuard/scripts side, branch
+feat/node-tls-migration, scripts.md holds.
 The gate keeps each entry green until an upstream tag contains it, and then fails on it until it is ported or decided
 again. The upstream commits that fork main carries by an `Upstream:` trailer with every line present (9bb6b35df2cc,
 076a874e937d, 0d3bc70f546e, 4a9d0cf8bd38, 1ae411b76c37, f58fce8fc835 and 5cbcb5fdc16a) are counted as ported and need
@@ -142,6 +158,8 @@ comment lines.
 - `a35be6e8be91b215201c2515d027ac834f670992` only on the upstream dependabot branch dependabot/github_actions/dev/docker/login-action-4.8.0, which is its head (committed 2026-11-09; on 2026-11-10 `gh api repos/PasarGuard/node/commits/a35be6e8be91/branches-where-head` lists that branch alone, so it is on neither dev nor main nor any tag, and the newest node release is v0.5.7 of 2026-11-03): chore(deps) bump docker/login-action 4.7.0 to 4.8.0. Held until an upstream release contains it; then bump the fork's four `docker/login-action@v4.7.0` pins to v4.8.0. security: no, v4.8.0 fixes no vulnerability - its only security-adjacent change is a one-hour default for the Docker Hub OIDC token lifetime, and the fork's workflows reference no Docker Hub and no OIDC login at all
 - `9208d106d1c96fa9480a71e265e6c1aee15361ec` only on the upstream dependabot branch dependabot/go_modules/dev/golang.org/x/sys-0.50.0, which is its head (committed 2026-11-10, the day it was reviewed; on neither dev nor main nor any tag, and the newest node release is v0.5.7 of 2026-11-03): chore(deps) bump golang.org/x/sys 0.49.0 to 0.50.0. Held until an upstream release contains it. security: no, v0.50.0 publishes no release notes and no Go advisory names 0.49.0 or 0.50.0; golang.org/x/sys appears in the Go vulnerability index only as a module that has carried advisories historically, which is not evidence about this bump
 - `aa1c3ebe3081e6fa92566b875d3f6e41c2e54038` only on upstream dev, which is its head (committed 2026-11-11 at 08:51:16Z; `git for-each-ref --contains` on the tracker mirror lists no upstream tag, and the newest node release is still v0.5.7 739eab94a934 of 2026-11-03): chore(deps) bump golang.org/x/sys 0.49.0 to 0.50.0 (#136), the merge onto dev of the dependabot commit 9208d106d1c9 above and patch-identical to it (`git patch-id --stable` gives 8f607d2121f7 for both). Held until an upstream release contains it. Fork node main d2fb3d4c760fc7a02ca4b7fb504f1fbcf7c11b26 (2026-11-11) still requires golang.org/x/sys v0.49.0 in go.mod, and no fork node commit has ever set v0.50.0, so the fork does not carry it yet. security: no, the same bump as 9208d106d1c9, for which no Go advisory names 0.49.0 or 0.50.0
+- `aba2d8108e1ea566e4e35014f908e412df492767` only on upstream dev (committed 2026-11-16; on 2026-11-22 `git for-each-ref --contains` on the tracker mirror lists only upstream/dev, no tag, and the newest node release is still v0.5.7 739eab94a934 of 2026-11-03): feat: support private node backends behind external TLS termination (#138). It adds a TLS_ENABLED setting (default true; its .env.example lines say to disable it only behind a TLS-terminating web server); with TLS_ENABLED=false, NODE_HOST defaults to 127.0.0.1 and must be a literal loopback, RFC1918 IPv4 or IPv6 unique-local address (PrivateBackendHost in config/config.go). It also changes cmd/node/main.go and the REST and gRPC services (controller/rest/service.go, controller/rpc/service.go) and adds docs/node-tls.md, examples/nginx/grpc.conf and rest.conf, node-tls-migration-plan.md and listener tests. Fork main 226911fe1b17 has none of it: cmd/node/main.go:28 loads the TLS certificate unconditionally and stops on an error, and no TLS_ENABLED or PrivateBackendHost exists in its code. Held until an upstream release contains it. security: yes, it adds an opt-in plaintext listener mode guarded to private addresses; fork main keeps TLS mandatory on both listeners, so fork main is not exposed to what that guard protects
+- `3fa41478012f1f4d264dc69bf2f25f8addfbc6b4` only on upstream dev, which is its head (committed 2026-11-17; on 2026-11-22 `git for-each-ref --contains` on the tracker mirror lists only upstream/dev, no tag, and the newest node release is still v0.5.7 of 2026-11-03): feat: hot reload REST and gRPC TLS certificates on SIGHUP. It adds pkg/tlsutil/certificate.go (CertificateHolder with Reload and TLSConfig) with its tests, serves the holder's TLS config on both listeners and makes cmd/node/main.go reload the certificate on SIGHUP. Fork main 226911fe1b17 has no reload path: cmd/node/main.go:50 subscribes only to os.Interrupt and SIGTERM, and pkg/tlsutil has only tls.go. Held until an upstream release contains it. security: no, an operational reload of a renewed certificate that fixes no vulnerability; on fork main the certificate is loaded at start (cmd/node/main.go:28), so a node restart picks up a renewed one
 
 ## Port queue
 
