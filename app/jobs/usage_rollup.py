@@ -7,7 +7,8 @@ from datetime import UTC, datetime, timedelta, tzinfo
 from sqlalchemy import delete, func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import NodeOutboundUsage, NodeUsage, NodeUserUsage
+from app.db.base import begin_immediate_if_sqlite
+from app.db.models import NodeOutboundUsage, NodeUsage, NodeUserUsage, User
 from app.models.settings import CleanupSettings
 from app.utils.logger import get_logger
 
@@ -21,6 +22,7 @@ ROLLUP_MAX_SECONDS_PER_RUN = 120
 ROLLUP_PAUSE_SECONDS = 0.2
 # Rows this recent are never merged: the PostgreSQL user usage buffer and late flushes stay far below it
 ROLLUP_MIN_AGE = timedelta(days=1)
+ROLLUP_USERS_PER_TRANSACTION = 500
 
 HOUR = timedelta(hours=1)
 HALF_DAY = timedelta(hours=12)
@@ -88,10 +90,22 @@ def _target_step(day_end: datetime, now: datetime, levels: list[tuple[timedelta,
     return None
 
 
-async def _merge_bucket(db: AsyncSession, model, keys, values, start: datetime, end: datetime) -> tuple[int, int]:
+async def _lock_users(db: AsyncSession, user_ids) -> None:
+    await db.execute(select(User.id).where(User.id.in_(user_ids)).order_by(User.id).with_for_update(read=True))
+
+
+async def _merge_bucket(
+    db: AsyncSession, model, keys, values, start: datetime, end: datetime, user_ids=None
+) -> tuple[int, int]:
     """Replace every row of one bucket with one summed row per key, in one transaction."""
     created_at = model.created_at
     in_bucket = (created_at >= start, created_at < end)
+    if user_ids is not None:
+        in_bucket = (*in_bucket, model.user_id.in_(user_ids))
+    await db.commit()
+    await begin_immediate_if_sqlite(db)
+    if user_ids is not None:
+        await _lock_users(db, user_ids)
     key_columns = [getattr(model, key) for key in keys]
     rows = (
         await db.execute(
@@ -115,6 +129,19 @@ async def _merge_bucket(db: AsyncSession, model, keys, values, start: datetime, 
         )
     await db.commit()
     return deleted, len(rows)
+
+
+async def _merge_user_bucket(db: AsyncSession, model, keys, values, start: datetime, end: datetime) -> tuple[int, int]:
+    in_bucket = (model.created_at >= start, model.created_at < end)
+    found = await db.execute(select(model.user_id).where(*in_bucket).distinct().order_by(model.user_id))
+    user_ids = found.scalars().all()
+    deleted = inserted = 0
+    for index in range(0, len(user_ids), ROLLUP_USERS_PER_TRANSACTION):
+        batch = user_ids[index : index + ROLLUP_USERS_PER_TRANSACTION]
+        batch_deleted, batch_inserted = await _merge_bucket(db, model, keys, values, start, end, batch)
+        deleted += batch_deleted
+        inserted += batch_inserted
+    return deleted, inserted
 
 
 async def rollup_table(
@@ -184,7 +211,8 @@ async def rollup_table(
                     return result
                 if end > now - ROLLUP_MIN_AGE:
                     raise RuntimeError("Usage rollup must not touch rows newer than one day")
-                deleted, inserted = await _merge_bucket(db, model, keys, values, start, end)
+                merge = _merge_user_bucket if "user_id" in keys else _merge_bucket
+                deleted, inserted = await merge(db, model, keys, values, start, end)
                 result.buckets += 1
                 result.rows_after += inserted - deleted
                 merged.add(start)
