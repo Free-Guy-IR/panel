@@ -9,6 +9,7 @@ from app.db.crud.user import build_revoked_proxy_settings
 from app.db.crud.wireguard import (
     RECONCILE_USER_CHUNK,
     _accessible_tags_stmt,
+    committed_tags_of_groups,
     get_wg_cores,
     lock_users_proxy_settings,
     tags_from_groups,
@@ -170,6 +171,13 @@ class UserExtrasMixin:
         if not is_lock_unavailable(exc):
             raise exc
         await self.raise_error(message=detail, code=503, db=db)
+
+    async def _committed_group_access(self, db: AsyncSession, groups: Sequence[Group]) -> list[CommittedAccess]:
+        try:
+            await acquire_proxy_secrets_lock(db)
+            return _access_from_tags(await committed_tags_of_groups(db, groups))
+        except (DBAPIError, NamedLockMissing) as exc:
+            await self._raise_if_lock_unavailable(db, exc)
 
     async def _lock_user_proxy_settings(
         self, db: AsyncSession, db_user: User, groups: Sequence[Group] | None = None

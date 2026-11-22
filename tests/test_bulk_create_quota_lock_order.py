@@ -74,6 +74,7 @@ async def test_a_quota_bound_bulk_create_and_a_single_create_by_the_same_admin_n
     single_holds_secrets = asyncio.Event()
     real_quota_lock = user_operation.lock_admin_quota_row
     real_prepare = UserOperation._prepare_user_proxy_settings
+    real_access = UserOperation._committed_group_access
     real_persist = UserOperation._persist_bulk_users
 
     async def gated_persist(self, db, *args, **kwargs):
@@ -87,6 +88,11 @@ async def test_a_quota_bound_bulk_create_and_a_single_create_by_the_same_admin_n
             await asyncio.wait_for(single_started.wait(), BOUND)
             await asyncio.sleep(SETTLE_SECONDS)
 
+    async def gated_access(self, db, *args, **kwargs):
+        if db.info.get("label") == "single":
+            single_started.set()
+        return await real_access(self, db, *args, **kwargs)
+
     async def gated_prepare(self, db, *args, **kwargs):
         if db.info.get("label") == "single":
             single_started.set()
@@ -99,6 +105,7 @@ async def test_a_quota_bound_bulk_create_and_a_single_create_by_the_same_admin_n
 
     monkeypatch.setattr(UserOperation, "_persist_bulk_users", gated_persist)
     monkeypatch.setattr(user_operation, "lock_admin_quota_row", gated_quota_lock)
+    monkeypatch.setattr(UserOperation, "_committed_group_access", gated_access)
     monkeypatch.setattr(UserOperation, "_prepare_user_proxy_settings", gated_prepare)
 
     single = _single(recorder_db, _creator(creator_id, name), group_id, f"{base}s1")
