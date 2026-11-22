@@ -3,16 +3,24 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import insert, select, text, update
 
+from app.db.models import Group, User, users_groups_association
 from app.jobs import record_usages
+from app.models.admin import AdminDetails, AdminRoleData
+from app.models.admin_role import RoleAccess
+from app.models.settings import General
+from app.operation import OperatorType, user as user_operation
+from app.operation.user import UserOperation
 from config import database_settings
 from tests.test_usage_rollup_interleavings import (  # noqa: F401
     WAITERS,
+    Pause,
     _failures,
     _partner,
     _rollup,
     _seed,
+    _waits_on_a_lock,
     world_fixture,
 )
 
@@ -106,3 +114,57 @@ async def test_reset_all_and_a_usage_write_lock_users_without_a_deadlock(world, 
     )
 
     assert not _failures(results), [repr(result)[:200] for result in _failures(results)]
+
+
+@pytest.mark.asyncio
+async def test_a_reset_all_that_meets_a_held_late_user_below_its_lock_frontier_is_retried(world, monkeypatch):
+    settings = General()
+
+    async def general_settings():
+        return settings
+
+    monkeypatch.setattr(user_operation, "general_settings", general_settings)
+    late, inside, last = sorted((await _seed(world, users=3))[0])
+    async with world.factory() as db:
+        group = Group(name="reset-scope", inbounds=[])
+        db.add(group)
+        await db.flush()
+        group_id = group.id
+        await db.execute(
+            insert(users_groups_association),
+            [{"user_id": inside, "groups_id": group_id}, {"user_id": last, "groups_id": group_id}],
+        )
+        await db.execute(update(User).values(used_traffic=500))
+        await db.commit()
+    caller = AdminDetails(
+        id=None,
+        username="scoped",
+        role=AdminRoleData(id=3, name="operator", is_owner=False, access=RoleAccess(allowed_group_ids=[group_id])),
+    )
+    pause = Pause(lambda statement: getattr(statement, "_for_update_arg", None) is not None)
+
+    async def reset():
+        async with world.factory() as db:
+            pause.before_statement(db)
+            await UserOperation(operator_type=OperatorType.API).reset_users_data_usage(db, caller)
+
+    task = asyncio.create_task(reset())
+    holder = await world.engine.connect()
+    holder_tx = await holder.begin()
+    try:
+        await asyncio.wait_for(pause.reached.wait(), 30)
+        async with world.engine.begin() as conn:
+            await conn.execute(insert(users_groups_association).values(user_id=late, groups_id=group_id))
+        await holder.execute(text("select id from users where id = :id for update"), {"id": late})
+        pause.release.set()
+        await _waits_on_a_lock(world, task)
+    finally:
+        pause.release.set()
+        await holder_tx.rollback()
+        await holder.close()
+    results = await asyncio.wait_for(asyncio.gather(task, return_exceptions=True), 60)
+
+    assert not _failures(results), [repr(result)[:200] for result in _failures(results)]
+    async with world.engine.connect() as conn:
+        used = dict((await conn.execute(select(User.id, User.used_traffic))).all())
+    assert used == {late: 0, inside: 0, last: 0}

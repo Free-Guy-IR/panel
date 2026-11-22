@@ -1437,12 +1437,16 @@ class UserOperation(UserExtrasMixin, BaseOperation):
 
     async def reset_users_data_usage(self, db: AsyncSession, admin: AdminDetails):
         """Reset all users data usage — requires scope=all, resets every user."""
-        await reset_all_users_data_usage(
-            db=db,
-            admin=None,  # None = all admins, not filtered by owner
-            clean_chart_data=(await general_settings()).usage.reset_usage_clean_chart_data,
-            allowed_group_ids=get_allowed_group_ids(admin),
-        )
+
+        async def reset_once():
+            await reset_all_users_data_usage(
+                db=db,
+                admin=None,  # None = all admins, not filtered by owner
+                clean_chart_data=(await general_settings()).usage.reset_usage_clean_chart_data,
+                allowed_group_ids=get_allowed_group_ids(admin),
+            )
+
+        await self._retry_bulk_on_row_lock_conflict(db, reset_once)
 
     async def _active_next_plan(self, db: AsyncSession, db_user: User, admin: AdminDetails) -> UserResponse:
         if db_user is None or db_user.next_plan is None:
