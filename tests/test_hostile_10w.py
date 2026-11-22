@@ -1,3 +1,5 @@
+import pytest
+
 from tests.test_hostile_10m import load_inventory
 from tests.test_hostile_10q import commit, git
 
@@ -35,6 +37,7 @@ def wrong_spot_world(tmp_path):
     superseded = commit(repo, "security: require admin", {"a.py": UPSTREAM_PICK})
     later = commit(repo, "refactor: tidy checks", {"a.py": BASE})
     git(repo, "update-ref", "refs/remotes/upstream/main", "up")
+    git(repo, "update-ref", "refs/upstream-tags/v1.1", "up")
     git(repo, "checkout", "-q", "fork")
     commit(repo, "fork: guard second", {"a.py": FORK_BASE})
     pick = commit(repo, f"security: require admin\n\n(cherry picked from commit {superseded})", {"a.py": FORK_PICK})
@@ -65,7 +68,8 @@ def test_10w_later_hunk_at_a_spot_other_than_the_picks_own_is_not_brought(tmp_pa
     assert module.ported_later_changes(superseded, head, "a.py") == ()
 
 
-def test_10w_later_hunk_at_the_picks_own_spot_is_brought(tmp_path, monkeypatch):
+@pytest.mark.parametrize("released", [True, False], ids=["released", "on-main-only"])
+def test_10w_later_hunk_at_the_picks_own_spot_is_brought(tmp_path, monkeypatch, released):
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "fork")
@@ -75,6 +79,8 @@ def test_10w_later_hunk_at_the_picks_own_spot_is_brought(tmp_path, monkeypatch):
     superseded = commit(repo, "security: require admin", {"a.py": UPSTREAM_PICK})
     later = commit(repo, "refactor: tidy checks", {"a.py": BASE})
     git(repo, "update-ref", "refs/remotes/upstream/main", "up")
+    if released:
+        git(repo, "update-ref", "refs/upstream-tags/v1.1", "up")
     git(repo, "checkout", "-q", "fork")
     commit(repo, "fork: guard second", {"a.py": FORK_BASE})
     commit(repo, f"security: require admin\n\n(cherry picked from commit {superseded})", {"a.py": FORK_PICK})
@@ -84,7 +90,9 @@ def test_10w_later_hunk_at_the_picks_own_spot_is_brought(tmp_path, monkeypatch):
     hunks = module.commit_hunks(later)
     assert len(hunks) == 1
     assert module.later_hunk_brought(head, "a.py", hunks[0], superseded) is True
-    assert [sha for sha, _ in module.ported_later_changes(superseded, head, "a.py")] == [later]
+    assert module.on_upstream_ref(later)
+    assert bool(git(repo, "for-each-ref", f"--contains={later}", "refs/upstream-tags/")) is released
+    assert [sha for sha, _ in module.ported_later_changes(superseded, head, "a.py")] == ([later] if released else [])
 
 
 def test_10w_positions_survive_pure_deletions_and_insertions(tmp_path, monkeypatch):

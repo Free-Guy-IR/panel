@@ -151,7 +151,7 @@ S_LATER = {
 }
 
 
-def supersede_world(tmp_path, later=S_LATER, pick=None, after=None, trailer=None, unrelated=None):
+def supersede_world(tmp_path, later=S_LATER, pick=None, after=None, trailer=None, unrelated=None, released=True):
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "fork")
@@ -163,6 +163,8 @@ def supersede_world(tmp_path, later=S_LATER, pick=None, after=None, trailer=None
     replaced = commit(repo, "security: stricter validation", later)
     newer = commit(repo, "unrelated upstream", unrelated) if unrelated else None
     git(repo, "update-ref", "refs/remotes/upstream/main", "up")
+    if released:
+        git(repo, "update-ref", "refs/upstream-tags/v1.1", "up")
     git(repo, "checkout", "-q", "fork")
     named = {"later": replaced, "other": other, "newer": newer, "superseded": superseded}[trailer or "later"]
     for rel, text in (pick or later).items():
@@ -189,6 +191,17 @@ def test_10s_superseding_pick_survives_an_unrelated_later_fork_change(tmp_path, 
     module = load_inventory()
     monkeypatch.chdir(repo)
     assert module.security_design_problems(f"carried by {fork[:12]}", head, superseded, {}) == []
+
+
+def test_10s_a_later_change_on_upstream_main_that_no_final_release_holds_supersedes_nothing(tmp_path, monkeypatch):
+    repo, superseded, replaced, fork, head = supersede_world(tmp_path, released=False)
+    module = load_inventory()
+    monkeypatch.chdir(repo)
+    assert module.on_upstream_ref(replaced)
+    assert git(repo, "for-each-ref", f"--contains={replaced}", "refs/upstream-tags/") == ""
+    reason = f"superseded upstream; carried by {fork[:12]}"
+    assert module.superseding_pick(reason, head, superseded) is None
+    assert module.security_design_problems(reason, head, superseded, {}) is None
 
 
 @pytest.mark.parametrize(

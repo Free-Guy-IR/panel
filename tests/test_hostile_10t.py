@@ -23,7 +23,7 @@ T_LATER = {
 T_OTHER = {"c.txt": "notes\n"}
 
 
-def partial_world(tmp_path, later=T_LATER, ported=T_LATER, trailer="later", order="after"):
+def partial_world(tmp_path, later=T_LATER, ported=T_LATER, trailer="later", order="after", released=True):
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "fork")
@@ -37,6 +37,8 @@ def partial_world(tmp_path, later=T_LATER, ported=T_LATER, trailer="later", orde
         superseded = commit(repo, "security: validate input", T_PICK)
         replaced = commit(repo, "perf: single pass", later)
     git(repo, "update-ref", "refs/remotes/upstream/main", "up")
+    if released:
+        git(repo, "update-ref", "refs/upstream-tags/v1.1", "up")
     git(repo, "checkout", "-q", "fork")
     pick = commit(repo, f"security: validate input\n\n(cherry picked from commit {superseded})", T_PICK)
     named = {"later": f"\n\n(cherry picked from commit {replaced})", "none": ""}[trailer]
@@ -50,6 +52,19 @@ def test_10t_later_ported_upstream_removal_is_accepted(tmp_path, monkeypatch):
     monkeypatch.chdir(repo)
     reason = f"Ported by its cherry-pick -x {pick[:12]}. security: yes"
     assert module.security_design_problems(reason, head, superseded, {}) == []
+
+
+def test_10t_a_later_removal_no_final_release_holds_is_not_accepted(tmp_path, monkeypatch):
+    repo, superseded, replaced, pick, head = partial_world(tmp_path, released=False)
+    module = load_inventory()
+    monkeypatch.chdir(repo)
+    assert module.on_upstream_ref(replaced)
+    assert git(repo, "for-each-ref", f"--contains={replaced}", "refs/upstream-tags/") == ""
+    assert module.ported_later_changes(superseded, head, "a.py") == ()
+    reason = f"Ported by its cherry-pick -x {pick[:12]}. security: yes"
+    problems = module.security_design_problems(reason, head, superseded, {})
+    assert problems
+    assert any("a.py:+" in problem for problem in problems)
 
 
 @pytest.mark.parametrize(

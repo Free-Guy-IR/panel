@@ -87,7 +87,7 @@ WORLDS = {
 }
 
 
-def positional_world(tmp_path, name):
+def positional_world(tmp_path, name, released=True):
     base, pick_text, later_text, ported_text, head_text = WORLDS[name]
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -98,6 +98,8 @@ def positional_world(tmp_path, name):
     superseded = commit(repo, "security: require admin", {"a.py": pick_text})
     later = commit(repo, "refactor: tidy checks", {"a.py": later_text})
     git(repo, "update-ref", "refs/remotes/upstream/main", "up")
+    if released:
+        git(repo, "update-ref", "refs/upstream-tags/v1.1", "up")
     git(repo, "checkout", "-q", "fork")
     pick = commit(repo, f"security: require admin\n\n(cherry picked from commit {superseded})", {"a.py": pick_text})
     head = commit(repo, f"refactor: tidy checks\n\n(cherry picked from commit {later})", {"a.py": ported_text})
@@ -106,8 +108,8 @@ def positional_world(tmp_path, name):
     return repo, superseded, pick, head
 
 
-def run_row(tmp_path, monkeypatch, name):
-    repo, superseded, pick, head = positional_world(tmp_path, name)
+def run_row(tmp_path, monkeypatch, name, released=True):
+    repo, superseded, pick, head = positional_world(tmp_path, name, released)
     module = load_inventory()
     monkeypatch.chdir(repo)
     reason = f"Ported by its cherry-pick -x {pick[:12]}. security: yes"
@@ -134,6 +136,13 @@ def test_10u_unported_reversal_is_refused(tmp_path, monkeypatch, name):
 @pytest.mark.parametrize("name", ["honest-port", "split-honest", "same-nearest-context-honest"])
 def test_10u_brought_later_hunk_at_the_spot_is_accepted(tmp_path, monkeypatch, name):
     assert run_row(tmp_path, monkeypatch, name) == []
+
+
+@pytest.mark.parametrize("name", ["honest-port", "split-honest", "same-nearest-context-honest"])
+def test_10u_a_brought_later_hunk_no_final_release_holds_is_not_accepted(tmp_path, monkeypatch, name):
+    problems = run_row(tmp_path, monkeypatch, name, released=False)
+    assert problems
+    assert any("a.py:+" in problem for problem in problems)
 
 
 @pytest.mark.parametrize(
