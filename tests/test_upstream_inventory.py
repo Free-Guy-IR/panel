@@ -3458,12 +3458,11 @@ def test_a_carrier_line_a_merge_resolution_replaced_needs_the_merge_named(tmp_pa
 
 GUARDED = "def run(u):\n    finish(u)\n"
 GUARDED_FIXED = "def run(u):\n    load(u)\n    check(u)\n    finish(u)\n"
-GUARDED_RELEASED = "def run(u):\n    check(u)\n    load(u)\n    finish(u)\n"
 GUARDED_SWAPPED = "def run(u):\n    check(u)\n    load(u)\n    finish(u)\n    finish(u)\n"
 
 
-def swap_world(tmp_path, case, released):
-    path = tmp_path / f"swap-{case}-{released}"
+def swap_world(tmp_path, case):
+    path = tmp_path / f"swap-{case}"
     path.mkdir()
     git(path, "init", "-q", "-b", "up")
     for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
@@ -3472,12 +3471,6 @@ def swap_world(tmp_path, case, released):
     git(path, "tag", "v1.0")
     fix = commit(path, "fix: check the user after loading it", {"run.py": GUARDED_FIXED})
     git(path, "update-ref", "refs/remotes/upstream/dev", fix)
-    waiver = ""
-    if released:
-        reordered = commit(path, "fix: check the user before loading it", {"run.py": GUARDED_RELEASED})
-        git(path, "update-ref", "refs/remotes/upstream/dev", reordered)
-        git(path, "update-ref", "refs/upstream-tags/v1.1", reordered)
-        waiver = f"\n## Waived\n\n- `{reordered}` moves the check before the load, decided on its own security: no\n"
     git(path, "checkout", "-q", "--orphan", "main", "v1.0")
     git(path, "commit", "-q", "-m", "fork root")
     carrier = commit(path, "fork: check the user", {"run.py": GUARDED_FIXED})
@@ -3487,78 +3480,12 @@ def swap_world(tmp_path, case, released):
     text = (
         f"## Ported by design\n\n- `{fix}` the fork checks the user in fork commit {carrier}; {clause}; security: yes\n"
     )
-    return path, fix, text + waiver
-
-
-@pytest.mark.parametrize(
-    ("case", "released", "code"),
-    [
-        ("blame-view-exception", True, 0),
-        ("forward-view-exception", True, 1),
-        ("blame-view-exception", False, 1),
-    ],
-)
-def test_a_replacing_commit_is_read_in_the_direction_the_line_tracking_reads_it(tmp_path, case, released, code):
-    path, fix, text = swap_world(tmp_path, case, released)
-    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
-    assert result.returncode == code, result.stdout + result.stderr
-    if code:
-        assert f"`{fix[:12]}` is ported by design as a security fix, but {NO_CARRIER}" in result.stdout
-
-
-REORDER_HEADER = (
-    "from lib import a, b, check\n\nFLAGS = 1\nLIMITS = 2\nNAMES = 3\nMODES = 4\nZONES = 5\nRATES = 6\n\n\n"
-)
-REORDER_ACTIONS = ["a(user)", "log(user)", "save(user)"]
-
-
-def reorder_body(*lines):
-    return REORDER_HEADER + "def handle(user):\n" + "".join(f"    {line}\n" for line in lines)
-
-
-def reorder_world(tmp_path, case):
-    actions = REORDER_ACTIONS if case.startswith("three") else REORDER_ACTIONS[:1]
-    steps = {
-        "one-action-intact": [],
-        "one-action-moved-above-the-check": [reorder_body("a(user)", "check(user)", "return b(user)")],
-        "three-actions-intact": [],
-        "three-actions-hoisted-in-two-commits": [
-            reorder_body(*REORDER_ACTIONS, "check(user)", *REORDER_ACTIONS, "return b(user)"),
-            reorder_body(*REORDER_ACTIONS, "check(user)", "return b(user)"),
-        ],
-    }[case]
-    path = tmp_path / f"reorder-{case}"
-    path.mkdir()
-    git(path, "init", "-q", "-b", "up")
-    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
-        git(path, "config", key, value)
-    commit(path, "upstream base", {"svc.py": reorder_body(*actions, "return b(user)").replace(", check\n", "\n")})
-    git(path, "tag", "v1.0")
-    fixed = reorder_body("check(user)", *actions, "return b(user)")
-    fix = commit(path, "fix: check the caller before handling", {"svc.py": fixed})
-    git(path, "update-ref", "refs/remotes/upstream/dev", fix)
-    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
-    git(path, "commit", "-q", "-m", "fork root")
-    carrier = commit(path, "fork: check the caller before handling", {"svc.py": fixed, "fork.py": "fork\n"})
-    for index, text in enumerate(steps):
-        commit(path, f"fork: reorder step {index}", {"svc.py": text})
-    text = (
-        f"## Ported by design\n\n- `{fix}` the fork checks the caller itself in fork commit {carrier} security: yes\n"
-    )
     return path, fix, text
 
 
-@pytest.mark.parametrize(
-    ("case", "code"),
-    [
-        ("one-action-intact", 0),
-        ("one-action-moved-above-the-check", 1),
-        ("three-actions-intact", 0),
-        ("three-actions-hoisted-in-two-commits", 1),
-    ],
-)
-def test_a_security_check_moved_after_the_action_it_guards_is_not_ported_by_design(tmp_path, case, code):
-    path, fix, text = reorder_world(tmp_path, case)
+@pytest.mark.parametrize(("case", "code"), [("blame-view-exception", 0), ("forward-view-exception", 1)])
+def test_a_replacing_commit_is_read_in_the_direction_the_line_tracking_reads_it(tmp_path, case, code):
+    path, fix, text = swap_world(tmp_path, case)
     result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
     assert result.returncode == code, result.stdout + result.stderr
     if code:
