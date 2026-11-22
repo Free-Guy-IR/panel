@@ -21,6 +21,7 @@ from app.models.host import (
     OpenVPNHostOverrides,
     TransportSettings,
     WireGuardHostOverrides,
+    prune_blank_values,
 )
 from app.models.subscription import (
     GRPCTransportConfig,
@@ -117,7 +118,7 @@ def _normalize_finalmask_link(final_mask_settings: FinalMask | dict | str | None
             fms = dump_fork_final_mask_for_xray(fms)
 
     if isinstance(fms, dict):
-        fms = restore_doh_tls_configs(normalize_and_remove_none_values(fms))
+        fms = restore_doh_tls_configs(prune_blank_values(normalize_and_remove_none_values(fms)))
 
     if fms:
         return json.dumps(fms, separators=(",", ":"))
