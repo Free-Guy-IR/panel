@@ -96,6 +96,7 @@ client_config = {
     },
 }
 
+
 class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
     _ENCODED_RULE_RESPONSE_HEADERS: ClassVar[set[str]] = {"announce", "profile-title"}
     _ALWAYS_HTTP_HEADERS: ClassVar[set[str]] = {"content-disposition", "cache-control"}
