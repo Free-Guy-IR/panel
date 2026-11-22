@@ -6,6 +6,7 @@ import difflib
 import functools
 import hashlib
 import io
+import itertools
 import json
 import os
 import re
@@ -1909,6 +1910,39 @@ def excepted_replacement(fork_sha, head, path, own_numbers, exceptions):
     return True
 
 
+def carrier_order_kept(fork_sha, head, path, hunk, reference, here, kept, excused):
+    carrier_content = head_blob(fork_sha, path)
+    release = normalised_file(reference, path)
+    survivors = surviving_lines(fork_sha, head, path)
+    if carrier_content is None or release is None or survivors is None:
+        return False
+    carrier = normalised(path, carrier_content)
+    carrier_kept = kept_line_numbers(path, carrier_content)
+    release_at = aligned_lines(carrier, release)
+    head_at = {number: index for index, number in enumerate(kept)}
+    carried = {head_at[number] for number in survivors.values() if number in head_at}
+    start = hunk["post_span"][0]
+    numbers = [start + k for k, (text, _) in enumerate(hunk["post"]) if normalise_line(path, text)]
+    landed = {number: head_at[survivors[number]] for number in numbers if survivors.get(number) in head_at}
+    if not landed:
+        return True
+    low, high = min(landed.values()), max(landed.values())
+    order = []
+    for number in numbers:
+        index = bisect.bisect_left(carrier_kept, number)
+        if number in excused or index >= len(carrier_kept) or carrier_kept[index] != number or index not in release_at:
+            continue
+        spot = landed.get(number)
+        if spot is None:
+            moved = [i for i in range(low, high + 1) if i not in carried and here[i] == carrier[index]]
+            if len(moved) != 1:
+                continue
+            spot = moved[0]
+        order.append((release_at[index], spot))
+    spots = [spot for _, spot in sorted(order)]
+    return all(earlier < later for earlier, later in itertools.pairwise(spots))
+
+
 def own_hunk_in_upstream_form(
     fork_sha, upstream_sha, head, path, hunk, reference, here, dropped, inserted, gone, exceptions=None
 ):
@@ -1926,6 +1960,7 @@ def own_hunk_in_upstream_form(
     kept = kept_line_numbers(path, content)
     replacements = {}
     covered = set()
+    excused = set()
     for removed, added_numbers, anchor in later_change_blocks(fork_sha, head, path):
         if not removed & own:
             continue
@@ -1939,15 +1974,19 @@ def own_hunk_in_upstream_form(
             and upstream_had_lines(fork_sha, upstream_sha, path, lost_here)
             and not lost_texts & release_only
         )
-        if not upstream_form and not (
-            exceptions and excepted_replacement(fork_sha, head, path, lost_here or removed & own, exceptions)
-        ):
-            return False
+        named = lost_here or removed & own
+        if not upstream_form:
+            if not (exceptions and excepted_replacement(fork_sha, head, path, named, exceptions)):
+                return False
+            excused |= named
         replacements[min(removed & span)] = replacement
         covered |= removed
+    unexcused = lost - covered
     if not covered or (
-        lost - covered and not (exceptions and excepted_replacement(fork_sha, head, path, lost - covered, exceptions))
+        unexcused and not (exceptions and excepted_replacement(fork_sha, head, path, unexcused, exceptions))
     ):
+        return False
+    if not carrier_order_kept(fork_sha, head, path, hunk, reference, here, kept, excused | unexcused):
         return False
     side = []
     for k, entry in enumerate(hunk["post"]):

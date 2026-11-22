@@ -3565,6 +3565,89 @@ def test_a_security_check_moved_after_the_action_it_guards_is_not_ported_by_desi
         assert f"`{fix[:12]}` is ported by design as a security fix, but {NO_CARRIER}" in result.stdout
 
 
+EXCEPTED_REORDER_CASES = {
+    "intact": (["check(user)", "audit(user)"], ["a(user)"], [], None, 0),
+    "audit-made-strict": (
+        ["check(user)", "audit(user)"],
+        ["a(user)"],
+        [["check(user)", "audit(user, strict=True)", "a(user)", "return b(user)"]],
+        13,
+        0,
+    ),
+    "action-moved-above-both-with-the-audit-made-strict": (
+        ["check(user)", "audit(user)"],
+        ["a(user)"],
+        [["a(user)", "check(user)", "audit(user, strict=True)", "return b(user)"]],
+        13,
+        1,
+    ),
+    "two-actions-moved-above-four-checks-with-the-log-made-strict": (
+        ["check(user)", "audit(user)", "verify(user)", "log(user)"],
+        ["a(user)", "save(user)"],
+        [
+            [
+                "a(user)",
+                "save(user)",
+                "check(user)",
+                "audit(user)",
+                "verify(user)",
+                "log(user, strict=True)",
+                "return b(user)",
+            ]
+        ],
+        15,
+        1,
+    ),
+    "action-moved-past-the-excused-audit-in-a-later-commit": (
+        ["check(user)", "audit(user)"],
+        ["a(user)"],
+        [
+            ["check(user)", "audit(user, strict=True)", "a(user)", "return b(user)"],
+            ["a(user)", "check(user)", "audit(user, strict=True)", "return b(user)"],
+        ],
+        13,
+        1,
+    ),
+}
+
+
+def excepted_reorder_world(tmp_path, case):
+    guard, actions, steps, line, _ = EXCEPTED_REORDER_CASES[case]
+    path = tmp_path / f"excepted-reorder-{case}"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "upstream base", {"svc.py": reorder_body(*actions, "return b(user)").replace(", check\n", "\n")})
+    git(path, "tag", "v1.0")
+    fixed = reorder_body(*guard, *actions, "return b(user)")
+    fix = commit(path, "fix: guard the action", {"svc.py": fixed})
+    git(path, "update-ref", "refs/remotes/upstream/dev", fix)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    carrier = commit(path, "fork: guard the action", {"svc.py": fixed, "fork.py": "fork\n"})
+    made = [
+        commit(path, f"fork: rework the guard, step {index}", {"svc.py": reorder_body(*lines)})
+        for index, lines in enumerate(steps)
+    ]
+    clause = f"; missing `svc.py:+{line}` because {made[0]} makes that line strict" if line else ""
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the caller itself in fork commit {carrier}{clause} "
+        "security: yes\n"
+    )
+    return path, fix, text
+
+
+@pytest.mark.parametrize("case", sorted(EXCEPTED_REORDER_CASES))
+def test_a_clause_for_one_rewritten_guard_line_does_not_excuse_moving_the_action_above_the_guard(tmp_path, case):
+    path, fix, text = excepted_reorder_world(tmp_path, case)
+    code = EXCEPTED_REORDER_CASES[case][-1]
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but {NO_CARRIER}" in result.stdout
+
+
 SVC_STRICT = SVC_FIXED.replace("    check(user)\n", "    check(user, strict=True)\n")
 TRAILER_FILES = {
     "test-only": {"extra_test.py": "def test_extra_caller():\n    assert checked(extra())\n"},
