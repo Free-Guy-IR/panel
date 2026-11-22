@@ -760,12 +760,17 @@ def _cleanup_target_user_conditions(
     elif target == "inactive":
         # Fall back to account creation for users that have never connected,
         # so newly created accounts are not treated as long-term inactive.
-        last_activity = func.coalesce(User.online_at, User.created_at)
+        activity_moments = (
+            func.coalesce(User.online_at, User.created_at),
+            func.coalesce(User.edit_at, User.created_at),
+        )
         conditions = []
         if expired_after:
-            conditions.append(last_activity >= to_utc_for_filter(expired_after))
+            after = to_utc_for_filter(expired_after)
+            conditions.append(or_(*(moment >= after for moment in activity_moments)))
         if expired_before:
-            conditions.append(last_activity <= to_utc_for_filter(expired_before))
+            before = to_utc_for_filter(expired_before)
+            conditions.extend(moment <= before for moment in activity_moments)
     else:
         # For limited / on_hold / disabled: date range filters apply to
         # last_status_change (i.e. when the user entered that status).

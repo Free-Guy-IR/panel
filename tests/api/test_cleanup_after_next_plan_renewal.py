@@ -20,6 +20,7 @@ from tests.api.helpers import (
 )
 
 CUTOFF_DAYS = 30
+LAST_ONLINE = {"an hour ago": td(hours=1), "sixty days ago": td(days=60)}
 
 
 async def _age(user_id: int, *, online_ago: td | None, status_changed_ago: td | None = None) -> None:
@@ -37,7 +38,9 @@ async def _age(user_id: int, *, online_ago: td | None, status_changed_ago: td | 
 async def _stored(user_id: int):
     async with TestSession() as session:
         return (
-            await session.execute(select(User.status, User.online_at, User.last_status_change).where(User.id == user_id))
+            await session.execute(
+                select(User.status, User.online_at, User.last_status_change).where(User.id == user_id)
+            )
         ).one_or_none()
 
 
@@ -96,11 +99,34 @@ async def _drop_world(access_token, users, core, group, template) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("last_online", sorted(LAST_ONLINE))
+@pytest.mark.parametrize("template_status", ["on_hold", "active"])
+async def test_a_customer_renewed_a_moment_ago_is_not_deleted_as_inactive(access_token, template_status, last_online):
+    core, group, template = _world(access_token, template_status)
+    renewed = create_user(access_token, group_ids=[group["id"]], payload={"username": unique_name("renewed_customer")})
+    idle = create_user(access_token, group_ids=[group["id"]], payload={"username": unique_name("idle_customer")})
+    try:
+        await _age(renewed["id"], online_ago=LAST_ONLINE[last_online])
+        await _age(idle["id"], online_ago=td(days=60))
+        _renew(access_token, renewed["username"], template["id"], template_status)
+
+        listed = _listed(access_token, "inactive")
+        _delete_target(access_token, "inactive")
+
+        assert renewed["username"] not in listed, "a customer renewed a moment ago is listed as inactive"
+        assert await _stored(renewed["id"]) is not None, "the inactive cleanup deleted a customer renewed a moment ago"
+        assert idle["username"] in listed, "a customer neither online nor renewed for sixty days must stay a target"
+        assert await _stored(idle["id"]) is None, (
+            "the inactive cleanup must still delete a customer idle for sixty days"
+        )
+    finally:
+        await _drop_world(access_token, [renewed, idle], core, group, template)
+
+
+@pytest.mark.asyncio
 async def test_a_renewal_into_an_on_hold_plan_starts_a_new_hold_for_the_on_hold_cleanup(access_token):
     core, group, template = _world(access_token, "on_hold")
-    renewed = create_user(
-        access_token, group_ids=[group["id"]], payload={"username": unique_name("renewed_on_hold")}
-    )
+    renewed = create_user(access_token, group_ids=[group["id"]], payload={"username": unique_name("renewed_on_hold")})
     held = create_user(access_token, group_ids=[group["id"]], payload={"username": unique_name("held_on_hold")})
     try:
         await _age(renewed["id"], online_ago=td(hours=1), status_changed_ago=td(days=100))
