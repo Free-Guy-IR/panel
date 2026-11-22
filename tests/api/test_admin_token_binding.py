@@ -12,7 +12,7 @@ from app.db.crud.admin import get_admin as get_admin_by_username
 from app.db.models import Admin
 from app.models.admin import hash_password
 from app.routers.authentication import get_admin, get_admin_with_metrics
-from app.utils.jwt import get_secret_key
+from app.utils.jwt import get_admin_token_binding, get_secret_key
 from tests.api import DATABASE_URL, IS_SQLITE, TestSession, client
 from tests.api.helpers import auth_headers, create_admin, delete_admin, strong_password, unique_name
 
@@ -58,6 +58,54 @@ def _forge(claims: dict) -> str:
     return jwt.encode(
         {"access": "admin", "iat": now, "exp": now + timedelta(minutes=30), **claims}, secret, algorithm="HS256"
     )
+
+
+def _stored_credentials(username: str) -> tuple[int, str]:
+    async def _read() -> tuple[int, str]:
+        async with TestSession() as session:
+            db_admin = await get_admin_by_username(session, username, load_users=False)
+            return db_admin.id, db_admin.hashed_password
+
+    return asyncio.run(_read())
+
+
+def _bound_token_expired_inside_the_leeway(username: str, admin_id: int, hashed_password: str) -> str:
+    secret = asyncio.run(get_secret_key())
+    now = datetime.now(UTC)
+    claims = {
+        "sub": username,
+        "access": "admin",
+        "aid": admin_id,
+        "binding": get_admin_token_binding(hashed_password, secret),
+        "iat": now - timedelta(minutes=30),
+        "exp": now - timedelta(seconds=1),
+    }
+    return jwt.encode(claims, secret, algorithm="HS256")
+
+
+def test_a_bound_token_one_second_past_exp_still_authenticates_inside_the_leeway(access_token):
+    admin = create_admin(access_token, role_id=2)
+    try:
+        token = _bound_token_expired_inside_the_leeway(admin["username"], *_stored_credentials(admin["username"]))
+        response = client.get("/api/admin", headers=auth_headers(token))
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["username"] == admin["username"]
+    finally:
+        delete_admin(access_token, admin["username"])
+
+
+def test_a_replaced_admins_token_inside_the_leeway_does_not_authenticate_the_replacement(access_token):
+    admin = create_admin(access_token, role_id=2)
+    _, old_hash = _stored_credentials(admin["username"])
+    delete_admin(access_token, admin["username"])
+    replacement = create_admin(access_token, username=admin["username"], role_id=2)
+    try:
+        replacement_id, _ = _stored_credentials(replacement["username"])
+        token = _bound_token_expired_inside_the_leeway(admin["username"], replacement_id, old_hash)
+        response = client.get("/api/admin", headers=auth_headers(token))
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    finally:
+        delete_admin(access_token, replacement["username"])
 
 
 def test_a_fresh_login_token_authenticates(access_token):
