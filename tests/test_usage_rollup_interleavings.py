@@ -50,8 +50,8 @@ def _bucket() -> datetime:
     return (datetime.now(UTC) - timedelta(days=5)).replace(minute=0, second=0, microsecond=0)
 
 
-@pytest.fixture
-async def world(tmp_path):
+@pytest.fixture(name="world")
+async def world_fixture(tmp_path):
     if SERVER:
         url = database_settings.url
         engine = create_async_engine(url, poolclass=NullPool)

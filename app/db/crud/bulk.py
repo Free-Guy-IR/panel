@@ -102,12 +102,19 @@ async def reset_all_users_data_usage(
         reset_users = reset_users.where(User.admin_id == admin.id)
     if allowed_group_ids is not None:
         reset_users = reset_users.where(user_in_allowed_groups(User.id, allowed_group_ids))
-    await db.execute(reset_users)
+    await _hold_write_lock_without_row_locks(db)
+    condition = user_ids.whereclause if user_ids.whereclause is not None else true()
+    targets = sorted(await _lock_matching_rows(db, condition, (User.id,)))
+    for statement in locked_targets(reset_users, targets):
+        await db.execute(statement)
 
-    await db.execute(delete(UserUsageResetLogs).where(UserUsageResetLogs.user_id.in_(user_ids)))
+    for chunk in _id_chunks(targets):
+        await db.execute(delete(UserUsageResetLogs).where(UserUsageResetLogs.user_id.in_(chunk)))
     if clean_chart_data:
-        await db.execute(delete(NodeUserUsage).where(NodeUserUsage.user_id.in_(user_ids)))
-    await db.execute(delete(NextPlan).where(NextPlan.user_id.in_(user_ids)))
+        for chunk in _id_chunks(targets):
+            await db.execute(delete(NodeUserUsage).where(NodeUserUsage.user_id.in_(chunk)))
+    for chunk in _id_chunks(targets):
+        await db.execute(delete(NextPlan).where(NextPlan.user_id.in_(chunk)))
 
     await db.commit()
 
