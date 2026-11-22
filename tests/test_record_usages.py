@@ -202,7 +202,7 @@ async def test_history_write_drops_a_batch_the_database_rejects(monkeypatch: pyt
     bucket = datetime(2026, 8, 14, 18, 30, tzinfo=UTC)
     executed = []
 
-    async def fake_safe_execute(stmt, params=None, max_retries=5):
+    async def fake_safe_execute(stmt, params=None, max_retries=5, cache_compiled=True):
         executed.append(params)
         if len(executed) == 1:
             raise _foreign_key_error()
@@ -226,7 +226,7 @@ async def test_postgres_history_drops_rows_the_database_rejects(monkeypatch: pyt
     executed = []
     monotonic_values = iter([100.0, 161.0, 222.0])
 
-    async def fake_safe_execute(stmt, params=None, max_retries=5):
+    async def fake_safe_execute(stmt, params=None, max_retries=5, cache_compiled=True):
         executed.append(params)
         if len(executed) == 1:
             raise _foreign_key_error()
@@ -259,7 +259,7 @@ async def test_postgres_history_caps_buffered_buckets_after_failed_flushes(monke
     buckets = [first_bucket + timedelta(minutes=10 * index) for index in range(9)]
     bucket_values = iter(buckets)
 
-    async def failing_safe_execute(stmt, params=None, max_retries=5):
+    async def failing_safe_execute(stmt, params=None, max_retries=5, cache_compiled=True):
         raise OperationalError("INSERT INTO node_user_usages", {}, Exception("connection lost"))
 
     monkeypatch.setattr(record_usages, "get_dialect", AsyncMock(return_value="postgresql"))
@@ -391,7 +391,7 @@ async def test_mysql_history_retries_only_the_batches_a_failed_flush_did_not_wri
     written: defaultdict[int, int] = defaultdict(int)
     calls = []
 
-    async def flaky_safe_execute(stmt, params=None, max_retries=5):
+    async def flaky_safe_execute(stmt, params=None, max_retries=5, cache_compiled=True):
         calls.append(len(params))
         if len(calls) == 2:
             raise OperationalError("INSERT INTO node_user_usages", {}, Exception("connection lost"))
@@ -947,6 +947,90 @@ async def test_node_user_usage_history_skips_deleted_nodes(session_factory):
         assert rows.all() == [(kept_node_id, 50)]
 
 
+async def _seed_users_and_node(session_factory, count: int) -> tuple[list[int], int]:
+    async with session_factory() as session:
+        users = [User(username=f"user{index}", proxy_settings=ProxyTable().dict(no_obj=True)) for index in range(count)]
+        node = Node(
+            name="node-1",
+            address="10.0.0.1",
+            port=1000,
+            api_port=1001,
+            server_ca="ca1",
+            api_key="key1",
+            core_config_id=None,
+        )
+        session.add_all([*users, node])
+        await session.flush()
+        ids = [user.id for user in users], node.id
+        await session.commit()
+    return ids
+
+
+def _compiled_cache_size() -> int:
+    return len(record_usages.engine.sync_engine._compiled_cache)
+
+
+@pytest.mark.asyncio
+async def test_history_writes_of_any_batch_length_do_not_grow_the_compiled_cache(session_factory):
+    user_ids, node_id = await _seed_users_and_node(session_factory, 30)
+    lengths = range(2, len(user_ids) + 1)
+
+    async def write(length: int) -> None:
+        await record_usages.record_user_stats_batched(
+            {node_id: [{"uid": str(uid), "value": 1} for uid in user_ids[:length]]}, {node_id: 1}
+        )
+
+    await write(lengths[0])
+    cached_statements = _compiled_cache_size()
+    for length in lengths[1:]:
+        await write(length)
+
+    assert _compiled_cache_size() == cached_statements
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(NodeUserUsage.user_id, func.sum(NodeUserUsage.used_traffic))
+            .group_by(NodeUserUsage.user_id)
+            .order_by(NodeUserUsage.user_id)
+        )
+        assert rows.all() == [(uid, sum(index < length for length in lengths)) for index, uid in enumerate(user_ids)]
+
+
+@pytest.mark.asyncio
+async def test_user_traffic_updates_of_any_batch_length_do_not_grow_the_compiled_cache(session_factory):
+    user_ids, _ = await _seed_users_and_node(session_factory, 30)
+    lengths = range(2, len(user_ids) + 1)
+
+    async def update(length: int) -> None:
+        await record_usages.update_users_traffic([{"uid": uid, "value": 1} for uid in user_ids[:length]])
+
+    await update(lengths[0])
+    cached_statements = _compiled_cache_size()
+    for length in lengths[1:]:
+        await update(length)
+
+    assert _compiled_cache_size() == cached_statements
+    async with session_factory() as session:
+        rows = await session.execute(select(User.id, User.used_traffic).order_by(User.id))
+        assert rows.all() == [(uid, sum(index < length for length in lengths)) for index, uid in enumerate(user_ids)]
+
+
+@pytest.mark.asyncio
+async def test_full_usage_batches_share_one_compiled_statement(monkeypatch: pytest.MonkeyPatch, session_factory):
+    user_ids, node_id = await _seed_users_and_node(session_factory, 10)
+    dialect = await record_usages.get_dialect()
+    monkeypatch.setitem(record_usages.NODE_USER_USAGE_BATCH_SIZE_BY_DIALECT, dialect, 5)
+    monkeypatch.setitem(record_usages.USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT, dialect, 5)
+    cached_statements = _compiled_cache_size()
+
+    for _ in range(3):
+        await record_usages.record_user_stats_batched(
+            {node_id: [{"uid": str(uid), "value": 1} for uid in user_ids]}, {node_id: 1}
+        )
+        await record_usages.update_users_traffic([{"uid": uid, "value": 1} for uid in user_ids])
+
+    assert _compiled_cache_size() == cached_statements + 2
+
+
 @pytest.mark.skipif(
     os.getenv("TEST_FROM", "local").lower() == "local" or not database_settings.url.startswith(("postgresql", "mysql")),
     reason="only PostgreSQL and MySQL buffer node user usage history",
@@ -1086,7 +1170,7 @@ async def test_record_user_stats_batched_chunks_mysql_batches(monkeypatch: pytes
     async def fake_get_dialect():
         return "mysql"
 
-    async def fake_safe_execute(stmt, params=None, max_retries=5):
+    async def fake_safe_execute(stmt, params=None, max_retries=5, cache_compiled=True):
         executed_param_sizes.append(len(params))
 
     monkeypatch.setattr(record_usages, "get_dialect", fake_get_dialect)

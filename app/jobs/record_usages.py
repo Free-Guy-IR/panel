@@ -35,6 +35,7 @@ NODE_USER_USAGE_BATCH_SIZE_BY_DIALECT = {
     "mysql": 1_000,
     "sqlite": 400,
 }
+FIXED_SHAPE_USER_USAGE_HISTORY_DIALECTS = ("postgresql", "mysql")
 USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT = {
     "mysql": 500,
     "sqlite": 400,
@@ -327,7 +328,10 @@ async def update_users_traffic(usage_params: list[dict]) -> None:
 
         batch_size = USER_TRAFFIC_UPDATE_BATCH_SIZE_BY_DIALECT.get(dialect, len(ordered_params))
         for batch in _chunked(ordered_params, batch_size):
-            await safe_execute(*build_user_traffic_update(dialect, batch))
+            await safe_execute(
+                *build_user_traffic_update(dialect, batch),
+                cache_compiled=dialect != "mysql" or len(batch) == batch_size,
+            )
 
 
 async def touch_users_online_at(user_ids: list[int], now: dt | None = None) -> None:
@@ -440,7 +444,7 @@ def _is_retriable_db_error(err) -> bool:
     return "deadlock" in message or "lock wait timeout" in message or "database is locked" in message
 
 
-async def safe_execute(stmt, params=None, max_retries: int = DEADLOCK_MAX_RETRIES):
+async def safe_execute(stmt, params=None, max_retries: int = DEADLOCK_MAX_RETRIES, cache_compiled: bool = True):
     """
     Safely execute database operations with deadlock and connection handling.
     Creates a fresh DB session for each retry attempt to release locks.
@@ -467,6 +471,8 @@ async def safe_execute(stmt, params=None, max_retries: int = DEADLOCK_MAX_RETRIE
         # READ COMMITTED avoids gap/next-key locks that amplify MySQL deadlocks
         # during concurrent usage updates and upserts.
         connectable = engine.execution_options(isolation_level="READ COMMITTED")
+    if not cache_compiled:
+        connectable = connectable.execution_options(compiled_cache=None)
 
     for attempt in range(max_retries):
         try:
@@ -573,9 +579,10 @@ async def _write_node_user_usage_params(dialect: str, upsert_params: list[dict])
     async with JOB_SEM:
         for batch in batches:
             queries = build_node_user_usage_upsert(dialect, batch)
+            cache_compiled = dialect in FIXED_SHAPE_USER_USAGE_HISTORY_DIALECTS or len(batch) == batch_size
             try:
                 for stmt, stmt_params in queries:
-                    await safe_execute(stmt, stmt_params)
+                    await safe_execute(stmt, stmt_params, cache_compiled=cache_compiled)
             except (DataError, IntegrityError) as err:
                 # The same rows would be rejected again on every retry and block all later history writes
                 logger.error(
