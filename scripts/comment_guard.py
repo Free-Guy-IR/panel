@@ -69,7 +69,7 @@ HEADER_LINES = 30
 DOCKERFILE_DIRECTIVE = re.compile(r"#\s*(syntax|escape|check)\s*=\s*\S", re.IGNORECASE)
 CSS_UNQUOTED_URL = re.compile(r"url\(\s*(?=[^\s'\"])", re.IGNORECASE)
 ZERO = "0" * 40
-GRANDFATHERED_BASE = "bb4bfd2a21a6493600bf98ab6e67cdd5c20e2995"
+GRANDFATHERED_BASE = "23e8ad749031e8c639fa469f272ab7ea15195645"
 FULL_SHA = re.compile(r"[0-9a-f]{40}")
 
 
