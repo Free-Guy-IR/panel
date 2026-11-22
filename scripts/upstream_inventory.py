@@ -1879,9 +1879,9 @@ def replaced_by(fork_sha, sha, head, path, number):
         at = surviving_line(fork_sha, parent, path, number) if is_ancestor(fork_sha, parent) else None
         if at is None:
             continue
-        for old_at, old_count, new_at, new_count in change_counts(sha, parent, path):
-            if new_at <= at < new_at + new_count and old_count:
-                return range(old_at, old_at + old_count)
+        for old_at, old_count, new_at, new_count in change_counts(parent, sha, path):
+            if old_at <= at < old_at + old_count and new_count:
+                return range(new_at, new_at + new_count)
     return None
 
 
