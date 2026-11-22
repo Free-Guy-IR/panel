@@ -29,6 +29,7 @@ BLANK_FIRST_CASES = [
         id="whitespace-first-delay",
     ),
 ]
+WHITESPACE_MAX_SPLIT_SETTINGS = {"packets": "tlshello", "lengths": ["100-200"], "delays": ["10-20"], "maxSplit": "  "}
 WHERE = [pytest.param("host", id="host-mask"), pytest.param("inbound", id="inbound-mask")]
 
 
@@ -97,5 +98,14 @@ def test_a_list_only_fragment_is_served_with_the_scalars_stable_xray_reads(acces
 def test_a_blank_first_fragment_entry_does_not_hide_the_scalar(access_token, where, stored, served):
     xray_settings, link_settings = _served_fragment_settings(access_token, where, stored, 18482)
 
+    assert xray_settings == served
+    assert link_settings == served
+
+
+@pytest.mark.parametrize("where", WHERE)
+def test_a_whitespace_only_max_split_is_left_out_of_the_link_as_out_of_the_xray_json(access_token, where):
+    xray_settings, link_settings = _served_fragment_settings(access_token, where, WHITESPACE_MAX_SPLIT_SETTINGS, 18483)
+
+    served = {"packets": "tlshello", "lengths": ["100-200"], "delays": ["10-20"], "length": "100-200", "delay": "10-20"}
     assert xray_settings == served
     assert link_settings == served
