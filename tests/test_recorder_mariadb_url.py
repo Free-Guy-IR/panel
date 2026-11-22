@@ -63,7 +63,7 @@ class _MariaDBConnection:
         self.users = users
         self.sent: list[tuple[str, object]] = []
 
-    async def execute(self, statement, params=None):
+    async def execute(self, statement, params=None, execution_options=None):
         sql = str(statement.compile(dialect=MARIADB_DIALECT))
         self.sent.append((sql, params))
         if sql.lstrip().upper().startswith("SELECT") and "FOR UPDATE" in sql.upper():

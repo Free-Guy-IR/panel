@@ -733,10 +733,17 @@ async def share_lock_nodes(conn, node_ids) -> None:
         await conn.execute(select(Node.id).where(Node.id.in_(ordered)).order_by(Node.id).with_for_update(read=True))
 
 
+def node_user_usage_execution_options(dialect: str) -> dict | None:
+    if sql_family(dialect) == "postgresql":
+        return None
+    return {"compiled_cache": None}
+
+
 async def write_node_user_usage_rows(conn, dialect: str, chart_rows: list[dict]) -> None:
     if not chart_rows:
         return
     batch_size = NODE_USER_USAGE_BATCH_SIZE_BY_DIALECT.get(sql_family(dialect), len(chart_rows))
+    execution_options = node_user_usage_execution_options(dialect)
     batches = list(_chunked(chart_rows, batch_size))
     if len(batches) > 1:
         logger.debug(
@@ -747,7 +754,7 @@ async def write_node_user_usage_rows(conn, dialect: str, chart_rows: list[dict])
         )
     for batch in batches:
         for stmt, stmt_params in build_node_user_usage_upsert(dialect, batch):
-            await conn.execute(stmt, stmt_params)
+            await conn.execute(stmt, stmt_params, execution_options=execution_options)
 
 
 async def _write_node_user_usage_params(dialect: str, upsert_params: list[dict]) -> None:

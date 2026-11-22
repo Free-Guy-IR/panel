@@ -702,7 +702,7 @@ async def test_chart_rows_are_written_in_mysql_sized_batches(monkeypatch: pytest
     executed_param_sizes = []
 
     class RecordingConnection:
-        async def execute(self, stmt, params=None):
+        async def execute(self, stmt, params=None, execution_options=None):
             executed_param_sizes.append(len(params))
 
     monkeypatch.setattr(record_usages, "_get_time_bucket", lambda: None)
@@ -1144,7 +1144,7 @@ async def test_usage_writes_are_ordered_by_user_id(monkeypatch: pytest.MonkeyPat
         def __init__(self, conn):
             self._conn = conn
 
-        async def execute(self, statement, params=None):
+        async def execute(self, statement, params=None, execution_options=None):
             table_name = getattr(getattr(statement, "table", None), "name", "")
             if table_name == "users" and isinstance(params, list):
                 captured["users"].extend(item["uid"] for item in params)
@@ -1153,13 +1153,13 @@ async def test_usage_writes_are_ordered_by_user_id(monkeypatch: pytest.MonkeyPat
             elif table_name == "admins" and isinstance(params, list):
                 captured["admins"].extend(item["admin_id"] for item in params)
             if params is None:
-                result = await self._conn.execute(statement)
+                result = await self._conn.execute(statement, execution_options=execution_options)
                 if table_name == "":
                     rows = result.fetchall()
                     captured["locked"].append([row[0] for row in rows])
                     return _ReplayResult(rows)
                 return result
-            return await self._conn.execute(statement, params)
+            return await self._conn.execute(statement, params, execution_options=execution_options)
 
     async def capturing_transaction(operation, max_retries=record_usages.DEADLOCK_MAX_RETRIES):
         async def wrapped(conn):
