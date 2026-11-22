@@ -1627,6 +1627,7 @@ async def reset_user_by_next(db: AsyncSession, db_user: User, *, clean_chart_dat
         raise NextPlanUnavailable(db_user.id)
 
     now = datetime.now(UTC)
+    previous_status = db_user.status
     db_user.status = UserStatus.active
     db_user.on_hold_expire_duration = None
     db_user.on_hold_timeout = None
@@ -1676,6 +1677,8 @@ async def reset_user_by_next(db: AsyncSession, db_user: User, *, clean_chart_dat
             db_user.proxy_settings = proxy_settings
         db_user.data_limit_reset_strategy = db_user.next_plan.user_template.data_limit_reset_strategy
 
+    if db_user.status != previous_status or db_user.status == UserStatus.on_hold:
+        db_user.last_status_change = now
     await bump_usage_epoch(db, [db_user.id])
     await _reset_users_traffic_and_log(db, [db_user.id], clean_chart_data=clean_chart_data)
     await db.commit()
