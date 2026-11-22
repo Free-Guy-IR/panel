@@ -12,7 +12,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm.attributes import set_committed_value
 
 from app.db import AsyncSession
-from app.db.crud.wireguard import get_users_accessible_tags
+from app.db.crud.wireguard import committed_tags_of_groups, get_users_accessible_tags
 from app.db.models import CoreConfig, CoreType, User
 from app.fork.proxy_secrets.claims import claim_stored_proxy_secrets, claimed_values, guarded_field
 from app.fork.proxy_secrets.errors import describe_failure
@@ -207,12 +207,16 @@ async def put_entitled_secret(
 
 
 async def entitled_core_tags(
-    db: AsyncSession, specs: Sequence[EntitledSecretSpec]
+    db: AsyncSession, specs: Sequence[EntitledSecretSpec], *, committed: bool = False
 ) -> dict[EntitledSecretField, set[str]]:
     if not specs:
         return {}
     core_types = [spec.core_type for spec in specs]
-    cores = list((await db.execute(select(CoreConfig).where(CoreConfig.type.in_(core_types)))).scalars().all())
+    if committed:
+        statement = select(CoreConfig.type, CoreConfig.config).where(CoreConfig.type.in_(core_types))
+        cores = await read_committed_rows(db, statement)
+    else:
+        cores = list((await db.execute(select(CoreConfig).where(CoreConfig.type.in_(core_types)))).scalars().all())
     return {
         spec.field: spec.core_tags([core for core in cores if _core_type_value(core.type) == spec.core_type.value])
         for spec in specs
@@ -357,19 +361,23 @@ async def grant_entitled_secrets(
     *,
     fields=None,
     reserved: ReservedSecrets | None = None,
+    tags_by_user: dict[int, set[str]] | None = None,
+    tags_by_field: dict[EntitledSecretField, set[str]] | None = None,
 ) -> list[User]:
     if not users:
         return []
     specs = entitled_specs(fields)
-    tags_by_field = await entitled_core_tags(db, specs)
+    if tags_by_field is None:
+        tags_by_field = await entitled_core_tags(db, specs)
     reachable_tags = set().union(*tags_by_field.values()) if tags_by_field else set()
     if not reachable_tags:
         return []
 
-    tags_by_user: dict[int, set[str]] = {}
-    user_ids = sorted({user.id for user in users})
-    for start in range(0, len(user_ids), LOOKUP_CHUNK):
-        tags_by_user.update(await get_users_accessible_tags(db, user_ids[start : start + LOOKUP_CHUNK]))
+    if tags_by_user is None:
+        tags_by_user = {}
+        user_ids = sorted({user.id for user in users})
+        for start in range(0, len(user_ids), LOOKUP_CHUNK):
+            tags_by_user.update(await get_users_accessible_tags(db, user_ids[start : start + LOOKUP_CHUNK]))
     plan = plan_entitled_secrets(users, tags_by_user, tags_by_field, specs)
     report_unreadable(plan)
     changed = await apply_secret_plan(db, plan, reserved)
@@ -382,7 +390,12 @@ async def grant_entitled_secrets_after_plan_change(db: AsyncSession, db_user: Us
     await db.flush()
     savepoint = await db.begin_nested()
     try:
-        granted = await grant_entitled_secrets(db, [db_user])
+        granted = await grant_entitled_secrets(
+            db,
+            [db_user],
+            tags_by_user={db_user.id: await committed_tags_of_groups(db, db_user.groups)},
+            tags_by_field=await entitled_core_tags(db, entitled_specs(), committed=True),
+        )
     except ProxySecretUniquenessError as exc:
         await savepoint.rollback()
         logger.error(
