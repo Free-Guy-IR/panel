@@ -4564,6 +4564,27 @@ HOSTILE_GUARD_WORLDS = {
         False,
         1,
     ),
+    "c5-action-rewritten-and-moved-above-a-one-line-guard": (
+        GUARD_ONE,
+        [["a(user, now=True)", "check(user)", "return b(user)"]],
+        [],
+        False,
+        1,
+    ),
+    "r1-release-rewrote-the-action-and-the-fork-moves-the-old-action-above": (
+        GUARD_ONE,
+        [["a(user)", "check(user)", "return b(user)"]],
+        [],
+        ["check(user)", "a(user, ctx)", "return b(user)"],
+        1,
+    ),
+    "b2one-extra-action-call-above-a-one-line-guard": (
+        GUARD_ONE,
+        [["a(user)", "check(user)", "a(user)", "return b(user)"]],
+        [],
+        False,
+        1,
+    ),
     "g5-action-moved-above-an-unchanged-two-line-guard": (
         GUARD_TWO,
         [["a(user)", "check(user)", "audit(user)", "return b(user)"]],
@@ -4676,7 +4697,7 @@ HOSTILE_GUARD_WORLDS = {
 
 
 def hostile_guard_world(tmp_path, case):
-    (base, fixed), steps, clauses, tag_fix, _ = HOSTILE_GUARD_WORLDS[case]
+    (base, fixed), steps, clauses, release, _ = HOSTILE_GUARD_WORLDS[case]
     path = tmp_path / case
     path.mkdir()
     git(path, "init", "-q", "-b", "up")
@@ -4685,8 +4706,11 @@ def hostile_guard_world(tmp_path, case):
     commit(path, "upstream base", {"svc.py": hostile_body(*base).replace(", check\n", "\n")})
     git(path, "tag", "v1.0")
     fix = commit(path, "fix: guard the action", {"svc.py": hostile_body(*fixed)})
-    if tag_fix:
+    if release is True:
         git(path, "update-ref", "refs/upstream-tags/v1.1", fix)
+    elif release:
+        released = commit(path, "upstream: a later release change", {"svc.py": hostile_body(*release)})
+        git(path, "update-ref", "refs/upstream-tags/v1.1", released)
     git(path, "update-ref", "refs/remotes/upstream/dev", fix)
     git(path, "checkout", "-q", "--orphan", "main", "v1.0")
     git(path, "commit", "-q", "-m", "fork root")
@@ -4706,15 +4730,20 @@ def hostile_guard_world(tmp_path, case):
     return path, fix, text
 
 
+CONTEXT_MOVE_HOLE = (
+    "open gate hole inherited from CP1 7d452bcb7d09, on the 2026-11-26 gate-hardening backlog: git diff reads the "
+    "move as a change to the context lines around the guard, which the design check tolerates"
+)
+RELEASE_FORM_HOLE = (
+    "open gate hole inherited from CP1 7d452bcb7d09, on the 2026-11-26 gate-hardening backlog: a one-line guard moved "
+    "past the action passes when the release rewrote that action"
+)
 HOSTILE_OPEN_HOLES = {
-    case: (
-        "open gate hole inherited from CP1 7d452bcb7d09: git diff reads the move as the guarded action deleted and "
-        "re-inserted around a guard of two or more lines, a context change the design check tolerates"
-    )
-    for case in (
-        "g1b-two-actions-moved-above-four-checks-with-the-log-made-strict",
-        "g5-action-moved-above-an-unchanged-two-line-guard",
-    )
+    "b2one-extra-action-call-above-a-one-line-guard": CONTEXT_MOVE_HOLE,
+    "c5-action-rewritten-and-moved-above-a-one-line-guard": CONTEXT_MOVE_HOLE,
+    "g1b-two-actions-moved-above-four-checks-with-the-log-made-strict": CONTEXT_MOVE_HOLE,
+    "g5-action-moved-above-an-unchanged-two-line-guard": CONTEXT_MOVE_HOLE,
+    "r1-release-rewrote-the-action-and-the-fork-moves-the-old-action-above": RELEASE_FORM_HOLE,
 }
 
 

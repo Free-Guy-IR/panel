@@ -595,22 +595,31 @@ Upstream bugs the fork fixes in its own code. Main submits them upstream after f
   ``missing `<path>:+<line>` because <full fork sha> <reason>``, whose fork commit's own diff replaced that line. A
   clause for a line the gate does not find missing fails the row as excusing nothing. These restructures fail the gate
   even with a clause: a block regrouped over several commits, so that the carrier-to-main diff removes a line no single
-  commit's diff removes; a carrier line rewritten inside a merge resolution; and a one-line guard moved below the action
-  it guards. Such a row needs a fork commit that carries the change in the release's form, or a Waived entry under an
+  commit's diff removes; a carrier line rewritten inside a merge resolution; and a one-line guard moved verbatim below
+  the action it guards, when no release rewrote that action (the other reorders of a guard and its action are the open
+  hole below). Such a row needs a fork commit that carries the change in the release's form, or a Waived entry under an
   owner decision. CP2 briefly read these lines through blame instead; that let a moved guard or a duplicated action pass
   (hostile round 2: G1, G1b, G2 and G3) and was reverted. The fork trackers' strict check reads lost lines the same way;
   it accepts, for each line that diff removes, a clause whose reason names a fork commit that changed the file or an
   owner decision. Tests: `test_a_restructured_security_carrier_needs_a_clause_for_each_line_the_diff_removes`,
   `test_a_guard_moved_below_or_past_the_action_it_guards_is_not_ported_by_design` and
   `test_a_strict_hunk_line_is_lost_when_the_diff_from_its_carrier_to_fork_main_changes_it`.
-- Open fail-open, same class as G1 (found 2026-11-22 by the CP2 hostile round 2 regression worlds; present on main
-  23e8ad749, on CP1 7d452bcb7d09 and on CP1 r2 54448c728, so not introduced by CP2): when an upstream security fix
-  adds a guard of two or more lines above an action and a later fork commit moves the action above the guard,
-  `git diff` reads the move as the action deleted below the guard and re-inserted above it. The action is context of
-  the upstream hunk, the design check tolerates fork changes to context lines, and every guard line is still in place,
-  so the row passes with no clause. From CP1 on, the same move also passes with a clause for one rewritten guard line.
-  A one-line guard is caught, because the diff then moves the guard line itself. Both worlds are pinned as strict
-  xfail in `test_a_guard_moved_below_or_past_the_action_it_guards_is_not_ported_by_design`
-  (`g5-action-moved-above-an-unchanged-two-line-guard` and
-  `g1b-two-actions-moved-above-four-checks-with-the-log-made-strict`) and fail once the gate catches them. Owner:
+- Open fail-open, same class as G1, on the gate-hardening backlog with target date 2026-11-26 (found 2026-11-22 by the
+  CP2 hostile round 2 regression worlds and the CP2 security reviewer's closure check; none is introduced by CP2): the
+  design check does not prove that a guard still runs before the action it guards. It passes these reorders of a
+  security fix's carrier with no clause. G5: the fix adds a guard of two or more lines above an action and a later fork
+  commit moves the action above the guard; `git diff` reads the move as the action deleted below the guard and
+  re-inserted above it, a change to context lines that the design check tolerates, while every guard line is still in
+  place. From CP1 on, the same move also passes with a clause for one rewritten guard line. C5: the action is rewritten
+  and moved above a one-line guard. B2one: an extra call of the action is inserted above a one-line guard. Both read as
+  context changes the same way, and both pass on main 23e8ad749, on CP1 7d452bcb7d09 and on CP1 r2 54448c728, as G5
+  does. R1: the release rewrote the action, and a fork commit moves the old action above a one-line guard; the diff
+  moves the guard line itself, as a verbatim move does, yet from CP1 on the gate passes it (CP1 7d452bcb7d09 and CP1 r2
+  54448c728; main 23e8ad749 rejects it). A one-line guard moved verbatim past its action is caught only when no release
+  rewrote that action: the diff then moves the guard line itself. The five worlds are pinned as strict xfail in
+  `test_a_guard_moved_below_or_past_the_action_it_guards_is_not_ported_by_design`
+  (`g5-action-moved-above-an-unchanged-two-line-guard`,
+  `g1b-two-actions-moved-above-four-checks-with-the-log-made-strict`,
+  `c5-action-rewritten-and-moved-above-a-one-line-guard`, `b2one-extra-action-call-above-a-one-line-guard` and
+  `r1-release-rewrote-the-action-and-the-fork-moves-the-old-action-above`) and fail once the gate catches them. Owner:
   TRACKERS-GATE.
