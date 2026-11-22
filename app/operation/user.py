@@ -1648,7 +1648,11 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             enforce_permission(admin, "users", "read")
         except PermissionDenied as exc:
             await self.raise_error(message=str(exc), code=403)
-        scope_admin_id = get_scope_admin_id(admin, "users", "read")
+        scope_admin_id = get_scope_admin_id(
+            admin,
+            "users",
+            "read",
+        )
         if scope_admin_id is not None:
             query = query.model_copy(update={"owner": [admin.username], "admin_ids": None})
 
