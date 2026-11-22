@@ -512,7 +512,7 @@ v5.5.1 sync until 2026-11-26. The 31 entries classified `security: yes` are owed
 kept for the next upstream release that v5.6.0 contains, the dev head ae8681539d74 and the version bump
 2b75db15cb00 are owed by the v5.6.0 sync (PG-SYNC-560) until 2026-11-20; the 10 of them classified
 `security: yes` are owed only under `owner-decision: 2026-11-03-main-v560-released`. Re-checked on 2026-11-22 (UTC) against PasarGuard/panel main 2b75db15cb00 (= v5.6.0, still the newest release) and dev
-91c1ca252e91: after the lane B and lane C fold-ins the queue holds #864 5a636058dc55 and the three version labels; #947 eb30578050a2
+91c1ca252e91: after the lane A, B and C fold-ins the queue holds only the three version labels (#864 5a636058dc55 is Ported by design); #947 eb30578050a2
 moved to Waived under the 2026-11-22-main-947-carried-fork-form decision, and no entry is owed under the
 2026-10-27-owner-delegated decision any more.
 
