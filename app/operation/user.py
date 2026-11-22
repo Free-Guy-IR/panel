@@ -2188,6 +2188,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         field: Literal["expire", "data_limit"],
         allowed_group_ids: list[int] | None,
     ) -> dict:
+        """Check write access and validate every final value before a guarded batch update."""
         if not _has_permission(admin, "users", "update") or not is_scope_all(admin, "users", "update"):
             await self.raise_error(message="All-user update permission is required", code=403, db=db)
         await self._enforce_manual_user_write_access(admin, db)
@@ -2205,13 +2206,19 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         targets = await get_bulk_user_limit_targets(
             db, bulk_model, field, allowed_group_ids, lock=not bulk_model.dry_run
         )
+        if any(
+            bulk_final_value(field, fix_datetime_timezone(value) if field == "expire" else value, bulk_model.amount)
+            is None
+            for _, value in targets
+        ):
+            await self.raise_error(message=out_of_range_detail(field), code=422, db=db)
         now = datetime.now(UTC)
         for _, value in targets:
-            final_value = bulk_final_value(
-                field, fix_datetime_timezone(value) if field == "expire" else value, bulk_model.amount
+            final_value = (
+                fix_datetime_timezone(value) + td(seconds=bulk_model.amount)
+                if field == "expire"
+                else value + bulk_model.amount
             )
-            if final_value is None:
-                await self.raise_error(message=out_of_range_detail(field), code=422, db=db)
             await self._enforce_user_limits(
                 db,
                 admin,
@@ -2231,6 +2238,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         return await retry_on_row_lock_conflict(self, db, attempt_once, BULK_LOCK_UNAVAILABLE_DETAIL)
 
     async def bulk_modify_expire(self, db: AsyncSession, bulk_model: BulkUser, admin: AdminDetails):
+        """Adjust finite expirations atomically within the actor's role and override limits."""
         return await self._retry_bulk_on_row_lock_conflict(
             db, lambda: self._bulk_modify_expire_once(db, bulk_model, admin)
         )
@@ -2258,6 +2266,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         return users_count
 
     async def bulk_modify_datalimit(self, db: AsyncSession, bulk_model: BulkUser, admin: AdminDetails):
+        """Adjust finite quotas atomically within the actor's role and override limits."""
         return await self._retry_bulk_on_row_lock_conflict(
             db, lambda: self._bulk_modify_datalimit_once(db, bulk_model, admin)
         )
