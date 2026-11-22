@@ -1939,10 +1939,8 @@ def own_hunk_in_upstream_form(
             and upstream_had_lines(fork_sha, upstream_sha, path, lost_here)
             and not lost_texts & release_only
         )
-        if (
-            lost_here
-            and not upstream_form
-            and not (exceptions and excepted_replacement(fork_sha, head, path, lost_here, exceptions))
+        if not upstream_form and not (
+            exceptions and excepted_replacement(fork_sha, head, path, lost_here or removed & own, exceptions)
         ):
             return False
         replacements[min(removed & span)] = replacement
