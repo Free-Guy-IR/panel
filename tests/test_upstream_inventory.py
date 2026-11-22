@@ -4405,7 +4405,7 @@ SUPERSEDED_LIB = "def a(user):\n    return user\n\n\ndef b(user):\n    return us
 SUPERSEDED_LIB_CHECKING = SUPERSEDED_LIB.replace("def a(user):\n", "def a(user):\n    check(user)\n")
 
 
-def dev_superseded_world(tmp_path, case, released):
+def dev_superseded_world(tmp_path, case, released, held_on_main=False):
     path = tmp_path / f"superseding-{case}-{'released' if released else 'dev'}"
     path.mkdir()
     git(path, "init", "-q", "-b", "up")
@@ -4423,6 +4423,7 @@ def dev_superseded_world(tmp_path, case, released):
     git(path, "update-ref", "refs/remotes/upstream/dev", later)
     if released:
         git(path, "update-ref", "refs/upstream-tags/v1.2", later)
+    if released or held_on_main:
         git(path, "update-ref", "refs/remotes/upstream/main", later)
     git(path, "checkout", "-q", "--orphan", "main", "v1.0")
     git(path, "commit", "-q", "-m", "fork root")
@@ -4435,6 +4436,8 @@ def dev_superseded_world(tmp_path, case, released):
         f"## Ported by design\n\n- `{fix}` the fork checks the caller in fork commit {carrier}, and {move} takes "
         "upstream's later move of the check security: yes\n"
     )
+    if held_on_main:
+        text += f"\n## Held for an upstream release\n\n- `{later}` moves the caller check into a() security: no\n"
     return path, fix, text
 
 
@@ -4447,3 +4450,14 @@ def test_only_a_released_later_upstream_change_supersedes_a_security_fix(tmp_pat
     result = standalone_gate(path, text, "--grandfathered-base", "v1.0", *CALLER_RELEASE_ARGS)
     assert result.returncode == code, result.stdout + result.stderr
     assert (f"`{fix[:12]}` is ported by design as a security fix, but" in result.stdout) is not released
+
+
+@pytest.mark.parametrize("case", ["svc-half-only", "full-pick"])
+def test_a_later_upstream_change_held_on_main_before_a_final_release_supersedes_no_security_fix(tmp_path, case):
+    path, fix, text = dev_superseded_world(tmp_path, case, False, held_on_main=True)
+    later = git(path, "rev-parse", "refs/remotes/upstream/main")
+    assert git(path, "for-each-ref", f"--contains={later}", "refs/upstream-tags/") == ""
+    assert "check(user)" not in git(path, "show", "main:svc.py")
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0", *CALLER_RELEASE_ARGS)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"`{fix[:12]}` is ported by design as a security fix, but" in result.stdout
