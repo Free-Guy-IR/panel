@@ -598,9 +598,11 @@ Upstream bugs the fork fixes in its own code. Main submits them upstream after f
   commit's diff removes; a carrier line rewritten inside a merge resolution; and a one-line guard moved below the action
   it guards. Such a row needs a fork commit that carries the change in the release's form, or a Waived entry under an
   owner decision. CP2 briefly read these lines through blame instead; that let a moved guard or a duplicated action pass
-  (hostile round 2: G1, G1b, G2 and G3) and was reverted. Tests:
-  `test_a_restructured_security_carrier_needs_a_clause_for_each_line_the_diff_removes` and
-  `test_a_guard_moved_below_or_past_the_action_it_guards_is_not_ported_by_design`.
+  (hostile round 2: G1, G1b, G2 and G3) and was reverted. The fork trackers' strict check reads lost lines the same way;
+  it accepts, for each line that diff removes, a clause whose reason names a fork commit that changed the file or an
+  owner decision. Tests: `test_a_restructured_security_carrier_needs_a_clause_for_each_line_the_diff_removes`,
+  `test_a_guard_moved_below_or_past_the_action_it_guards_is_not_ported_by_design` and
+  `test_a_strict_hunk_line_is_lost_when_the_diff_from_its_carrier_to_fork_main_changes_it`.
 - Open fail-open, same class as G1 (found 2026-11-22 by the CP2 hostile round 2 regression worlds; present on main
   23e8ad749, on CP1 7d452bcb7d09 and on CP1 r2 54448c728, so not introduced by CP2): when an upstream security fix
   adds a guard of two or more lines above an action and a later fork commit moves the action above the guard,
