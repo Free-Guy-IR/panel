@@ -137,7 +137,9 @@ async def test_bulk_owner_move_of_many_users_while_admin_wide_change_and_admin_r
             assert rows[user_id][0] == home, (user_id, rows[user_id], outcomes)
         statuses = {(rows[user_id][1], user_id in open_restrictions) for user_id in moved_ids}
         assert len(statuses) == 1, ("moved users were changed by part of the admin-wide change", statuses, outcomes)
-        assert traffic[home] == 1000 * len(moved_ids), (traffic, outcomes)
+        orphaned_before_move = order.index("remover") < order.index("mover")
+        credited_ids = away_ids if orphaned_before_move else moved_ids
+        assert traffic[home] == 1000 * len(credited_ids), (traffic, outcomes)
         assert traffic[away] == -1000 * len(away_ids), (traffic, outcomes)
     if outcomes.get("remover") == "committed":
         assert gone not in traffic, (traffic, outcomes)

@@ -6,7 +6,7 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.db.crud.user import bulk_set_owner
+from app.db.crud.user import bulk_set_owner, set_owner
 from app.db.models import Admin, Base, Group, User, UserStatus
 from app.models.proxy import ProxyTable
 
@@ -90,14 +90,25 @@ async def test_a_real_move_still_shifts_the_traffic_between_both(db):
 
 
 @pytest.mark.asyncio
-async def test_a_user_with_no_owner_is_still_credited_to_the_new_one(db):
+async def test_a_user_with_no_owner_is_not_credited_to_the_new_one(db):
     new = await _admin(db, "new", used_traffic=0)
     user = await _user(db, "orphan", None, used_traffic=700)
     await db.commit()
 
     await bulk_set_owner(db, [user], new)
 
-    assert await _traffic(db, new.id) == 700
+    assert await _traffic(db, new.id) == 0
+
+
+@pytest.mark.asyncio
+async def test_set_owner_does_not_credit_a_user_with_no_owner_either(db):
+    new = await _admin(db, "new", used_traffic=0)
+    user = await _user(db, "orphan", None, used_traffic=700)
+    await db.commit()
+
+    await set_owner(db, user, new)
+
+    assert await _traffic(db, new.id) == 0
 
 
 def _dependencies(route_name: str) -> set[str]:

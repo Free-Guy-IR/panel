@@ -2725,8 +2725,7 @@ def test_parallel_creates_respect_role_max_users(access_token, mode):
         cleanup_groups(access_token, core, groups)
 
 
-def test_bulk_set_owner_credits_a_user_that_had_no_owner(access_token):
-    """A user whose traffic was counted against nobody starts counting against the admin that takes it."""
+def test_bulk_set_owner_does_not_credit_a_user_that_had_no_owner(access_token):
     taker = create_admin(access_token)
     user = create_user(access_token, payload={"username": unique_name("orphan_credit")})
 
@@ -2750,7 +2749,7 @@ def test_bulk_set_owner_credits_a_user_that_had_no_owner(access_token):
             json={"ids": [user["id"]], "admin_username": taker["username"]},
         )
         assert response.status_code == status.HTTP_200_OK, response.json()
-        assert asyncio.run(_traffic(taker["username"])) == 700
+        assert asyncio.run(_traffic(taker["username"])) == 0
     finally:
         delete_user(access_token, user["username"])
         delete_admin(access_token, taker["username"])
