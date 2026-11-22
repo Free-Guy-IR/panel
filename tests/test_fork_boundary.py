@@ -81,7 +81,7 @@ AUTHENTICATION_DEPENDENCIES = frozenset(
 )
 
 ACCEPTED_LOCALE_VALUE_OVERRIDES = {
-    "en": frozenset(),
+    "en": frozenset({("settings", "cleanup", "expiredUsers", "selectInactiveDate")}),
     "fa": frozenset({("hostsDialog", "sni.info")}),
     "ru": frozenset({("hostsDialog", "sni.info"), ("hostsDialog", "sniPlaceholder")}),
     "zh": frozenset(),
