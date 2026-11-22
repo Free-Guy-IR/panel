@@ -341,14 +341,14 @@ GROUP_CHANGE_TABLES = ("groups", "users_groups_association", "inbounds_groups_as
 
 
 def _deadlock_on_the_first_group_write(engine):
-    seen = SimpleNamespace(marked=False, failed=[])
+    seen = SimpleNamespace(locked=False, failed=[])
 
     def fail(conn, cursor, statement, *rest):
         text = " ".join(statement.split()).lower()
-        if text.startswith("insert into pending_user_resyncs"):
-            seen.marked = True
+        if text.startswith("update named_locks"):
+            seen.locked = True
             return
-        if not seen.marked or seen.failed:
+        if not seen.locked or seen.failed:
             return
         for prefix in ("insert into ", "update ", "delete from "):
             if text.startswith(prefix) and text[len(prefix) :].split(" ", 1)[0] in GROUP_CHANGE_TABLES:
