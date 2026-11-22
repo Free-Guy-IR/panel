@@ -67,16 +67,24 @@ def _delete_target(access_token, target: str) -> None:
     assert response.status_code in (status.HTTP_200_OK, status.HTTP_404_NOT_FOUND), response.text
 
 
-def _renew(access_token, username: str, template_id: int, expected_status: str) -> None:
+def _plan_next(access_token, username: str, template_id: int) -> None:
     update = client.put(
         f"/api/user/{username}",
         headers=auth_headers(access_token),
         json={"next_plan": {"user_template_id": template_id}},
     )
     assert update.status_code == status.HTTP_200_OK, update.text
+
+
+def _activate_next(access_token, username: str, expected_status: str) -> None:
     renewed = client.post(f"/api/user/{username}/active_next", headers=auth_headers(access_token))
     assert renewed.status_code == status.HTTP_200_OK, renewed.text
     assert renewed.json()["status"] == expected_status
+
+
+def _renew(access_token, username: str, template_id: int, expected_status: str) -> None:
+    _plan_next(access_token, username, template_id)
+    _activate_next(access_token, username, expected_status)
 
 
 def _world(access_token, template_status: str):
@@ -106,9 +114,10 @@ async def test_a_customer_renewed_a_moment_ago_is_not_deleted_as_inactive(access
     renewed = create_user(access_token, group_ids=[group["id"]], payload={"username": unique_name("renewed_customer")})
     idle = create_user(access_token, group_ids=[group["id"]], payload={"username": unique_name("idle_customer")})
     try:
-        await _age(renewed["id"], online_ago=LAST_ONLINE[last_online])
         await _age(idle["id"], online_ago=td(days=60))
-        _renew(access_token, renewed["username"], template["id"], template_status)
+        _plan_next(access_token, renewed["username"], template["id"])
+        await _age(renewed["id"], online_ago=LAST_ONLINE[last_online])
+        _activate_next(access_token, renewed["username"], template_status)
 
         listed = _listed(access_token, "inactive")
         _delete_target(access_token, "inactive")
