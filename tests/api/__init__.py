@@ -3,6 +3,7 @@ import contextlib
 import json
 import logging
 import os
+import sqlite3
 
 from alembic.command import upgrade
 from alembic.config import Config
@@ -148,7 +149,22 @@ def _bootstrap_local_database_once() -> None:
     run_migrations()
 
 
+def _journal_like_the_app() -> None:
+    if not IS_SQLITE or ":memory:" in DATABASE_URL:
+        return
+
+    path = DATABASE_URL.split("///", 1)[-1]
+    if not path or not os.path.exists(path):
+        return
+
+    with contextlib.closing(sqlite3.connect(path, uri=True)) as connection:
+        mode = connection.execute("PRAGMA journal_mode=WAL").fetchone()[0]
+    if mode.lower() != "wal":
+        raise RuntimeError(f"the SQLite test database at {path} stayed in {mode} journal mode instead of WAL")
+
+
 _bootstrap_local_database_once()
+_journal_like_the_app()
 
 
 class GetTestDB:

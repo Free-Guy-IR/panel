@@ -1,13 +1,17 @@
 import asyncio
+import contextlib
 import dataclasses
 import importlib
 import random
+import sqlite3
+import time
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from asyncpg.exceptions import DeadlockDetectedError
 from fastapi import HTTPException
 from PasarGuardNodeBridge import NodeAPIError
 from PasarGuardNodeBridge.storage import (
@@ -17,6 +21,7 @@ from PasarGuardNodeBridge.storage import (
     get_default_user_sync_store,
 )
 from sqlalchemy import event, inspect, select, text, update
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -152,8 +157,12 @@ async def forget_every_owed_stop() -> None:
 
 
 async def drain_owed_stops(monkeypatch, now: datetime) -> None:
+    await drain_with(monkeypatch, SessionOfItsOwn, now)
+
+
+async def drain_with(monkeypatch, sessions, now: datetime) -> None:
     module = retirement()
-    monkeypatch.setattr(module, "GetDB", SessionOfItsOwn)
+    monkeypatch.setattr(module, "GetDB", sessions)
     await module.drain_node_retirements(now=now)
 
 
@@ -1075,3 +1084,236 @@ async def test_one_failing_owed_stop_does_not_abort_the_drain_of_the_others(monk
         assert not h.remote(db_node).running
         assert await stops_owed_to(row.address) == 0
         assert await stops_owed_to(broken_row.address) == 1
+
+
+DATABASE_ERRORS = {
+    "sqlite busy": lambda statement: OperationalError(statement, {}, sqlite3.OperationalError("database is locked")),
+    "mysql deadlock": lambda statement: OperationalError(
+        statement, {}, Exception(1213, "Deadlock found when trying to get lock; try restarting transaction")
+    ),
+    "mysql lock wait": lambda statement: OperationalError(
+        statement, {}, Exception(1205, "Lock wait timeout exceeded; try restarting transaction")
+    ),
+    "postgres deadlock": lambda statement: OperationalError(statement, {}, DeadlockDetectedError("deadlock detected")),
+}
+
+
+@dataclasses.dataclass(frozen=True)
+class RetryStep:
+    name: str
+    sql: str
+    fails_on: str = "execute"
+    occurrence: int = 1
+    handed_off: bool = False
+    unreachable: bool = False
+    stop_lands: bool = False
+
+
+RETRY_STEPS = [
+    RetryStep("due rows", "SELECT node_retirements.id,"),
+    RetryStep("claim", "UPDATE node_retirements SET next_attempt_at=:next_attempt_at, attempts="),
+    RetryStep(
+        "claim commit", "UPDATE node_retirements SET next_attempt_at=:next_attempt_at, attempts=", fails_on="commit"
+    ),
+    RetryStep("still managed check", "SELECT nodes.id FROM nodes WHERE nodes.id =", handed_off=True),
+    RetryStep("node again check", "SELECT nodes.id FROM nodes WHERE nodes.address ="),
+    RetryStep("node again check before the stop", "SELECT nodes.id FROM nodes WHERE nodes.address =", occurrence=2),
+    RetryStep("failure record", "UPDATE node_retirements SET last_error=", fails_on="commit", unreachable=True),
+    RetryStep("forget", "DELETE FROM node_retirements", fails_on="commit", stop_lands=True),
+]
+
+
+class DatabaseFault:
+    def __init__(self, step: RetryStep, error: Exception):
+        self.step = step
+        self.error = error
+        self.seen = 0
+        self.raised = False
+
+    def hits(self, statement) -> bool:
+        if self.raised or not " ".join(str(statement).split()).startswith(self.step.sql):
+            return False
+        self.seen += 1
+        return self.seen == self.step.occurrence
+
+    def fire(self) -> None:
+        self.raised = True
+        raise self.error
+
+
+class SessionWithAFault:
+    def __init__(self, fault: DatabaseFault):
+        self.fault = fault
+        self.db = Session()
+        self.failing_commit = False
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc_info):
+        await self.db.close()
+
+    async def execute(self, statement, *args, **kwargs):
+        if self.fault.hits(statement):
+            if self.fault.step.fails_on == "execute":
+                self.fault.fire()
+            self.failing_commit = True
+        return await self.db.execute(statement, *args, **kwargs)
+
+    async def commit(self):
+        if self.failing_commit:
+            self.failing_commit = False
+            self.fault.fire()
+        await self.db.commit()
+
+
+@pytest.mark.parametrize("error", sorted(DATABASE_ERRORS))
+@pytest.mark.parametrize("step", RETRY_STEPS, ids=[step.name for step in RETRY_STEPS])
+async def test_an_owed_stop_outlives_a_database_error_at_any_step_of_its_retry(monkeypatch, step, error):
+    quiet_side_effects(monkeypatch)
+    async with Harness(monkeypatch) as h:
+        row, db_node = await managed_row(h, monkeypatch)
+        remote = h.remote(db_node)
+        operation = None
+        if step.handed_off:
+            monkeypatch.setattr(node_nats_client, "publish", AsyncMock())
+            operation = backend_role_operation(monkeypatch)
+        else:
+            remote.lost = set(EVERY_RPC)
+        assert await refused_delete(row, bulk=False, operation=operation) is None
+        h.db_nodes.pop(row.id)
+        assert await stops_owed_to(row.address) == 1
+        remote.lost = set(EVERY_RPC) if step.unreachable else set()
+        fault = DatabaseFault(step, DATABASE_ERRORS[error](step.sql))
+        moment = datetime.now(UTC) + timedelta(hours=1)
+
+        with contextlib.suppress(OperationalError):
+            await drain_with(monkeypatch, lambda: SessionWithAFault(fault), moment)
+
+        assert fault.raised, f"the retry never reached its {step.name} step"
+        assert await stops_owed_to(row.address) == 1, f"a database error at the {step.name} step dropped the owed Stop"
+        assert remote.running == (not step.stop_lands)
+
+        remote.lost = set()
+        await drain_owed_stops(monkeypatch, moment + timedelta(hours=2))
+
+        assert not remote.running, f"the owed Stop was never retried after a database error at the {step.name} step"
+        assert await node_manager.get_node(row.id) is None
+        assert await stops_owed_to(row.address) == 0
+
+
+def _wait_a_second_for_row_locks(dbapi_connection, _record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("SET SESSION innodb_lock_wait_timeout = 1")
+    cursor.close()
+
+
+def impatient_connections():
+    if IS_SQLITE:
+        engine = create_async_engine(
+            DATABASE_URL, connect_args={"check_same_thread": False, "uri": True, "timeout": 0.2}, poolclass=NullPool
+        )
+        event.listen(engine.sync_engine, "connect", _enforce_sqlite_foreign_keys)
+        return engine
+    if DATABASE_URL.startswith("postgresql"):
+        return create_async_engine(
+            DATABASE_URL, connect_args={"server_settings": {"lock_timeout": "200"}}, poolclass=NullPool
+        )
+    engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
+    event.listen(engine.sync_engine, "connect", _wait_a_second_for_row_locks)
+    return engine
+
+
+def sessions_on(engine):
+    maker = async_sessionmaker(autocommit=False, autoflush=False, expire_on_commit=False, bind=engine)
+
+    @contextlib.asynccontextmanager
+    async def session():
+        db = maker()
+        try:
+            yield db
+        finally:
+            await db.close()
+
+    return session
+
+
+@contextlib.asynccontextmanager
+async def a_writer_holding(address: str):
+    async with Session() as blocker:
+        if IS_SQLITE:
+            await blocker.execute(text("BEGIN IMMEDIATE"))
+        else:
+            held = await blocker.execute(
+                text("SELECT id FROM node_retirements WHERE address = :address FOR UPDATE"), {"address": address}
+            )
+            assert held.first() is not None
+        try:
+            yield
+        finally:
+            await blocker.rollback()
+
+
+@contextlib.asynccontextmanager
+async def a_reader_of(address: str):
+    async with Session() as reader:
+        if IS_SQLITE:
+            await reader.execute(text("BEGIN"))
+        seen = await reader.execute(
+            text("SELECT id FROM node_retirements WHERE address = :address"), {"address": address}
+        )
+        assert seen.first() is not None
+        try:
+            yield
+        finally:
+            await reader.rollback()
+
+
+async def test_an_owed_stop_whose_retry_meets_a_real_lock_timeout_is_kept_as_it_was_and_sent_by_the_next_drain(
+    monkeypatch, caplog
+):
+    quiet_side_effects(monkeypatch)
+    async with Harness(monkeypatch) as h:
+        row, db_node = await managed_row(h, monkeypatch)
+        remote = h.remote(db_node)
+        remote.lost = set(EVERY_RPC)
+        assert await refused_delete(row, bulk=False) is None
+        h.db_nodes.pop(row.id)
+        remote.lost = set()
+        owed_before = await owed_rows(row.address)
+        moment = datetime.now(UTC) + timedelta(hours=1)
+        impatient = impatient_connections()
+        try:
+            async with a_writer_holding(row.address):
+                await drain_with(monkeypatch, sessions_on(impatient), moment)
+        finally:
+            await impatient.dispose()
+
+        failed_retries = [record for record in caplog.records if "Retrying the Stop owed" in record.getMessage()]
+        assert len(failed_retries) == 1, [record.getMessage() for record in caplog.records]
+        assert remote.running, "the Stop went out although the retry could not claim its owed Stop"
+        assert await owed_rows(row.address) == owed_before, "a retry that met a lock changed or dropped its owed Stop"
+
+        await drain_owed_stops(monkeypatch, moment)
+
+        assert not remote.running, "the drain after the lock was released never sent the owed Stop"
+        assert await stops_owed_to(row.address) == 0
+
+
+async def test_a_session_reading_the_owed_stops_does_not_hold_back_their_retry(monkeypatch):
+    quiet_side_effects(monkeypatch)
+    async with Harness(monkeypatch) as h:
+        row, db_node = await managed_row(h, monkeypatch)
+        remote = h.remote(db_node)
+        remote.lost = set(EVERY_RPC)
+        assert await refused_delete(row, bulk=False) is None
+        h.db_nodes.pop(row.id)
+        remote.lost = set()
+
+        started = time.monotonic()
+        async with a_reader_of(row.address):
+            await drain_owed_stops(monkeypatch, datetime.now(UTC) + timedelta(hours=1))
+        waited = time.monotonic() - started
+
+        assert not remote.running, f"the owed Stop was not sent while another session was reading ({waited:.1f}s)"
+        assert await stops_owed_to(row.address) == 0
