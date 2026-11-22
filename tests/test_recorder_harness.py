@@ -36,10 +36,10 @@ def file_backed_database_url(directory: Path) -> str:
     return f"sqlite+aiosqlite:///{directory / 'recorder.db'}" if url.startswith("sqlite") else url
 
 
-def _recorder_engine(url: str):
+def _recorder_engine(url: str, scratch_file: bool):
     if not url.startswith("sqlite"):
         return create_async_engine(url, poolclass=NullPool)
-    if ":memory:" in url:
+    if not scratch_file:
         return create_async_engine(url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     engine = create_async_engine(url, connect_args={"check_same_thread": False})
     event.listen(engine.sync_engine, "connect", base._set_sqlite_pragmas)
@@ -95,15 +95,15 @@ async def restore_seeded_rows(engine, seeded: dict[str, list[dict]]) -> None:
 @contextlib.asynccontextmanager
 async def recorder_database(monkeypatch: pytest.MonkeyPatch, url: str):
     is_sqlite = url.startswith("sqlite")
-    scratch_file = is_sqlite and ":memory:" not in url
+    scratch_file = is_sqlite and ":memory:" not in url and url != _database_url()
     json_column = base.Base.metadata.tables["users"].c.proxy_settings
     json_default = json_column.server_default
     if url.startswith("mysql"):
         json_column.server_default = None
 
-    engine = _recorder_engine(url)
+    engine = _recorder_engine(url, scratch_file)
 
-    seeded = None if is_sqlite else await snapshot_seeded_rows(engine)
+    seeded = None if scratch_file or ":memory:" in url else await snapshot_seeded_rows(engine)
     async with engine.begin() as conn:
         await conn.run_sync(drop_migration_owned_tables)
         await conn.run_sync(base.Base.metadata.drop_all)
