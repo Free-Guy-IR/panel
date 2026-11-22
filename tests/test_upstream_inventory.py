@@ -4461,3 +4461,435 @@ def test_a_later_upstream_change_held_on_main_before_a_final_release_supersedes_
     result = standalone_gate(path, text, "--grandfathered-base", "v1.0", *CALLER_RELEASE_ARGS)
     assert result.returncode == 1, result.stdout + result.stderr
     assert f"`{fix[:12]}` is ported by design as a security fix, but" in result.stdout
+
+
+HOSTILE_HEADER = (
+    "from lib import a, b, check\n\nFLAGS = 1\nLIMITS = 2\nNAMES = 3\nMODES = 4\nZONES = 5\nRATES = 6\n\n\n"
+)
+HOSTILE_STRICT = "check(user, strict=True)"
+HOSTILE_AUDIT_STRICT = "audit(user, strict=True)"
+HOSTILE_LOG = 'log.debug("handle")'
+HOSTILE_ACTIONS = ["a(user)", "log(user)", "save(user)"]
+
+
+def hostile_body(*lines):
+    return HOSTILE_HEADER + "def handle(user):\n" + "".join(f"    {line}\n" if line else "\n" for line in lines)
+
+
+def hostile_merged_side(text):
+    def step(path):
+        git(path, "checkout", "-q", "-b", "side")
+        side = commit(path, "side: run the action first", {"svc.py": text})
+        git(path, "checkout", "-q", "main")
+        git(path, "merge", "-q", "--no-ff", "-m", "merge side", side)
+        return git(path, "rev-parse", "HEAD")
+
+    return step
+
+
+def hostile_merge_resolution(main_text, side_text, resolved_text):
+    def step(path):
+        git(path, "checkout", "-q", "-b", "side")
+        side = commit(path, "side: rework", {"svc.py": side_text})
+        git(path, "checkout", "-q", "main")
+        commit(path, "main: rework", {"svc.py": main_text})
+        subprocess.run(
+            ["git", "merge", "-q", "--no-ff", "--no-commit", side], cwd=path, env=ENV, capture_output=True, check=False
+        )
+        (path / "svc.py").write_text(resolved_text)
+        git(path, "add", "svc.py")
+        git(path, "commit", "-q", "--no-edit", "-m", "merge side with a resolution")
+        return git(path, "rev-parse", "HEAD")
+
+    return step
+
+
+GUARD_ONE = (["a(user)", "return b(user)"], ["check(user)", "a(user)", "return b(user)"])
+GUARD_TWO = (["a(user)", "return b(user)"], ["check(user)", "audit(user)", "a(user)", "return b(user)"])
+GUARD_THREE_ACTIONS = (
+    [*HOSTILE_ACTIONS, "return b(user)"],
+    ["check(user)", *HOSTILE_ACTIONS, "return b(user)"],
+)
+GUARD_FOUR = (
+    ["a(user)", "save(user)", "return b(user)"],
+    ["check(user)", "audit(user)", "verify(user)", "log(user)", "a(user)", "save(user)", "return b(user)"],
+)
+GUARD_LOGGED = (
+    [HOSTILE_LOG, "a(user)", "x = 1", "y = 2", "return b(user)"],
+    [HOSTILE_LOG, "check(user)", "a(user)", "x = 1", "y = 2", "return b(user)"],
+)
+HOSTILE_GUARD_WORLDS = {
+    "g1-check-moved-after-one-action": (GUARD_ONE, [["a(user)", "check(user)", "return b(user)"]], [], False, 1),
+    "g1-check-moved-after-three-actions-in-two-commits": (
+        GUARD_THREE_ACTIONS,
+        [
+            [*HOSTILE_ACTIONS, "check(user)", *HOSTILE_ACTIONS, "return b(user)"],
+            [*HOSTILE_ACTIONS, "check(user)", "return b(user)"],
+        ],
+        [],
+        False,
+        1,
+    ),
+    "g1b-action-moved-above-both-with-the-audit-made-strict": (
+        GUARD_TWO,
+        [["a(user)", "check(user)", HOSTILE_AUDIT_STRICT, "return b(user)"]],
+        [(13, [0])],
+        False,
+        1,
+    ),
+    "g1b-two-actions-moved-above-four-checks-with-the-log-made-strict": (
+        GUARD_FOUR,
+        [
+            [
+                "a(user)",
+                "save(user)",
+                "check(user)",
+                "audit(user)",
+                "verify(user)",
+                "log(user, strict=True)",
+                "return b(user)",
+            ]
+        ],
+        [(15, [0])],
+        False,
+        1,
+    ),
+    "g1b-action-moved-past-the-excused-audit-in-a-later-commit": (
+        GUARD_TWO,
+        [
+            ["check(user)", HOSTILE_AUDIT_STRICT, "a(user)", "return b(user)"],
+            ["a(user)", "check(user)", HOSTILE_AUDIT_STRICT, "return b(user)"],
+        ],
+        [(13, [0])],
+        False,
+        1,
+    ),
+    "g5-action-moved-above-an-unchanged-two-line-guard": (
+        GUARD_TWO,
+        [["a(user)", "check(user)", "audit(user)", "return b(user)"]],
+        [],
+        False,
+        1,
+    ),
+    "g2-a1-rewrite-then-move": (
+        GUARD_ONE,
+        [[HOSTILE_STRICT, "a(user)", "return b(user)"], ["a(user)", HOSTILE_STRICT, "return b(user)"]],
+        [(12, [0])],
+        False,
+        1,
+    ),
+    "g2-a4-rewrite-then-move-in-two-commits": (
+        GUARD_ONE,
+        [
+            [HOSTILE_STRICT, "a(user)", "return b(user)"],
+            ["a(user)", HOSTILE_STRICT, "a(user)", "return b(user)"],
+            ["a(user)", HOSTILE_STRICT, "return b(user)"],
+        ],
+        [(12, [0])],
+        False,
+        1,
+    ),
+    "g2-a6-two-line-guard-both-excused-then-move": (
+        GUARD_TWO,
+        [
+            [HOSTILE_STRICT, HOSTILE_AUDIT_STRICT, "a(user)", "return b(user)"],
+            ["a(user)", HOSTILE_STRICT, HOSTILE_AUDIT_STRICT, "return b(user)"],
+        ],
+        [(12, [0]), (13, [0])],
+        False,
+        1,
+    ),
+    "g2-a8-rewrite-then-move-on-a-merged-side-branch": (
+        GUARD_ONE,
+        [
+            [HOSTILE_STRICT, "a(user)", "return b(user)"],
+            hostile_merged_side(hostile_body("a(user)", HOSTILE_STRICT, "return b(user)")),
+        ],
+        [(12, [0])],
+        False,
+        1,
+    ),
+    "g2-a9-rewrite-then-move-in-a-merge-resolution": (
+        GUARD_ONE,
+        [
+            [HOSTILE_STRICT, "a(user)", "return b(user)"],
+            hostile_merge_resolution(
+                hostile_body(HOSTILE_STRICT, "a(user)", "return b(user)", "", "", "def other(user):", "    return 1"),
+                hostile_body(HOSTILE_STRICT, "a(user)", "return b(user)") + "\n\nX = 1\n",
+                hostile_body("a(user)", HOSTILE_STRICT, "return b(user)", "", "", "def other(user):", "    return 1")
+                + "\n\nX = 1\n",
+            ),
+        ],
+        [(12, [0])],
+        False,
+        1,
+    ),
+    "g2-a10-format-wrap-then-move": (
+        GUARD_ONE,
+        [
+            ["check(", "    user,", ")", "a(user)", "return b(user)"],
+            ["a(user)", "check(", "    user,", ")", "return b(user)"],
+        ],
+        [(12, [0])],
+        False,
+        1,
+    ),
+    "g2-a11-rewrite-then-move-release-tagged": (
+        GUARD_ONE,
+        [[HOSTILE_STRICT, "a(user)", "return b(user)"], ["a(user)", HOSTILE_STRICT, "return b(user)"]],
+        [(12, [0])],
+        True,
+        1,
+    ),
+    "g3-b1-action-written-twice-above-the-guard": (
+        GUARD_TWO,
+        [["a(user)", "a(user)", "check(user)", HOSTILE_AUDIT_STRICT, "return b(user)"]],
+        [(13, [0])],
+        False,
+        1,
+    ),
+    "g4-unrelated-assignments-swapped-after-the-action-keep-the-port": (
+        GUARD_LOGGED,
+        [
+            [HOSTILE_LOG, HOSTILE_STRICT, "a(user)", "x = 1", "y = 2", "return b(user)"],
+            [HOSTILE_LOG, HOSTILE_STRICT, "a(user)", "y = 2", "x = 1", "return b(user)"],
+        ],
+        [(13, [0])],
+        False,
+        0,
+    ),
+    "control-check-made-strict-in-place": (
+        GUARD_ONE,
+        [[HOSTILE_STRICT, "a(user)", "return b(user)"]],
+        [(12, [0])],
+        False,
+        0,
+    ),
+    "control-audit-made-strict-in-place": (
+        GUARD_TWO,
+        [["check(user)", HOSTILE_AUDIT_STRICT, "a(user)", "return b(user)"]],
+        [(13, [0])],
+        False,
+        0,
+    ),
+}
+
+
+def hostile_guard_world(tmp_path, case):
+    (base, fixed), steps, clauses, tag_fix, _ = HOSTILE_GUARD_WORLDS[case]
+    path = tmp_path / case
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "upstream base", {"svc.py": hostile_body(*base).replace(", check\n", "\n")})
+    git(path, "tag", "v1.0")
+    fix = commit(path, "fix: guard the action", {"svc.py": hostile_body(*fixed)})
+    if tag_fix:
+        git(path, "update-ref", "refs/upstream-tags/v1.1", fix)
+    git(path, "update-ref", "refs/remotes/upstream/dev", fix)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    carrier = commit(path, "fork: guard the action", {"svc.py": hostile_body(*fixed), "fork.py": "fork\n"})
+    made = [
+        step(path) if callable(step) else commit(path, f"fork: rework step {index}", {"svc.py": hostile_body(*step)})
+        for index, step in enumerate(steps)
+    ]
+    reasons = "".join(
+        f"; missing `svc.py:+{line}` because {' and '.join(made[i] for i in named)} rewrites that line"
+        for line, named in clauses
+    )
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the caller itself in fork commit {carrier}{reasons} "
+        "security: yes\n"
+    )
+    return path, fix, text
+
+
+HOSTILE_OPEN_HOLES = {
+    case: (
+        "open gate hole inherited from CP1 7d452bcb7d09: git diff reads the move as the guarded action deleted and "
+        "re-inserted around a guard of two or more lines, a context change the design check tolerates"
+    )
+    for case in (
+        "g1b-two-actions-moved-above-four-checks-with-the-log-made-strict",
+        "g5-action-moved-above-an-unchanged-two-line-guard",
+    )
+}
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        pytest.param(case, marks=pytest.mark.xfail(strict=True, reason=HOSTILE_OPEN_HOLES[case]))
+        if case in HOSTILE_OPEN_HOLES
+        else case
+        for case in sorted(HOSTILE_GUARD_WORLDS)
+    ],
+)
+def test_a_guard_moved_below_or_past_the_action_it_guards_is_not_ported_by_design(tmp_path, case):
+    path, fix, text = hostile_guard_world(tmp_path, case)
+    code = HOSTILE_GUARD_WORLDS[case][-1]
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == code, result.stdout + result.stderr
+    if code:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but" in result.stdout
+
+
+DELIVER = "def deliver(n):\n    finish(n)\n"
+DELIVER_FIXED = (
+    "def deliver(n):\n    if n.discord:\n        prepare(n)\n        post(n.hook)\n    else:\n"
+    "        body = payload(n)\n        prepare(n)\n        post(body)\n    finish(n)\n"
+)
+DELIVER_LOGGED = DELIVER_FIXED.replace(
+    "        body = payload(n)\n        prepare(n)\n", "        body = payload(n)\n        log(n)\n"
+)
+DELIVER_MERGED = (
+    "def deliver(n):\n    if n.discord:\n        body = payload(n)\n        prepare(n)\n        post(n.hook)\n"
+    "    else:\n        skip(n)\n    finish(n)\n"
+)
+DELIVER_POSTED = DELIVER_MERGED.replace("        post(n.hook)\n", "        post(body)\n")
+
+
+def restructure_world(tmp_path, case):
+    path = tmp_path / f"restructure-{case}"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "upstream base", {"deliver.py": DELIVER})
+    git(path, "tag", "v1.0")
+    fix = commit(path, "fix: prepare each delivery before posting it", {"deliver.py": DELIVER_FIXED})
+    git(path, "update-ref", "refs/remotes/upstream/dev", fix)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    carrier = commit(path, "fork: prepare each delivery", {"deliver.py": DELIVER_FIXED})
+    logged = commit(path, "fork: log the telegram delivery instead", {"deliver.py": DELIVER_LOGGED})
+    merged = commit(path, "fork: prepare once for both destinations", {"deliver.py": DELIVER_MERGED})
+    posted = commit(path, "fork: post the prepared body", {"deliver.py": DELIVER_POSTED})
+    if case == "tracking-fails-closed":
+        git(path, "config", "blame.ignoreRevsFile", "no-such-file")
+    replacers = {4: posted, 6: merged, 7: f"{logged} and {merged}", 8: merged}
+    if case == "a-truly-removed-line-left-out":
+        del replacers[7]
+    if case == "a-truly-removed-line-named-elsewhere":
+        replacers[7] = merged
+    if case == "a-surviving-line-excepted":
+        replacers[3] = merged
+    clauses = "; ".join(
+        f"missing `deliver.py:+{line}` because {sha} reworks the delivery" for line, sha in replacers.items()
+    )
+    text = f"## Ported by design\n\n- `{fix}` the fork prepares deliveries in fork commit {carrier}; {clauses}; security: yes\n"
+    return path, fix, text
+
+
+HANDLE = "def handle(u):\n    load(u)\n    return run(u)\n"
+HANDLE_CHECKED = HANDLE.replace("    load(u)\n", "    load(u)\n    check(u)\n")
+
+
+def merge_resolution_world(tmp_path, case):
+    path = tmp_path / f"merge-{case}"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "upstream base", {"handle.py": HANDLE})
+    git(path, "tag", "v1.0")
+    fix = commit(path, "fix: check the user before running", {"handle.py": HANDLE_CHECKED})
+    git(path, "update-ref", "refs/remotes/upstream/dev", fix)
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    git(path, "checkout", "-q", "-b", "side")
+    carrier = commit(path, "fork: check the user", {"handle.py": HANDLE_CHECKED})
+    tidy = commit(path, "fork: tidy the side branch", {"notes.txt": "side\n"})
+    git(path, "checkout", "-q", "main")
+    commit(path, "fork: run fast", {"handle.py": HANDLE.replace("run(u)", "run(u, fast=True)")})
+    subprocess.run(["git", "merge", "-q", "--no-commit", "side"], cwd=path, env=ENV, capture_output=True, check=False)
+    resolved = HANDLE_CHECKED.replace("check(u)", "check(u, strict=True)").replace("run(u)", "run(u, fast=True)")
+    (path / "handle.py").write_text(resolved)
+    git(path, "add", "handle.py", "notes.txt")
+    git(path, "commit", "-q", "-m", "merge the user check with a strict check")
+    merge = git(path, "rev-parse", "HEAD")
+    named = {"merge-named": merge, "side-commit-named": tidy, "no-exception": None}[case]
+    clause = f"missing `handle.py:+3` because {named} resolved the merge with a strict check; " if named else ""
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the user in fork commit {carrier}; {clause}security: yes\n"
+    )
+    return path, fix, text
+
+
+GUARDED = "def run(u):\n    finish(u)\n"
+GUARDED_FIXED = "def run(u):\n    load(u)\n    check(u)\n    finish(u)\n"
+GUARDED_RELEASED = "def run(u):\n    check(u)\n    load(u)\n    finish(u)\n"
+GUARDED_SWAPPED = "def run(u):\n    check(u)\n    load(u)\n    finish(u)\n    finish(u)\n"
+
+
+def swap_world(tmp_path, case, released):
+    path = tmp_path / f"swap-{case}-{released}"
+    path.mkdir()
+    git(path, "init", "-q", "-b", "up")
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com"), ("commit.gpgsign", "false")):
+        git(path, "config", key, value)
+    commit(path, "upstream base", {"run.py": GUARDED})
+    git(path, "tag", "v1.0")
+    fix = commit(path, "fix: check the user after loading it", {"run.py": GUARDED_FIXED})
+    git(path, "update-ref", "refs/remotes/upstream/dev", fix)
+    waiver = ""
+    if released:
+        reordered = commit(path, "fix: check the user before loading it", {"run.py": GUARDED_RELEASED})
+        git(path, "update-ref", "refs/remotes/upstream/dev", reordered)
+        git(path, "update-ref", "refs/upstream-tags/v1.1", reordered)
+        waiver = f"\n## Waived\n\n- `{reordered}` moves the check before the load, decided on its own security: no\n"
+    git(path, "checkout", "-q", "--orphan", "main", "v1.0")
+    git(path, "commit", "-q", "-m", "fork root")
+    carrier = commit(path, "fork: check the user", {"run.py": GUARDED_FIXED})
+    swapped = commit(path, "fork: check before loading, finish twice", {"run.py": GUARDED_SWAPPED})
+    line = {"blame-view-exception": 3, "forward-view-exception": 2, "no-exception": None}[case]
+    clause = f"; missing `run.py:+{line}` because {swapped} moved the check before the load" if line else ""
+    text = (
+        f"## Ported by design\n\n- `{fix}` the fork checks the user in fork commit {carrier}{clause}; security: yes\n"
+    )
+    return path, fix, text + waiver
+
+
+RESTRUCTURE_WORLDS = {
+    "restructure-with-a-clause-per-line-blame-loses": (restructure_world, ("per-commit-exceptions",), NO_CARRIER),
+    "restructure-with-a-removed-line-left-out": (restructure_world, ("a-truly-removed-line-left-out",), NO_CARRIER),
+    "restructure-with-a-removed-line-named-on-another-commit": (
+        restructure_world,
+        ("a-truly-removed-line-named-elsewhere",),
+        NO_CARRIER,
+    ),
+    "restructure-with-a-surviving-line-named": (restructure_world, ("a-surviving-line-excepted",), NO_CARRIER),
+    "restructure-with-a-broken-blame-config": (restructure_world, ("tracking-fails-closed",), NO_CARRIER),
+    "merge-resolution-that-rewrote-the-check-named": (merge_resolution_world, ("merge-named",), NO_CARRIER),
+    "merge-resolution-with-a-side-commit-named": (merge_resolution_world, ("side-commit-named",), NO_CARRIER),
+    "merge-resolution-without-a-clause": (merge_resolution_world, ("no-exception",), NO_CARRIER),
+    "release-order-followed-without-a-clause": (swap_world, ("no-exception", True), None),
+    "release-order-followed-with-a-clause-on-the-line-blame-loses": (
+        swap_world,
+        ("blame-view-exception", True),
+        "its exception for `run.py:+3` excuses nothing",
+    ),
+    "release-order-followed-with-a-clause-on-the-line-the-diff-removes": (
+        swap_world,
+        ("forward-view-exception", True),
+        "its exception for `run.py:+2` excuses nothing",
+    ),
+    "unreleased-order-change-without-a-clause": (swap_world, ("no-exception", False), NO_CARRIER),
+    "unreleased-order-change-with-a-clause-on-the-line-blame-loses": (
+        swap_world,
+        ("blame-view-exception", False),
+        NO_CARRIER,
+    ),
+}
+
+
+@pytest.mark.parametrize("case", sorted(RESTRUCTURE_WORLDS))
+def test_a_restructured_security_carrier_needs_a_clause_for_each_line_the_diff_removes(tmp_path, case):
+    build, args, message = RESTRUCTURE_WORLDS[case]
+    path, fix, text = build(tmp_path, *args)
+    result = standalone_gate(path, text, "--grandfathered-base", "v1.0")
+    assert result.returncode == (1 if message else 0), result.stdout + result.stderr
+    if message:
+        assert f"`{fix[:12]}` is ported by design as a security fix, but {message}" in result.stdout

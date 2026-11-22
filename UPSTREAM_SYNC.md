@@ -588,3 +588,27 @@ Upstream bugs the fork fixes in its own code. Main submits them upstream after f
   formed the later hunk's nearest after-context line, so the spot check no longer finds that line. Both make the gate
   fail, never pass, so neither can hide an unported security change; a row hit by either is settled by a reasoned
   design entry. Owner: TRACKERS-GATE.
+- Rule, accepted fail-closed (CP2 hostile review round 2, recorded 2026-11-22): a `security: yes` `Ported by design` row
+  is checked the way `git diff` reads the fork's later commits, from the carrier commit the row names to main; the gate
+  never reads `git blame` for it. A restructure of a security carrier is accepted only when each carrier line that diff
+  removes is replaced in the release's form, or is named by an explicit clause,
+  ``missing `<path>:+<line>` because <full fork sha> <reason>``, whose fork commit's own diff replaced that line. A
+  clause for a line the gate does not find missing fails the row as excusing nothing. These restructures fail the gate
+  even with a clause: a block regrouped over several commits, so that the carrier-to-main diff removes a line no single
+  commit's diff removes; a carrier line rewritten inside a merge resolution; and a one-line guard moved below the action
+  it guards. Such a row needs a fork commit that carries the change in the release's form, or a Waived entry under an
+  owner decision. CP2 briefly read these lines through blame instead; that let a moved guard or a duplicated action pass
+  (hostile round 2: G1, G1b, G2 and G3) and was reverted. Tests:
+  `test_a_restructured_security_carrier_needs_a_clause_for_each_line_the_diff_removes` and
+  `test_a_guard_moved_below_or_past_the_action_it_guards_is_not_ported_by_design`.
+- Open fail-open, same class as G1 (found 2026-11-22 by the CP2 hostile round 2 regression worlds; present on main
+  23e8ad749, on CP1 7d452bcb7d09 and on CP1 r2 54448c728, so not introduced by CP2): when an upstream security fix
+  adds a guard of two or more lines above an action and a later fork commit moves the action above the guard,
+  `git diff` reads the move as the action deleted below the guard and re-inserted above it. The action is context of
+  the upstream hunk, the design check tolerates fork changes to context lines, and every guard line is still in place,
+  so the row passes with no clause. From CP1 on, the same move also passes with a clause for one rewritten guard line.
+  A one-line guard is caught, because the diff then moves the guard line itself. Both worlds are pinned as strict
+  xfail in `test_a_guard_moved_below_or_past_the_action_it_guards_is_not_ported_by_design`
+  (`g5-action-moved-above-an-unchanged-two-line-guard` and
+  `g1b-two-actions-moved-above-four-checks-with-the-log-made-strict`) and fail once the gate catches them. Owner:
+  TRACKERS-GATE.
