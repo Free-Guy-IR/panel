@@ -341,5 +341,12 @@
   "statistics.periodCapped": "{{period}} would give more than {{max}} points for this range, so the chart uses Auto.",
   "theme": {
     "toggle": "Toggle theme"
+  },
+  "settings": {
+    "cleanup": {
+      "expiredUsers": {
+        "selectInactiveDate": "Select a cutoff date. Accounts match when both their last connection and their last edit or renewal are before it; for either one that never happened, the account's creation date is used."
+      }
+    }
   }
 }

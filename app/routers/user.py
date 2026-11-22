@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, status
 
 from app.db import AsyncSession, get_db
+from app.fork.routers.user import DELETE_EXPIRED_USERS_DESCRIPTION, EXPIRED_USERS_DESCRIPTION
 from app.models.admin import AdminDetails
 from app.models.settings import ConfigFormat
 from app.models.stats import (
@@ -598,7 +599,7 @@ async def get_users_count_metric(
     return await user_operator.get_users_count_metric(db, admin=admin, metric=metric, query=query)
 
 
-@router.get("s/expired", response_model=list[str])
+@router.get("s/expired", response_model=list[str], description=EXPIRED_USERS_DESCRIPTION)
 async def get_expired_users(
     query: Annotated[ExpiredUsersQuery, Depends(get_expired_users_query)],
     db: AsyncSession = Depends(get_db),
@@ -617,7 +618,7 @@ async def get_expired_users(
     return await user_operator.get_expired_users(db, query=query, admin=admin)
 
 
-@router.delete("s/expired", response_model=RemoveUsersResponse)
+@router.delete("s/expired", response_model=RemoveUsersResponse, description=DELETE_EXPIRED_USERS_DESCRIPTION)
 async def delete_expired_users(
     query: Annotated[ExpiredUsersQuery, Depends(get_expired_users_query)],
     db: AsyncSession = Depends(get_db),
