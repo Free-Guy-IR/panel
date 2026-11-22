@@ -674,7 +674,12 @@ class SubscriptionOperation(SubscriptionExtrasMixin, BaseOperation):
         with phase("subscription.render"):
             conf, media_type = await self.fetch_config(user, client_type)
 
-        await queue_subscription_access(db_user.id, SubscriptionAccessKind.manual, user_agent=user_agent, ip=ip)
+        await queue_subscription_access(
+            db_user.id,
+            SubscriptionAccessKind.manual,
+            user_agent=user_agent,
+            ip=ip,
+        )
 
         response_headers, body_lines = self._split_headers_for_placement(
             response_headers, sub_settings.header_placement, client_type
