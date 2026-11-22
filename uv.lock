@@ -1065,7 +1065,7 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "nats-py", specifier = ">=2.16.0" },
     { name = "packaging", specifier = ">=26.3" },
-    { name = "pasarguard-node-bridge", git = "https://github.com/Free-Guy-IR/node_bridge_py?rev=5b21adc6b961347066c844a696a9af8fea8c0af7" },
+    { name = "pasarguard-node-bridge", git = "https://github.com/Free-Guy-IR/node_bridge_py?rev=3eb396cbfb0fb8fd8c7836084a14633a225174a9" },
     { name = "psutil", specifier = ">=7.2.2" },
     { name = "pydantic", specifier = ">=2.13.5" },
     { name = "pydantic-settings", specifier = ">=2.16.2" },
@@ -1099,11 +1099,12 @@ dev = [
 
 [[package]]
 name = "pasarguard-node-bridge"
-version = "0.10.0+singbox.1"
-source = { git = "https://github.com/Free-Guy-IR/node_bridge_py?rev=5b21adc6b961347066c844a696a9af8fea8c0af7#5b21adc6b961347066c844a696a9af8fea8c0af7" }
+version = "0.11.2+singbox.1"
+source = { git = "https://github.com/Free-Guy-IR/node_bridge_py?rev=3eb396cbfb0fb8fd8c7836084a14633a225174a9#3eb396cbfb0fb8fd8c7836084a14633a225174a9" }
 dependencies = [
     { name = "aiohttp" },
     { name = "aiohttp-socks" },
+    { name = "cryptography" },
     { name = "grpclib" },
     { name = "packaging" },
     { name = "protobuf" },
