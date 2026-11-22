@@ -423,10 +423,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         if existing_usernames:
             await self.raise_error(message="User already exists", code=409, db=db)
 
-        try:
-            await acquire_proxy_secrets_lock(db)
-        except (DBAPIError, NamedLockMissing) as exc:
-            await self._raise_if_lock_unavailable(db, exc)
+        access = await self._committed_group_access(db, groups)
         await self._enforce_bulk_create_quota(db, admin, len(users_to_create))
 
         if not skip_per_user_limits:
@@ -450,7 +447,7 @@ class UserOperation(UserExtrasMixin, BaseOperation):
             user_to_create.proxy_settings.wireguard.peer_ips = []
             user_to_create.proxy_settings = await self._prepare_user_proxy_settings(
                 db,
-                groups,
+                access,
                 user_to_create.proxy_settings,
                 reserved_secrets=reserved_secrets,
                 explicit_fields=supplied_secret_fields(user_to_create.proxy_settings),
@@ -772,8 +769,9 @@ class UserOperation(UserExtrasMixin, BaseOperation):
         db_admin = await get_admin(db, admin.username, load_users=False, load_usage_logs=False)
         # peer IPs are never taken from input; the subnet pool assigns them at creation
         new_user.proxy_settings.wireguard.peer_ips = []
+        access = await self._committed_group_access(db, all_groups)
         new_user.proxy_settings = await self._prepare_user_proxy_settings(
-            db, all_groups, new_user.proxy_settings, explicit_fields=supplied_secret_fields(new_user.proxy_settings)
+            db, access, new_user.proxy_settings, explicit_fields=supplied_secret_fields(new_user.proxy_settings)
         )
 
         await self._enforce_locked_user_quota(db, admin, 1, "User limit reached ({limit})")
