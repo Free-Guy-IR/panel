@@ -216,12 +216,8 @@ async def lock_and_mark_group_members(db: AsyncSession, group_ids: Iterable[int]
     await resync_markers.mark_users(db, user_ids)
 
 
-async def lock_and_mark_bulk_group_scope(
-    db: AsyncSession, bulk_model, allowed_group_ids: list[int] | None = None
-) -> None:
-    user_ids = await resync_markers.bulk_group_scope_ids(db, bulk_model, allowed_group_ids)
-    await lock_scope_users(db, user_ids)
-    await resync_markers.mark_users(db, user_ids)
+async def lock_bulk_group_scope(db: AsyncSession, bulk_model, allowed_group_ids: list[int] | None = None) -> None:
+    await lock_scope_users(db, await resync_markers.bulk_group_scope_ids(db, bulk_model, allowed_group_ids))
 
 
 def _retry_keeps_the_transaction(db: AsyncSession, exc: BaseException) -> bool:

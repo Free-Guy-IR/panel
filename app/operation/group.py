@@ -214,8 +214,9 @@ class GroupOperation(BaseOperation):
             return BulkOperationDryRunResponse(affected_users=n)
 
         allowed_group_ids = get_allowed_group_ids(admin)
-        await self._mark_pending_resync(db, group_repair.lock_and_mark_bulk_group_scope, bulk_model, allowed_group_ids)
+        await self._mark_pending_resync(db, group_repair.lock_bulk_group_scope, bulk_model, allowed_group_ids)
         users, users_count = await self._write_first_step(db, add_groups_to_users, bulk_model, allowed_group_ids)
+        await self._write_first_step(db, resync_markers.mark_users, [user.id for user in users])
         await self._finish_locked_group_change(db, users)
 
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
@@ -229,8 +230,9 @@ class GroupOperation(BaseOperation):
             return BulkOperationDryRunResponse(affected_users=n)
 
         allowed_group_ids = get_allowed_group_ids(admin)
-        await self._mark_pending_resync(db, group_repair.lock_and_mark_bulk_group_scope, bulk_model, allowed_group_ids)
+        await self._mark_pending_resync(db, group_repair.lock_bulk_group_scope, bulk_model, allowed_group_ids)
         users, users_count = await self._write_first_step(db, remove_groups_from_users, bulk_model, allowed_group_ids)
+        await self._write_first_step(db, resync_markers.mark_users, [user.id for user in users])
         await self._finish_locked_group_change(db, users)
 
         if self.operator_type in (OperatorType.API, OperatorType.WEB):
