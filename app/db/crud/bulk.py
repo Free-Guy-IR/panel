@@ -317,7 +317,7 @@ async def remove_groups_from_users(
 
 
 class BulkUserUpdateConflict(ValueError):
-    pass
+    """A checked target changed before the conditional bulk update completed."""
 
 
 def _bulk_target_conditions(bulk_model: BulkUser, field: Literal["expire", "data_limit"]) -> tuple:
@@ -332,6 +332,7 @@ def _bulk_target_conditions(bulk_model: BulkUser, field: Literal["expire", "data
 def _bulk_user_target_filter(
     bulk_model: BulkUser, field: Literal["expire", "data_limit"], allowed_group_ids: list[int] | None = None
 ):
+    """Select exactly the finite values that the requested bulk adjustment can change."""
     return and_(_create_final_filter(bulk_model, allowed_group_ids), *_bulk_target_conditions(bulk_model, field))
 
 
@@ -343,6 +344,7 @@ async def get_bulk_user_limit_targets(
     *,
     lock: bool = True,
 ) -> list[tuple]:
+    """Read only IDs and values for limit validation, locking targets before a write."""
     column = expire_as_bulk_reads_it(db) if field == "expire" else User.data_limit
     condition = _bulk_user_target_filter(bulk_model, field, allowed_group_ids)
     if not lock:
@@ -354,6 +356,7 @@ async def get_bulk_user_limit_targets(
 
 
 def _bulk_final_value_bounds(value, minimum, maximum):
+    """Constrain final values again in the write to protect against concurrent changes."""
     conditions = []
     if minimum is not None:
         conditions.append(value >= minimum)
@@ -365,6 +368,7 @@ def _bulk_final_value_bounds(value, minimum, maximum):
 async def count_bulk_expire_targets(
     db: AsyncSession, bulk_model: BulkUser, allowed_group_ids: list[int] | None = None
 ) -> int:
+    """Count finite expirations eligible for the requested adjustment."""
     final_filter = _bulk_user_target_filter(bulk_model, "expire", allowed_group_ids)
     return (await db.execute(select(func.count(User.id)).where(final_filter))).scalar_one_or_none() or 0
 
@@ -372,6 +376,7 @@ async def count_bulk_expire_targets(
 async def count_bulk_datalimit_targets(
     db: AsyncSession, bulk_model: BulkUser, allowed_group_ids: list[int] | None = None
 ) -> int:
+    """Count finite quotas eligible for the requested adjustment, including subtraction guards."""
     final_filter = _bulk_user_target_filter(bulk_model, "data_limit", allowed_group_ids)
     return (await db.execute(select(func.count(User.id)).where(final_filter))).scalar_one_or_none() or 0
 
