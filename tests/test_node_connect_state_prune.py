@@ -118,12 +118,14 @@ async def test_a_removal_between_a_held_connect_and_its_waiters_never_runs_two_c
         running += 1
         overlaps.append(running)
         locks_seen.append(node_extras._CONNECT_LOCKS.get(db_node.id))
-        if core == "holder":
-            holding.set()
-            await release.wait()
-        else:
-            await asyncio.sleep(0)
-        running -= 1
+        try:
+            if core == "holder":
+                holding.set()
+                await release.wait()
+            else:
+                await asyncio.sleep(0)
+        finally:
+            running -= 1
         finished.append(core)
 
     monkeypatch.setattr(NodeOperation, "_connect_node_inner", staticmethod(inner))
@@ -159,6 +161,8 @@ async def test_a_nats_worker_removal_withdraws_the_held_connect_and_its_waiter_a
 ):
     running = 0
     overlaps: list[int] = []
+    locks_seen: list[object] = []
+    removal_saw: list[tuple[object, bool, int]] = []
     finished: list[str] = []
     holding = asyncio.Event()
     release = asyncio.Event()
@@ -167,6 +171,7 @@ async def test_a_nats_worker_removal_withdraws_the_held_connect_and_its_waiter_a
         nonlocal running
         running += 1
         overlaps.append(running)
+        locks_seen.append(node_extras._CONNECT_LOCKS.get(db_node.id))
         try:
             if core == "holder":
                 holding.set()
@@ -177,7 +182,12 @@ async def test_a_nats_worker_removal_withdraws_the_held_connect_and_its_waiter_a
             running -= 1
         finished.append(core)
 
+    async def note_what_the_removal_holds(*_args, **_kwargs):
+        lock = node_extras._CONNECT_LOCKS.get(NODE_ID)
+        removal_saw.append((lock, lock is not None and lock.locked(), running))
+
     monkeypatch.setattr(NodeOperation, "_connect_node_inner", staticmethod(inner))
+    node_worker.node_manager.remove_node.side_effect = note_what_the_removal_holds
 
     def connect(name: str) -> asyncio.Task:
         return asyncio.create_task(
@@ -206,3 +216,9 @@ async def test_a_nats_worker_removal_withdraws_the_held_connect_and_its_waiter_a
     assert holder.result() is None and waiter.result() is None
     assert finished == ["after-removal"]
     assert max(overlaps) == 1
+    assert locks_seen[0] is not None
+    assert all(lock is locks_seen[0] for lock in locks_seen), "a connect after the removal ran under another lock"
+    assert removal_saw == [(locks_seen[0], True, 0)], (
+        "the NATS worker's remove_node did not run under the held connect's lock with no connect of the id running: "
+        f"{removal_saw}"
+    )
