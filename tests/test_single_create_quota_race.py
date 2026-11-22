@@ -83,7 +83,7 @@ async def test_a_create_that_counted_before_a_concurrent_create_committed_never_
     reseller, group_id, template_id, base = await _seed_reseller_one_below_quota(recorder_db)
     late_counted = asyncio.Event()
     early_finished = asyncio.Event()
-    gated_name = "_persist_bulk_users" if kind == "bulk" else "_prepare_user_proxy_settings"
+    gated_name = "_persist_bulk_users" if kind == "bulk" else "_committed_group_access"
     real_step = getattr(UserOperation, gated_name)
 
     async def gated_step(self, db, *args, **kwargs):
@@ -115,12 +115,13 @@ async def test_a_create_that_counted_before_a_concurrent_create_committed_never_
     early_finished.set()
     await asyncio.wait_for(late, BOUND)
     deadlocks_after = await _deadlocks()
+    owned = await _owned_by(recorder_db, reseller.id)
 
     assert outcomes["early"] == "committed", (outcomes, failures)
+    assert owned == QUOTA, (owned, outcomes, failures)
     assert isinstance(failures.get("late"), HTTPException), (outcomes, failures)
     assert failures["late"].status_code == 400, (outcomes, failures)
     refusal = "Bulk create would exceed user limit" if kind == "bulk" else "User limit reached"
     assert failures["late"].detail.startswith(refusal), (outcomes, failures)
-    assert await _owned_by(recorder_db, reseller.id) == QUOTA, outcomes
     if deadlocks_before is not None:
         assert deadlocks_after - deadlocks_before == 0, outcomes
