@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, status
 
 from app.db import AsyncSession, get_db
-from app.fork.routers.user import DELETE_EXPIRED_USERS_DESCRIPTION, EXPIRED_USERS_DESCRIPTION
+from app.fork.routers.user_descriptions import DELETE_EXPIRED_USERS_DESCRIPTION, EXPIRED_USERS_DESCRIPTION
 from app.models.admin import AdminDetails
 from app.models.settings import ConfigFormat
 from app.models.stats import (
