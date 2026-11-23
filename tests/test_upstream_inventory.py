@@ -2641,6 +2641,7 @@ def test_the_real_ledger_names_a_recorded_decision_on_exactly_its_security_ports
 
     entries, _ = upstream_inventory.parse_sync_ledger(str(SCRIPT.parent.parent / "UPSTREAM_SYNC.md"))
     carrying = [entry for entry in entries if DECISION_ID in entry["reason"]]
+    assert not carrying
     assert all(entry["kind"] == "port-queue" and entry["security"] for entry in carrying)
     queued_yes = [entry for entry in entries if entry["kind"] == "port-queue" and entry["security"]]
     assert all(entry["decision"] and entry["token"] in entry["covers"] for entry in queued_yes)
