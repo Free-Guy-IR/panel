@@ -455,10 +455,12 @@ async def test_answering_nodes_never_queue_behind_unanswering_ones_and_both_caps
     peaks = {"all": 0, "unanswered": 0}
     running = {"all": 0, "unanswered": 0}
     started_at: dict[int, float] = {}
+    probed_at: dict[int, float] = {}
     loop = asyncio.get_running_loop()
     began = loop.time()
 
     async def answers(node):
+        probed_at.setdefault(node.id, loop.time() - began)
         if node.id in unanswering:
             await asyncio.sleep(0.3)
             return False
@@ -505,8 +507,12 @@ async def test_answering_nodes_never_queue_behind_unanswering_ones_and_both_caps
 
     assert not node_background_connects.connecting_in_background()
     assert sorted(result["node_id"] for result in written.await_args.args[1]) == sorted(by_id)
-    assert max(started_at[node_id] for node_id in answering) < 0.25, (
+    answering_starts = [started_at[node_id] for node_id in answering]
+    assert max(answering_starts) - min(probed_at.values(), default=0.0) < 0.25, (
         f"an answering node waited behind the unanswering ones: {sorted(started_at.items())}"
+    )
+    assert max(answering_starts) < min(started_at[node_id] for node_id in unanswering), (
+        f"an answering node started after an unanswering one: {sorted(started_at.items())}"
     )
     assert peaks["all"] <= node_operation.CONNECT_CONCURRENCY
     assert peaks["unanswered"] <= node_operation.CONNECT_CONCURRENCY // 2
