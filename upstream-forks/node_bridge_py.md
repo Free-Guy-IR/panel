@@ -111,8 +111,8 @@ are still the only upstream commits in no final release, so none is held.
 
 Released upstream commits the fork owes. The queue is empty. It was empty from 2026-11-11 to 2026-11-21 too, when
 #24 9fa9f264cde1 and #26 779f9b9b1df9 were already under Ported by design, on fork main 5b21adc6b961 (tag v0.10.0,
-label `0.10.0+singbox.1`). From 2026-11-21 to 2026-11-23 it held the four code commits of upstream v0.11.0 to v0.11.2,
-owed under the decision 2026-11-21-main-bridge-rollout-pin below while the panel kept bridge 0.10.0. Since 2026-11-23
+label `0.10.0+singbox.1`). From 2026-11-21 to 2026-11-22 it held the four code commits of upstream v0.11.0 to v0.11.2,
+owed under the decision 2026-11-21-main-bridge-rollout-pin below while the panel kept bridge 0.10.0. Since 2026-11-22
 fork main 3eb396cbfb0f (label `0.11.2+singbox.1`) carries all four: 94dfc3abdc5e through its cherry-pick 1fc6d040e6fd,
 which the gate counts as ported, and e27d6fca5bb7, f851bbea3e3b and 959651999c76 under Ported by design above. The
 panel's integration branch integrate/v5.34.28 pins 3eb396cbfb0f since its head 0b3f5b8a8.
