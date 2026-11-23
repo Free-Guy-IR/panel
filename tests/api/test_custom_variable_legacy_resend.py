@@ -162,7 +162,7 @@ def test_a_subscription_of_a_user_whose_admin_holds_legacy_values_still_renders(
     )
     assert host.status_code == status.HTTP_201_CREATED, host.text
     group = create_group(access_token, name=unique_name("legacy_group"))
-    expire = (datetime.now(UTC) + timedelta(days=3)).isoformat()
+    expire = (datetime.now(UTC) + timedelta(days=2, hours=23)).isoformat()
     owner_headers = auth_headers(_login(owner["username"], owner["password"]))
     users = []
     try:
