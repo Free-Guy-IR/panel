@@ -1,8 +1,12 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from fastapi import status
+from sqlalchemy import select, update
 
-from tests.api import client
+from app.db.models import User
+from app.operation import user as user_operation
+from tests.api import TestSession, client
 from tests.api.helpers import auth_headers, create_admin, create_user, delete_admin, delete_user, unique_name
 
 MB = 1024 * 1024
@@ -172,3 +176,38 @@ def test_owner_bulk_quota_and_expiry_are_not_bounded_by_any_role(access_token):
         assert after["expire"] != user["expire"]
     finally:
         delete_user(access_token, user["username"])
+
+
+@pytest.mark.asyncio
+async def test_a_target_moved_near_the_last_storable_day_after_the_unlocked_check_gets_422_and_no_write(
+    access_token, monkeypatch
+):
+    role = _role(access_token)
+    admin = create_admin(access_token, role_id=role["id"])
+    token = _login(admin["username"], admin["password"])
+    user = _bounded_user(access_token)
+    moved_to = datetime(9999, 12, 31, 12, tzinfo=UTC)
+    checked = user_operation.reject_out_of_range_bulk_result
+
+    async def check_then_move_the_target(*args, **kwargs):
+        await checked(*args, **kwargs)
+        async with TestSession() as session:
+            await session.execute(update(User).where(User.id == user["id"]).values(expire=moved_to))
+            await session.commit()
+
+    monkeypatch.setattr(user_operation, "reject_out_of_range_bulk_result", check_then_move_the_target)
+    try:
+        response = client.post(
+            "/api/users/bulk/expire",
+            headers=auth_headers(token),
+            json={"amount": DAY, "users": [user["id"]]},
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, response.text
+        assert "Bulk expire would move" in response.json()["detail"], response.text
+        async with TestSession() as session:
+            stored = (await session.execute(select(User.expire).where(User.id == user["id"]))).scalar_one()
+        assert stored.replace(tzinfo=UTC) == moved_to, stored
+    finally:
+        delete_user(access_token, user["username"])
+        delete_admin(access_token, admin["username"])
+        _delete_role(access_token, role["id"])
